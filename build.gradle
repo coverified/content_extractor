@@ -15,7 +15,7 @@ ext {
     scriptsLocation = 'gradle' + File.separator + 'scripts' + File.separator //location of script plugins
 }
 
-apply from: scriptsLocation + 'graphqlCodegen.gradle'
+apply from: scriptsLocation + 'spotless.gradle'
 
 
 group = 'info.coverified'
