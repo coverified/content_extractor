@@ -40,6 +40,7 @@ repositories {
 
 dependencies {
 
+	// coverified dependencies
 	implementation('info.coverified:graphQLConnector:0.1-SNAPSHOT')
 
 	// https://mvnrepository.com/artifact/com.github.ghostdogpr/caliban
