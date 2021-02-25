@@ -30,9 +30,17 @@ configurations {
 
 repositories {
 	jcenter() //searches in bintray's repository 'jCenter', which contains Maven Central
+
+	// dev only
+	flatDir {
+		dir '../graphQLConnector/build/libs'
+	}
+
 }
 
 dependencies {
+
+	implementation('info.coverified:graphQLConnector:0.1-SNAPSHOT')
 
 	// https://mvnrepository.com/artifact/com.github.ghostdogpr/caliban
 	implementation group: 'com.github.ghostdogpr', name: "caliban_${scalaVersion}", version: '0.9.5'
