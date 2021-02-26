@@ -12,6 +12,8 @@ ext {
 	scalaBinaryVersion = '2.13.1'
 	javaVersion = JavaVersion.VERSION_1_8
 
+	slf4jVersion = '1.7.26'
+
 	scriptsLocation = 'gradle' + File.separator + 'scripts' + File.separator //location of script plugins
 }
 
@@ -48,6 +50,19 @@ dependencies {
 
 	// https://mvnrepository.com/artifact/com.github.ghostdogpr/caliban-tools
 	implementation group: 'com.github.ghostdogpr', name: "caliban-tools_${scalaVersion}", version: '0.9.5'
+
+
+	// logging
+	compile "org.slf4j:slf4j-api:${slf4jVersion}"  // slf4j wrapper
+	compile 'com.lmax:disruptor:3.4.2' // async logging
+	compile 'org.apache.logging.log4j:log4j-api:2.14.0' // log4j
+	compile 'org.apache.logging.log4j:log4j-core:2.14.0' // log4j
+	compile 'org.apache.logging.log4j:log4j-slf4j-impl:2.14.0' // log4j -> slf4j
+
+	compile "com.typesafe.scala-logging:scala-logging_${scalaVersion}:3.9.2" // akka scala logging
+	compile 'com.typesafe.scala-logging:scala-logging-slf4j_2.11:2.1.2'// scala logging
+	compile "org.slf4j:log4j-over-slf4j:${slf4jVersion}" // slf4j -> log4j
+
 
 	// CORE Scala //
 	compile "org.scala-lang:scala-library:${scalaBinaryVersion}"
