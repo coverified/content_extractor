@@ -42,6 +42,9 @@ dependencies {
 
     implementation('info.coverified:pageProfiles:0.1-SNAPSHOT')
 
+    // cmd args parser //
+    compile "com.github.scopt:scopt_${scalaVersion}:4.0.0"
+
     // https://mvnrepository.com/artifact/net.ruippeixotog/scala-scraper
     implementation group: 'net.ruippeixotog', name: 'scala-scraper_2.13', version: '2.2.0'
 
