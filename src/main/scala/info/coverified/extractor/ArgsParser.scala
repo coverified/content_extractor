@@ -1,19 +1,24 @@
+/**
+ * © 2021. CoVerified,
+ * Diehl, Fetzer, Hiry, Kilian, Mayer, Schlittenbauer, Schweikert, Vollnhals, Weise GbR
+ **/
+
 package info.coverified.extractor
 
 import scopt.{OptionParser => scoptOptionParser}
 
 /**
- * //ToDo: Class Description
- *
- * @version 0.1
- * @since 27.02.21
- */
+  * //ToDo: Class Description
+  *
+  * @version 0.1
+  * @since 27.02.21
+  */
 object ArgsParser {
 
   final case class Args(
-                         apiUrl: Option[String] = None,
-                         pageProfileFolderPath: Option[String] = None
-                       )
+      apiUrl: Option[String] = None,
+      pageProfileFolderPath: Option[String] = None
+  )
 
   private def buildParser: scoptOptionParser[Args] = {
     new scoptOptionParser[Args]("CoVerifiedExtractor") {
