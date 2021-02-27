@@ -42,8 +42,6 @@ dependencies {
 	// coverified dependencies
 	implementation 'com.github.coverified:graphQLConnector:00a1abc245'
 
-	implementation('info.coverified:pageProfiles:0.1-SNAPSHOT')
-
 	// cmd args parser //
 	compile "com.github.scopt:scopt_${scalaVersion}:4.0.0"
 
