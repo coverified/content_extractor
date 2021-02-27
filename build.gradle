@@ -4,6 +4,7 @@ plugins {
 	id 'scala' // scala support
 	id 'com.diffplug.spotless' version '5.7.0'//code format
 	id "com.github.johnrengelman.shadow" version "5.1.0" // fat jar
+	id "de.undercouch.download" version "3.4.3" // downloads plugin
 }
 
 
@@ -19,7 +20,7 @@ ext {
 }
 
 apply from: scriptsLocation + 'spotless.gradle'
-
+apply from: scriptsLocation + 'tscfg.gradle'
 
 group = 'info.coverified'
 version = '0.1-SNAPSHOT'

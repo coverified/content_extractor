@@ -8,7 +8,7 @@ package info.coverified.extractor
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.ArgsParser.Args
-import info.coverified.profile.ProfileConfig
+import info.coverified.extractor.profile.ProfileConfig
 import sttp.client3.UriContext
 import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
 import zio.{App, ExitCode, URIO, ZIO}

@@ -5,9 +5,9 @@
 
 package info.coverified.extractor.analyzer
 
+import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.schema.CoVerifiedClientSchema._
-import info.coverified.profile.ProfileConfig
-import info.coverified.profile.ProfileConfig.PageType.Selectors
+import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._

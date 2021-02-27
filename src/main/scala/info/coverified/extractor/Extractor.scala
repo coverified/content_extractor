@@ -7,6 +7,7 @@ package info.coverified.extractor
 
 import com.typesafe.config.ConfigFactory
 import info.coverified.extractor.analyzer.Analyzer
+import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.Connector
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Entry,
@@ -16,7 +17,6 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Source,
   Url
 }
-import info.coverified.profile.ProfileConfig
 import sttp.client3.asynchttpclient.zio.{SttpClient, send}
 import sttp.model.Uri
 import zio.ZIO

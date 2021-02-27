@@ -34,7 +34,7 @@ spotless {
 		licenseHeader coverifiedLicHead, "package.*\\n"
 	}
 
-	// removes unnecessary whitespace, indents with tabs and ends on new line for gradle, md and gitignore files and config-XMLs
+	// removes unnecessary whitespace, indents with tabs and ends on new line for gradle, md and gitignore files and profile-XMLs
 	format 'misc', {
 		target '**/*.md', '**/.gitignore', 'configs/**'
 		trimTrailingWhitespace()
