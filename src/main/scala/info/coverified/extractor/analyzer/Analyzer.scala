@@ -54,6 +54,8 @@ object Analyzer {
       case ("url", selectors) =>
         // build url entry
         buildUrlEntry(pageDoc, url, selectors, sourceId)
+      case ("video", selectors) =>
+        buildVideoEntry(pageDoc, url, selectors, sourceId)
       case (unknown, _) =>
         throw new RuntimeException(s"Unknown page type: $unknown")
     }
@@ -83,6 +85,52 @@ object Analyzer {
           content = content,
           url = Some(url),
           `type` = Some(EntryTypeType.url),
+          publishDate = Some(ZonedDateTime.now().toLocalDate.toString), // todo
+          source = Some(
+            SourceRelateToOneInput(
+              connect = Some(
+                SourceWhereUniqueInput(
+                  sourceId
+                )
+              )
+            )
+          )
+        )
+      )
+    )(
+      Entry.view()(
+        CloudinaryImage_File.view(),
+        Tag.view(Language.view, CloudinaryImage_File.view()),
+        _QueryMeta.view,
+        Language.view,
+        Source.view(GeoLocation.view(LocationGoogle.view))
+      )
+    )
+  }
+
+  private def buildVideoEntry(
+      pageDoc: Document,
+      url: String,
+      selectors: Selectors,
+      sourceId: String
+  ) = {
+    // extract data
+    val title = pageDoc >?> text(selectors.title)
+    val content = pageDoc >?> text(selectors.content)
+    //    val video = pageDoc >?> text(selectors.video) todo
+    val subtitle = selectors.subtitle.flatMap(pageDoc >?> text(_))
+    //    val breadcrumb = selectors.breadcrumb.flatMap(pageDoc >?> text(_)) todo
+    //    val date = selectors.date.flatMap(pageDoc >?> text(_)) // todo
+
+    // build entry mutation
+    Mutation.createEntry(
+      Some(
+        EntryCreateInput(
+          title = title,
+          subTitle = subtitle,
+          content = content,
+          url = Some(url),
+          `type` = Some(EntryTypeType.video),
           publishDate = Some(ZonedDateTime.now().toLocalDate.toString), // todo
           source = Some(
             SourceRelateToOneInput(
