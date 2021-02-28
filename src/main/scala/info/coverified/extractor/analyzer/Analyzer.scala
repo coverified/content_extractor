@@ -19,36 +19,37 @@ import com.typesafe.scalalogging.LazyLogging
 import scala.util.{Failure, Success, Try}
 
 /**
- * //ToDo: Class Description
- *
- * @version 0.1
- * @since 26.02.21
- */
+  * //ToDo: Class Description
+  *
+  * @version 0.1
+  * @since 26.02.21
+  */
 object Analyzer extends LazyLogging {
 
   def run(
-           url: String,
-           sourceId: String,
-           cfg: ProfileConfig,
-           browser: Browser = JsoupBrowser()
-         ) = {
+      url: String,
+      sourceId: String,
+      cfg: ProfileConfig,
+      browser: Browser = JsoupBrowser()
+  ) = {
 
     // get page doc
     Try {
       browser.get(url)
     } match {
       case Failure(exception) =>
-        logger.error(s"Exception during analysis of url '$url': ${exception.getMessage}\nStacktrace: ${exception.getStackTrace.toVector}")
+        logger.error(
+          s"Exception during analysis of url '$url': ${exception.getMessage}\nStacktrace: ${exception.getStackTrace.toVector}"
+        )
         None
       case Success(pageDoc) =>
-
         // extract data using matching page type
         // todo use type name enums
         val pageTypeName = cfg.profile.pageTypes
           .find(pageType => {
             val selectorFits = pageType.condition.selector.forall(selector => {
               pageDoc >/~ validator(elementList(selector))(_.nonEmpty) match {
-                case Left(_) => false
+                case Left(_)  => false
                 case Right(_) => true
               }
             }) // if selector is not set, it is always true
@@ -72,11 +73,11 @@ object Analyzer extends LazyLogging {
   }
 
   private def buildUrlEntry(
-                             pageDoc: Document,
-                             url: String,
-                             selectors: Selectors,
-                             sourceId: String
-                           ) = {
+      pageDoc: Document,
+      url: String,
+      selectors: Selectors,
+      sourceId: String
+  ) = {
     // extract data
     val title = pageDoc >?> text(selectors.title)
     val content = pageDoc >?> text(selectors.content)
@@ -117,11 +118,11 @@ object Analyzer extends LazyLogging {
   }
 
   private def buildVideoEntry(
-                               pageDoc: Document,
-                               url: String,
-                               selectors: Selectors,
-                               sourceId: String
-                             ) = {
+      pageDoc: Document,
+      url: String,
+      selectors: Selectors,
+      sourceId: String
+  ) = {
     // extract data
     val title = pageDoc >?> text(selectors.title)
     val content = pageDoc >?> text(selectors.content)
