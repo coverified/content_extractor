@@ -12,63 +12,71 @@ import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.model.Document
-
 import java.time.ZonedDateTime
 
+import com.typesafe.scalalogging.LazyLogging
+
+import scala.util.{Failure, Success, Try}
+
 /**
-  * //ToDo: Class Description
-  *
-  * @version 0.1
-  * @since 26.02.21
-  */
-object Analyzer {
+ * //ToDo: Class Description
+ *
+ * @version 0.1
+ * @since 26.02.21
+ */
+object Analyzer extends LazyLogging {
 
   def run(
-      url: String,
-      sourceId: String,
-      cfg: ProfileConfig,
-      browser: Browser = JsoupBrowser()
-  ) = {
+           url: String,
+           sourceId: String,
+           cfg: ProfileConfig,
+           browser: Browser = JsoupBrowser()
+         ) = {
 
     // get page doc
-    val pageDoc = browser.get(url)
+    Try {
+      browser.get(url)
+    } match {
+      case Failure(exception) =>
+        logger.error(s"Exception during analysis of url '$url': ${exception.getMessage}\nStacktrace: ${exception.getStackTrace.toVector}")
+        None
+      case Success(pageDoc) =>
 
-    // extract data using matching page type
-    // todo use type name enums
-    val pageTypeName = cfg.profile.pageTypes
-      .find(pageType => {
-        val selectorFits = pageType.condition.selector.forall(selector => {
-          pageDoc >/~ validator(elementList(selector))(_.nonEmpty) match {
-            case Left(_)  => false
-            case Right(_) => true
-          }
-        }) // if selector is not set, it is always true
+        // extract data using matching page type
+        // todo use type name enums
+        val pageTypeName = cfg.profile.pageTypes
+          .find(pageType => {
+            val selectorFits = pageType.condition.selector.forall(selector => {
+              pageDoc >/~ validator(elementList(selector))(_.nonEmpty) match {
+                case Left(_) => false
+                case Right(_) => true
+              }
+            }) // if selector is not set, it is always true
 
-        val pathFits = pageType.condition.path.forall(url.contains(_)) // if path is not set, it is always true
+            val pathFits = pageType.condition.path.forall(url.contains(_)) // if path is not set, it is always true
 
-        selectorFits && pathFits
-      })
-      .map(pt => (pt.name, pt.selectors))
+            selectorFits && pathFits
+          })
+          .map(pt => (pt.name, pt.selectors))
 
-    val res = pageTypeName.map {
-      case ("url", selectors) =>
-        // build url entry
-        buildUrlEntry(pageDoc, url, selectors, sourceId)
-      case ("video", selectors) =>
-        buildVideoEntry(pageDoc, url, selectors, sourceId)
-      case (unknown, _) =>
-        throw new RuntimeException(s"Unknown page type: $unknown")
+        Some(pageTypeName.map {
+          case ("url", selectors) =>
+            // build url entry
+            buildUrlEntry(pageDoc, url, selectors, sourceId)
+          case ("video", selectors) =>
+            buildVideoEntry(pageDoc, url, selectors, sourceId)
+          case (unknown, _) =>
+            throw new RuntimeException(s"Unknown page type: $unknown")
+        })
     }
-
-    res
   }
 
   private def buildUrlEntry(
-      pageDoc: Document,
-      url: String,
-      selectors: Selectors,
-      sourceId: String
-  ) = {
+                             pageDoc: Document,
+                             url: String,
+                             selectors: Selectors,
+                             sourceId: String
+                           ) = {
     // extract data
     val title = pageDoc >?> text(selectors.title)
     val content = pageDoc >?> text(selectors.content)
@@ -109,11 +117,11 @@ object Analyzer {
   }
 
   private def buildVideoEntry(
-      pageDoc: Document,
-      url: String,
-      selectors: Selectors,
-      sourceId: String
-  ) = {
+                               pageDoc: Document,
+                               url: String,
+                               selectors: Selectors,
+                               sourceId: String
+                             ) = {
     // extract data
     val title = pageDoc >?> text(selectors.title)
     val content = pageDoc >?> text(selectors.content)

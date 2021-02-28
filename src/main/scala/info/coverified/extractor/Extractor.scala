@@ -25,11 +25,11 @@ import zio.console.Console
 import java.io.File
 
 /**
-  * //ToDo: Class Description
-  *
-  * @version 0.1
-  * @since 26.02.21
-  */
+ * //ToDo: Class Description
+ *
+ * @version 0.1
+ * @since 26.02.21
+ */
 final case class Extractor(apiUrl: Uri) {
 
   def getExistingEntries: ZIO[Console with SttpClient, Throwable, List[_]] = ???
@@ -62,9 +62,9 @@ final case class Extractor(apiUrl: Uri) {
   }
 
   def getProfile4Url(
-      url: String,
-      configs: Map[String, ProfileConfig]
-  ): Option[ProfileConfig] = {
+                      url: String,
+                      configs: Map[String, ProfileConfig]
+                    ): Option[ProfileConfig] = {
     configs
       .find {
         case (hostname, cfg) =>
@@ -76,7 +76,7 @@ final case class Extractor(apiUrl: Uri) {
   def getMutations(url: String, sourceId: String, cfg: ProfileConfig) = {
     Analyzer
       .run(url, sourceId, cfg)
-      .map(mut => Connector.sendRequest(mut.toRequest(apiUrl)))
+      .flatMap(_.map(mut => Connector.sendRequest(mut.toRequest(apiUrl))))
   }
 
 }
