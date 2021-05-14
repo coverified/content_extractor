@@ -7,11 +7,13 @@ package info.coverified.extractor
 
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.ArgsParser.Args
+import info.coverified.extractor.config.Config
 import sttp.client3.UriContext
 import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
 import zio.{App, ExitCode, URIO, ZIO}
 
 import java.io.File
+import scala.util.{Failure, Success}
 
 /**
   * //ToDo: Class Description
@@ -24,29 +26,26 @@ object Run extends App with LazyLogging {
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = {
 
     // get args
-    val (extractor, configFolderPath): (Extractor, String) =
-      ArgsParser
+    val (extractor, configFolderPath): (Extractor, String) = {
+      val config = ArgsParser
         .parse(args.toArray)
-        .flatMap {
-          case Args(Some(apiUrl), Some(pageProfileFolderPath)) =>
-            Some((Extractor(uri"$apiUrl"), pageProfileFolderPath))
-          case _ =>
-            logger.info(
-              "Trying to get configuration from environment variables ... "
-            )
-            None
-        }
-        .getOrElse(
-          Option(sys.env("EXTRACTOR_API_URL"))
-            .zip(Option(sys.env("EXTRACTOR_PAGE_PROFILE_PATH"))) match {
-            case Some((apiUrl, pageProfileFolderPath)) =>
-              (Extractor(uri"$apiUrl"), pageProfileFolderPath)
-            case None =>
+        .flatMap(Config.fromArgs(_).toOption) match {
+        case Some(config) => config
+        case None =>
+          logger.info(
+            "Trying to get configuration from environment variables ... "
+          )
+          Config.fromEnv() match {
+            case Success(config) => config
+            case Failure(exception) =>
               throw new RuntimeException(
-                "Config parameters missing!"
+                "Config parameters missing!",
+                exception
               )
           }
-        )
+      }
+      (Extractor(uri"${config.apiUrl}"), config.profileDirectoryPath)
+    }
 
     // debug
     val configs = extractor.getAllConfigs(new File(configFolderPath))
