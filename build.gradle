@@ -2,14 +2,13 @@ plugins {
 	id 'groovy' // groovy support
 	id 'java' // java support
 	id 'scala' // scala support
-	id 'com.diffplug.spotless' version '5.7.0'//code format
-	id "com.github.johnrengelman.shadow" version "5.1.0" // fat jar
-	id "de.undercouch.download" version "3.4.3" // downloads plugin
+	id 'com.diffplug.spotless' version '5.12.5'//code format
+	id 'com.github.johnrengelman.shadow' version '7.0.0' // fat jar
+	id 'de.undercouch.download' version '4.1.1' // downloads plugin
+	id 'com.github.maiflai.scalatest' version '0.31' // testing scala source code
 }
 
-
 ext {
-
 	scalaVersion = '2.13'
 	scalaBinaryVersion = '2.13.1'
 	javaVersion = JavaVersion.VERSION_1_8
@@ -33,45 +32,36 @@ configurations {
 }
 
 repositories {
-	jcenter() //searches in bintray's repository 'jCenter', which contains Maven Central
+	mavenCentral()
 	maven { url 'https://jitpack.io' }
 }
 
 dependencies {
-
 	// coverified dependencies
 	implementation 'com.github.coverified:graphQLConnector:00a1abc245'
 
 	// cmd args parser //
-	compile "com.github.scopt:scopt_${scalaVersion}:4.0.0"
-
-	// https://mvnrepository.com/artifact/net.ruippeixotog/scala-scraper
-	implementation group: 'net.ruippeixotog', name: 'scala-scraper_2.13', version: '2.2.0'
-
-	// https://mvnrepository.com/artifact/com.github.ghostdogpr/caliban
-	implementation group: 'com.github.ghostdogpr', name: "caliban_${scalaVersion}", version: '0.9.5'
-
-	// https://mvnrepository.com/artifact/com.github.ghostdogpr/caliban-client
-	implementation group: 'com.github.ghostdogpr', name: "caliban-client_${scalaVersion}", version: '0.9.5'
-
-	// https://mvnrepository.com/artifact/com.github.ghostdogpr/caliban-codegen
-	//implementation group: 'com.github.ghostdogpr', name: "caliban-codegen_${scalaVersion}", version: '0.8.1'
-
-	// https://mvnrepository.com/artifact/com.github.ghostdogpr/caliban-tools
-	implementation group: 'com.github.ghostdogpr', name: "caliban-tools_${scalaVersion}", version: '0.9.5'
+	implementation "com.github.scopt:scopt_${scalaVersion}:4.0.0"
+	implementation "net.ruippeixotog:scala-scraper_2.13:2.2.0"
+	implementation "com.github.ghostdogpr:caliban_${scalaVersion}:0.9.5"
+	implementation "com.github.ghostdogpr:caliban-client_${scalaVersion}:0.9.5"
+	//implementation "com.github.ghostdogpr:caliban-codegen_${scalaVersion}:0.8.1"
+	implementation "com.github.ghostdogpr:caliban-tools_${scalaVersion}:0.9.5"
 
 	// logging
-	compile "org.slf4j:slf4j-api:${slf4jVersion}"  // slf4j wrapper
-	compile 'com.lmax:disruptor:3.4.2' // async logging
-	compile 'org.apache.logging.log4j:log4j-api:2.14.0' // log4j
-	compile 'org.apache.logging.log4j:log4j-core:2.14.0' // log4j
-	compile 'org.apache.logging.log4j:log4j-slf4j-impl:2.14.0' // log4j -> slf4j
+	implementation "org.slf4j:slf4j-api:${slf4jVersion}"  // slf4j wrapper
+	implementation 'com.lmax:disruptor:3.4.2' // async logging
+	implementation 'org.apache.logging.log4j:log4j-api:2.14.0' // log4j
+	implementation 'org.apache.logging.log4j:log4j-core:2.14.0' // log4j
+	implementation 'org.apache.logging.log4j:log4j-slf4j-impl:2.14.0' // log4j -> slf4j
 
-	compile "com.typesafe.scala-logging:scala-logging_${scalaVersion}:3.9.2" // akka scala logging
-	compile 'com.typesafe.scala-logging:scala-logging-slf4j_2.11:2.1.2'// scala logging
-	compile "org.slf4j:log4j-over-slf4j:${slf4jVersion}" // slf4j -> log4j
-
+	implementation "com.typesafe.scala-logging:scala-logging_${scalaVersion}:3.9.2" // akka scala logging
+	implementation 'com.typesafe.scala-logging:scala-logging-slf4j_2.11:2.1.2'// scala logging
+	implementation "org.slf4j:log4j-over-slf4j:${slf4jVersion}" // slf4j -> log4j
 
 	// CORE Scala //
-	compile "org.scala-lang:scala-library:${scalaBinaryVersion}"
+	implementation "org.scala-lang:scala-library:${scalaBinaryVersion}"
+	/* Testing scala */
+	testImplementation "org.scalatest:scalatest_${scalaVersion}:3.2.8"
+	testImplementation 'com.vladsch.flexmark:flexmark-all:0.35.10'
 }
