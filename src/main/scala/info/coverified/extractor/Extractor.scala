@@ -25,7 +25,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
 }
 import sttp.client3.asynchttpclient.zio.{SttpClient, send}
 import sttp.model.Uri
-import zio.{RIO, ZIO}
+import zio.{RIO, UIO, ZIO}
 import zio.console.Console
 
 import java.io.File
@@ -61,10 +61,9 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
     * @return
     */
   def buildExtractionEffect(): ZIO[Console with SttpClient, Throwable, Unit] = {
-    val urlToProfileConfigs = getAllConfigs(profileDirectoryPath)
-
     /* Getting hands on that ZIO stuff - flat mapping by for-comprehension */
     for {
+      urlToProfileConfigs <- getAllConfigs(profileDirectoryPath)
       availableUrlViews <- getAllUrlViews
       _ <- ZIO.collectAllPar(
         availableUrlViews.flatMap(urlViewToEntryView(_, urlToProfileConfigs))
@@ -80,7 +79,7 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
     */
   private def getAllConfigs(
       cfgDirectoryPath: String
-  ): Map[String, ProfileConfig] = {
+  ): UIO[Map[String, ProfileConfig]] = ZIO.effectTotal {
     val cfgDirectory = new File(cfgDirectoryPath)
     if (cfgDirectory.exists() && cfgDirectory.isDirectory) {
       cfgDirectory.listFiles
@@ -89,7 +88,7 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
         .map(profileCfg => profileCfg.profile.hostname -> profileCfg)
         .toMap
     } else {
-      Map.empty
+      Map.empty[String, ProfileConfig]
     }
   }
 
