@@ -7,18 +7,23 @@ package info.coverified.extractor.config
 
 import info.coverified.extractor.ArgsParser.Args
 import info.coverified.extractor.exceptions.ConfigException
+import sttp.client3.UriContext
+import sttp.model.Uri
 
 import scala.util.{Failure, Success, Try}
 
 /**
   * Configuring the content extraction service
   *
-  * @param apiUrl                URL of the API that needs to be queried for the sites to extract content from
+  * @param apiUri                URI of the API that needs to be queried for the sites to extract content from
   * @param profileDirectoryPath  Directory path, where to find the site profiles
   */
-final case class Config(apiUrl: String, profileDirectoryPath: String)
+final case class Config(apiUri: Uri, profileDirectoryPath: String)
 
 object Config {
+  def apply(apiUrl: String, profileDirectoryPath: String): Config =
+    new Config(uri"$apiUrl", profileDirectoryPath)
+
   private val API_URL_KEY = "EXTRACTOR_API_URL"
   private val PROFILE_DIRECTORY_PATH = "EXTRACTOR_PAGE_PROFILE_PATH"
 
@@ -28,7 +33,7 @@ object Config {
     * @param args The parsed input
     * @return A try to create a [[Config]]
     */
-  def fromArgs(args: Args): Try[Config] = {
+  def fromArgs(args: Args): Try[Config] = args match {
     case Args(Some(apiUrl), Some(pageProfileFolderPath)) =>
       Success(Config(apiUrl, pageProfileFolderPath))
     case _ =>

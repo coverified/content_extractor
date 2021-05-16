@@ -44,7 +44,7 @@ object Run extends App with LazyLogging {
               )
           }
       }
-      (Extractor(uri"${config.apiUrl}"), config.profileDirectoryPath)
+      (Extractor(uri"${config.apiUri}"), config.profileDirectoryPath)
     }
 
     // debug
