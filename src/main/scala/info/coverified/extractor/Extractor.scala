@@ -6,6 +6,7 @@
 package info.coverified.extractor
 
 import com.typesafe.config.ConfigFactory
+import info.coverified.extractor.Extractor.NeededInformation
 import info.coverified.extractor.analyzer.Analyzer
 import info.coverified.extractor.config.Config
 import info.coverified.extractor.profile.ProfileConfig
@@ -37,23 +38,11 @@ import java.io.File
   * @since 26.02.21
   */
 final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
-  /* Defining types as shorthands */
-  type UrlView = Url.UrlView[Source.SourceView[
-    GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
-  ]]
-  type EntryView =
-    Entry.EntryView[CloudinaryImage_File.CloudinaryImage_FileView, Tag.TagView[
-      Language.LanguageView,
-      CloudinaryImage_File.CloudinaryImage_FileView
-    ], _QueryMeta._QueryMetaView, Language.LanguageView, Source.SourceView[
-      GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
-    ]]
 
   /**
     * Build the extraction effect. It consists of the following steps:
     * <ol>
-    *   <li>Acquire all known configs</li>
-    *   <li>Acquire all known urls</li>
+    *   <li>Acquire all needed information in parallel</li>
     *   <li>Find applicable config</li>
     *   <li>Issue content extraction</li>
     * </ol>
@@ -63,13 +52,26 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
   def buildExtractionEffect(): ZIO[Console with SttpClient, Throwable, Unit] = {
     /* Getting hands on that ZIO stuff - flat mapping by for-comprehension */
     for {
-      urlToProfileConfigs <- getAllConfigs(profileDirectoryPath)
-      availableUrlViews <- getAllUrlViews
+      neededInformation <- acquireNeededInformation
       _ <- ZIO.collectAllPar(
-        availableUrlViews.flatMap(urlViewToEntryView(_, urlToProfileConfigs))
+        neededInformation.availableUrlViews.flatMap(
+          urlViewToEntryView(_, neededInformation.hostNameToProfileConfig)
+        )
       )
     } yield ()
   }
+
+  /**
+    * Get all needed information for content extraction in parallel prior to actual processing
+    *
+    * @return An effect, that evaluates to [[NeededInformation]]
+    */
+  private def acquireNeededInformation
+      : ZIO[Console with SttpClient, Throwable, NeededInformation] =
+    getAllConfigs(profileDirectoryPath).zipWithPar(getAllUrlViews) {
+      case (hostnameToConfig, urlViews) =>
+        NeededInformation(hostnameToConfig, urlViews)
+    }
 
   /**
     * Acquire all page profiles available in the given directory path.
@@ -98,7 +100,7 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
     * @return An effect, that evaluates to a list of [[UrlView]]s
     */
   private def getAllUrlViews
-      : ZIO[Console with SttpClient, Throwable, List[UrlView]] = {
+      : ZIO[Console with SttpClient, Throwable, List[Extractor.UrlView]] = {
     val urlsQuery = Query.allUrls()(
       Url.view(
         Source.view(
@@ -117,18 +119,19 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
     *
     * @param urlView              View onto the url
     * @param urlToProfileConfigs  Mapping from url to profile config to use
-    * @return An effect, that evaluates to an [[Option]] of [[EntryView]]
+    * @return An effect, that evaluates to an [[Option]] of [[Extractor.EntryView]]
     */
   private def urlViewToEntryView(
-      urlView: UrlView,
+      urlView: Extractor.UrlView,
       urlToProfileConfigs: Map[String, ProfileConfig]
-  ): Option[RIO[Console with SttpClient, Option[EntryView]]] = urlView match {
-    case UrlView(_, _, Some(url), Some(source)) =>
-      getProfile4Url(url, urlToProfileConfigs).flatMap(
-        profileCfg => getMutations(url, source.id, profileCfg)
-      )
-    case _ => None
-  }
+  ): Option[RIO[Console with SttpClient, Option[Extractor.EntryView]]] =
+    urlView match {
+      case UrlView(_, _, Some(url), Some(source)) =>
+        getProfile4Url(url, urlToProfileConfigs).flatMap(
+          profileCfg => getMutations(url, source.id, profileCfg)
+        )
+      case _ => None
+    }
 
   /**
     * Given a map of hostnames to configs, find that entry, whose hostname is included within the queried url.
@@ -154,13 +157,13 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
     * @param url      Queried url
     * @param sourceId The id of the source
     * @param cfg      [[ProfileConfig]] to use
-    * @return An [[Option]] onto an effect, that evaluates to an [[Option]] onto an [[EntryView]]
+    * @return An [[Option]] onto an effect, that evaluates to an [[Option]] onto an [[Extractor.EntryView]]
     */
   def getMutations(
       url: String,
       sourceId: String,
       cfg: ProfileConfig
-  ): Option[RIO[Console with SttpClient, Option[EntryView]]] = {
+  ): Option[RIO[Console with SttpClient, Option[Extractor.EntryView]]] = {
     Analyzer
       .run(url, sourceId, cfg)
       .flatMap(_.map(mut => Connector.sendRequest(mut.toRequest(apiUrl))))
@@ -171,6 +174,29 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
 }
 
 object Extractor {
+  /* Defining types as shorthands */
+  type UrlView = Url.UrlView[Source.SourceView[
+    GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
+  ]]
+  type EntryView =
+    Entry.EntryView[CloudinaryImage_File.CloudinaryImage_FileView, Tag.TagView[
+      Language.LanguageView,
+      CloudinaryImage_File.CloudinaryImage_FileView
+    ], _QueryMeta._QueryMetaView, Language.LanguageView, Source.SourceView[
+      GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
+    ]]
+
   def apply(config: Config): Extractor =
     new Extractor(config.apiUri, config.profileDirectoryPath)
+
+  /**
+    * Data structure to group all data, that can be loaded in parallel prior to actual information extraction
+    *
+    * @param hostNameToProfileConfig  Mapping a hostname string to applicable [[ProfileConfig]]
+    * @param availableUrlViews        List of all available [[UrlView]]s
+    */
+  final case class NeededInformation(
+      hostNameToProfileConfig: Map[String, ProfileConfig],
+      availableUrlViews: List[UrlView]
+  )
 }
