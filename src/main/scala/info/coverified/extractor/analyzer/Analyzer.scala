@@ -37,41 +37,107 @@ object Analyzer extends LazyLogging {
     Try {
       browser.get(url)
     } match {
+      case Success(pageDoc: browser.DocumentType) =>
+        analyze(url, pageDoc, sourceId, cfg)
       case Failure(exception) =>
         logger.error(
-          s"Exception during analysis of url '$url': ${exception.getMessage}\nStacktrace: ${exception.getStackTrace.toVector}"
+          "Exception during analysis of url '{}': {}\nStacktrace: {}",
+          url,
+          exception.getMessage,
+          exception.getStackTrace.toVector
         )
         None
-      case Success(pageDoc) =>
-        // extract data using matching page type
-        // todo use type name enums
-        val pageTypeName = cfg.profile.pageTypes
-          .find(pageType => {
-            val selectorFits = pageType.condition.selector.forall(selector => {
-              pageDoc >/~ validator(elementList(selector))(_.nonEmpty) match {
-                case Left(_)  => false
-                case Right(_) => true
-              }
-            }) // if selector is not set, it is always true
-
-            val pathFits = pageType.condition.path.forall(url.contains(_)) // if path is not set, it is always true
-
-            selectorFits && pathFits
-          })
-          .map(pt => (pt.name, pt.selectors))
-
-        Some(pageTypeName.map {
-          case ("url", selectors) =>
-            // build url entry
-            buildUrlEntry(pageDoc, url, selectors, sourceId)
-          case ("video", selectors) =>
-            buildVideoEntry(pageDoc, url, selectors, sourceId)
-          case (unknown, _) =>
-            throw new RuntimeException(s"Unknown page type: $unknown")
-        })
     }
   }
 
+  /**
+    * Analyze the given page document and extract information
+    *
+    * @param url            Url of page
+    * @param pageDoc        Page document
+    * @param sourceId       Id of source
+    * @param profileConfig  Applicable profile config for this page
+    * @return An [[Option]] onto an [[Option]] of a selection builder
+    */
+  private def analyze(
+      url: String,
+      pageDoc: Document,
+      sourceId: String,
+      profileConfig: ProfileConfig
+  ) = {
+    // todo use type name enums
+    // TODO CK: Improve control flow at this point (nested options, unhandled exception, ...)
+    Some(determinePageType(url, pageDoc, profileConfig).map {
+      case ("url", selectors) =>
+        // build url entry
+        buildUrlEntry(pageDoc, url, selectors, sourceId)
+      case ("video", selectors) =>
+        buildVideoEntry(pageDoc, url, selectors, sourceId)
+      case (unknown, _) =>
+        throw new RuntimeException(s"Unknown page type: $unknown")
+    })
+  }
+
+  /**
+    * Determine the page type (in terms of it's "name") as well as the associated selectors for this type of document
+    *
+    * @param url            Url of page
+    * @param pageDoc        Page document
+    * @param profileConfig  Applicable profile configuration
+    * @return Option onto a tuple of page type and associated selectors
+    */
+  private def determinePageType(
+      url: String,
+      pageDoc: Document,
+      profileConfig: ProfileConfig
+  ) = {
+    profileConfig.profile.pageTypes
+      .find(
+        pageType =>
+          selectorMatches(pageDoc, pageType) && pathMatches(url, pageType)
+      )
+      .map(pt => (pt.name, pt.selectors))
+  }
+
+  /**
+    * Check, if the page document is covered by the given profile config. If no selector is set, let it pass.
+    *
+    * @param pageDoc  Page document
+    * @param pageType Type of the page
+    * @return True, if selector matches or no selector is set
+    */
+  private def selectorMatches(
+      pageDoc: Document,
+      pageType: ProfileConfig.PageType
+  ): Boolean =
+    pageType.condition.selector.forall(selector => {
+      pageDoc >/~ validator(elementList(selector))(_.nonEmpty) match {
+        case Left(_)  => false
+        case Right(_) => true
+      }
+    })
+
+  /**
+    * Check, if the configured path is contained within the given url
+    *
+    * @param url      Url of the page
+    * @param pageType Type of the page
+    * @return True, the url covers the path or no path is set
+    */
+  private def pathMatches(
+      url: String,
+      pageType: ProfileConfig.PageType
+  ): Boolean = pageType.condition.path.forall(url.contains(_))
+
+  /**
+    * Build an entry with extracted page information for a typical url entry
+    *
+    * @param pageDoc    Page document
+    * @param url        Url of the page
+    * @param selectors  Applicable selectors
+    * @param sourceId   Id of source
+    * @return Applicable [[caliban.client.SelectionBuilder]] for the target mutation
+    */
   private def buildUrlEntry(
       pageDoc: Document,
       url: String,
@@ -117,6 +183,15 @@ object Analyzer extends LazyLogging {
     )
   }
 
+  /**
+    * Build an entry with extracted page information for a video based entry
+    *
+    * @param pageDoc    Page document
+    * @param url        Url of the page
+    * @param selectors  Applicable selectors
+    * @param sourceId   Id of source
+    * @return Applicable [[caliban.client.SelectionBuilder]] for the target mutation
+    */
   private def buildVideoEntry(
       pageDoc: Document,
       url: String,
