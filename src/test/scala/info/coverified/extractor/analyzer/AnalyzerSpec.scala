@@ -5,6 +5,8 @@
 
 package info.coverified.extractor.analyzer
 
+import caliban.client.Operations.RootMutation
+import caliban.client.SelectionBuilder
 import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.extractor.profile.ProfileConfig.PageType.{
@@ -12,34 +14,46 @@ import info.coverified.extractor.profile.ProfileConfig.PageType.{
   Selectors
 }
 import info.coverified.extractor.profile.ProfileConfig.Profile
+import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  CloudinaryImage_File,
+  Entry,
+  GeoLocation,
+  Language,
+  LocationGoogle,
+  Source,
+  Tag,
+  _QueryMeta
+}
 import info.coverified.test.scalatest.{MockBrowser, ZioSpec}
 import net.ruippeixotog.scalascraper.model.Document
 
+import scala.util.{Failure, Success, Try}
+
 class AnalyzerSpec extends ZioSpec with ProfileConfigHelper {
   "Given an analyzer" when {
-    "determining the page type" should {
-      val validPageDoc: Document = MockBrowser.MockDoc()
+    val validPageDoc: Document = MockBrowser.MockDoc()
 
-      val validPageType = ProfileConfig.PageType(
-        condition = Condition(
-          path = Some("https://wwww.coverified.info/impressum"),
-          selector = None
-        ),
-        examples = List("a", "b"),
-        name = "test_type",
-        selectors = Selectors(
-          audio = None,
-          breadcrumb = None,
-          content = "no content",
-          date = None,
-          image = None,
-          subtitle = None,
-          summary = None,
-          title = "fancy title",
-          video = None
-        )
+    val validPageType = ProfileConfig.PageType(
+      condition = Condition(
+        path = Some("https://wwww.coverified.info/impressum"),
+        selector = None
+      ),
+      examples = List("a", "b"),
+      name = "test_type",
+      selectors = Selectors(
+        audio = None,
+        breadcrumb = None,
+        content = "no content",
+        date = None,
+        image = None,
+        subtitle = None,
+        summary = None,
+        title = "fancy title",
+        video = None
       )
+    )
 
+    "determining the page type" should {
       val selectorMatches = PrivateMethod[Boolean](Symbol("selectorMatches"))
 
       "refuse matching selector, if selector does not lead to entries" in {
@@ -170,6 +184,48 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper {
           }
         }
       }
+    }
+
+    "analysing received content" should {
+      val analyze = PrivateMethod[Try[
+        Option[SelectionBuilder[RootMutation, Option[Entry.EntryView[
+          CloudinaryImage_File.CloudinaryImage_FileView,
+          Tag.TagView[
+            Language.LanguageView,
+            CloudinaryImage_File.CloudinaryImage_FileView
+          ],
+          _QueryMeta._QueryMetaView,
+          Language.LanguageView,
+          Source.SourceView[
+            GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
+          ]
+        ]]]]
+      ]](Symbol("analyze"))
+
+      "skip pages, that are not meant to be analyzed" in {
+        val profileConfig = ProfileConfig(
+          Profile(
+            "https://www.coverified.info",
+            List(
+              validPageType.copy(
+                condition = validPageType.condition.copy(
+                  path = Some("some invalid selector"),
+                  selector = Some("some invalid path")
+                )
+              )
+            )
+          )
+        )
+
+        Analyzer invokePrivate analyze(
+          "https://wwww.coverified.info/impressum/subpage",
+          validPageDoc,
+          "coverified",
+          profileConfig
+        ) shouldBe Success(None)
+      }
+
+      // TODO CK: Outcome, if page type can be determined
     }
 
     "running the analysis" should {
