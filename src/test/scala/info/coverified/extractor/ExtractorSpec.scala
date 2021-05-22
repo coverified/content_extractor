@@ -3,13 +3,13 @@
  * Diehl, Fetzer, Hiry, Kilian, Mayer, Schlittenbauer, Schweikert, Vollnhals, Weise GbR
  **/
 
-package info.coverified.extractor.config
+package info.coverified.extractor
 
 import caliban.client.CalibanClientError
 import caliban.client.CalibanClientError.CommunicationError
-import info.coverified.extractor.Extractor
 import info.coverified.extractor.Extractor.NeededInformation
 import info.coverified.extractor.config.ProfileConfigHelper.TempConfig
+import info.coverified.extractor.config.{Config, ProfileConfigHelper}
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.schema.CoVerifiedClientSchema.LocationGoogle.LocationGoogleView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
