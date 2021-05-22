@@ -8,6 +8,7 @@ package info.coverified.extractor.config
 import caliban.client.CalibanClientError
 import caliban.client.CalibanClientError.CommunicationError
 import info.coverified.extractor.Extractor
+import info.coverified.extractor.Extractor.NeededInformation
 import info.coverified.extractor.config.ProfileConfigHelper.TempConfig
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.schema.CoVerifiedClientSchema.LocationGoogle.LocationGoogleView
@@ -25,6 +26,40 @@ import java.nio.file.Files
 class ExtractorSpec extends ZioSpec with ProfileConfigHelper {
   "Given an extractor" when {
     val extractor = Extractor(Config("", ""))
+    val validViews = List(
+      UrlView(
+        _label_ = None,
+        id = "CoVerified",
+        url = Some("https://www.coverified.info"),
+        Some(
+          SourceView(
+            _label_ = None,
+            id = "Test id",
+            name = Some("Test name"),
+            acronym = Some("T"),
+            url = Some("https://www.coverified.info"),
+            location = Some(
+              LocationGoogleView(
+                id = Some("Random place"),
+                googlePlaceID = Some("random id"),
+                formattedAddress = Some("Here Street 12"),
+                lat = Some(7.689946),
+                lng = Some(51.534592)
+              )
+            ),
+            description = Some("Some useful description"),
+            updatedAt = Some("now"),
+            createdAt = Some("now")
+          )
+        )
+      ),
+      UrlView(
+        _label_ = None,
+        id = "ARD",
+        url = Some("https://www.ard.de"),
+        source = None
+      )
+    )
 
     "gathering all profile configs" should {
       val getAllConfigs =
@@ -146,51 +181,68 @@ class ExtractorSpec extends ZioSpec with ProfileConfigHelper {
       }
 
       "return correct views" in {
-        val views = List(
-          UrlView(
-            _label_ = None,
-            id = "CoVerified",
-            url = Some("https://www.coverified.info"),
-            Some(
-              SourceView(
-                _label_ = None,
-                id = "Test id",
-                name = Some("Test name"),
-                acronym = Some("T"),
-                url = Some("https://www.coverified.info"),
-                location = Some(
-                  LocationGoogleView(
-                    id = Some("Random place"),
-                    googlePlaceID = Some("random id"),
-                    formattedAddress = Some("Here Street 12"),
-                    lat = Some(7.689946),
-                    lng = Some(51.534592)
-                  )
-                ),
-                description = Some("Some useful description"),
-                updatedAt = Some("now"),
-                createdAt = Some("now")
-              )
-            )
-          ),
-          UrlView(
-            _label_ = None,
-            id = "ARD",
-            url = Some("https://www.ard.de"),
-            source = None
-          )
-        )
         val body: Either[CalibanClientError, Some[
           List[Some[Url.UrlView[_ <: SourceView[LocationGoogleView]]]]
         ]] =
-          Right(Some(views.map(Some(_))))
+          Right(Some(validViews.map(Some(_))))
         val queryEffect = extractor invokePrivate getAllUrlViews()
         val responseEffect = SttpStubbing.okayCool(queryEffect, body)
 
         val listOfUrlViews = evaluate(responseEffect)
 
         listOfUrlViews.size shouldBe 2
-        views.forall(scheme => listOfUrlViews.contains(scheme)) shouldBe true
+        validViews.forall(scheme => listOfUrlViews.contains(scheme)) shouldBe true
+      }
+    }
+
+    "acquiring all needed information" should {
+      val acquireNeededInformation = PrivateMethod[
+        ZIO[Console with SttpClient, Throwable, NeededInformation]
+      ](Symbol("acquireNeededInformation"))
+
+      "fail, if querying available url fails" in {
+        val body: Either[CalibanClientError, Some[
+          List[Option[Extractor.UrlView]]
+        ]] =
+          Left(CommunicationError("What did you say?"))
+        val queryEffect = extractor invokePrivate acquireNeededInformation()
+        val responseEffect = SttpStubbing.okayCool(queryEffect, body)
+
+        intercept[zio.FiberFailure] {
+          evaluate(responseEffect)
+        }
+      }
+
+      "return all needed information" in {
+        /* Preparation of profile configs */
+        val tempDirectoryPath = Files.createTempDirectory("profileConfigDir")
+        val tempDirectory = tempDirectoryPath.toFile
+        tempDirectory.deleteOnExit()
+        val expectedConfigs = Seq("a", "b", "c").map { hostName =>
+          hostName -> createTempConfig(tempDirectory, hostName)
+        }
+
+        /* Preparation of url query response */
+        val responseBody: Either[CalibanClientError, Some[
+          List[Some[Url.UrlView[_ <: SourceView[LocationGoogleView]]]]
+        ]] =
+          Right(Some(validViews.map(Some(_))))
+
+        /* Point Extractor to correct config directory */
+        val extractor =
+          Extractor(Config("", tempDirectoryPath.toAbsolutePath.toString))
+
+        /* Build complete effect */
+        val queryEffect = extractor invokePrivate acquireNeededInformation()
+        val responseEffect = SttpStubbing.okayCool(queryEffect, responseBody)
+
+        /* Have a look at the outcome */
+        evaluate(responseEffect) match {
+          case NeededInformation(hostNameToProfileConfig, availableUrlViews) =>
+            /* --- Only checking existence, as content is tested in other tests */
+            hostNameToProfileConfig.size shouldBe expectedConfigs.size
+            availableUrlViews.size shouldBe validViews.size
+        }
       }
     }
   }
