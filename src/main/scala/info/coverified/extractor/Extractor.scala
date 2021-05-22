@@ -8,7 +8,7 @@ package info.coverified.extractor
 import caliban.client.Operations.RootQuery
 import caliban.client.{CalibanClientError, SelectionBuilder}
 import com.typesafe.config.ConfigFactory
-import info.coverified.extractor.Extractor.NeededInformation
+import info.coverified.extractor.Extractor.{NeededInformation, getProfile4Url}
 import info.coverified.extractor.analyzer.Analyzer
 import info.coverified.extractor.config.Config
 import info.coverified.extractor.profile.ProfileConfig
@@ -149,24 +149,6 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
     }
 
   /**
-    * Given a map of hostnames to configs, find that entry, whose hostname is included within the queried url.
-    *
-    * @param url              Queried url
-    * @param hostNameToConfig Mapping a host name onto it's applicable config
-    * @return An [[Option]] onto an applicable config
-    */
-  private def getProfile4Url(
-      url: String,
-      hostNameToConfig: Map[String, ProfileConfig]
-  ): Option[ProfileConfig] =
-    hostNameToConfig
-      .find {
-        case (hostname, _) =>
-          url.contains(hostname)
-      }
-      .map(_._2)
-
-  /**
     * Issue the analyser and try to mutate the given url together with the config into an entry
     *
     * @param url      Queried url
@@ -214,4 +196,22 @@ object Extractor {
       hostNameToProfileConfig: Map[String, ProfileConfig],
       availableUrlViews: List[UrlView]
   )
+
+  /**
+    * Given a map of hostnames to configs, find that entry, whose hostname is included within the queried url.
+    *
+    * @param url              Queried url
+    * @param hostNameToConfig Mapping a host name onto it's applicable config
+    * @return An [[Option]] onto an applicable config
+    */
+  private def getProfile4Url(
+      url: String,
+      hostNameToConfig: Map[String, ProfileConfig]
+  ): Option[ProfileConfig] =
+    hostNameToConfig
+      .find {
+        case (hostname, _) =>
+          url.contains(hostname)
+      }
+      .map(_._2)
 }

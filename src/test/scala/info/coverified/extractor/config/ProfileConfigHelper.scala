@@ -20,33 +20,8 @@ trait ProfileConfigHelper {
     * @param hostname   Host name, the config does belong to
     * @return An instance of [[TempConfig]] that contains the expected config and the temp file
     */
-  def createTempConfig(directory: File, hostname: String): TempConfig = {
-    val content =
-      s"""
-        |profile {
-        |    hostname = "$hostname"
-        |    pageTypes = [{
-        |      name = "b"
-        |      condition {
-        |        path = "c"
-        |        selector = "d"
-        |    }
-        |    selectors {
-        |        content = "e"
-        |        title = "f"
-        |        subtitle = "g"
-        |        summary = "h"
-        |        date = "i"
-        |        image = "j"
-        |        video = "k"
-        |        audio = "l"
-        |        breadcrumb = "m"
-        |    }
-        |    examples = ["n", "o", "p"]
-        |    }]
-        |}
-        |""".stripMargin
-    val expectedConfig = ProfileConfig(ConfigFactory.parseString(content))
+  def writeTempConfig(directory: File, hostname: String): TempConfig = {
+    val (content, expectedConfig) = generateTempConfig(hostname)
     val configFile = File.createTempFile("config", "", directory)
     new PrintWriter(configFile) {
       try {
@@ -58,6 +33,50 @@ trait ProfileConfigHelper {
 
     TempConfig(expectedConfig, configFile)
   }
+
+  /**
+    * Generates a sample / temporary config for the given host name
+    *
+    * @param hostname Host name, the config belongs to
+    * @return A tuple of content and instance
+    */
+  private def generateTempConfig(hostname: String): (String, ProfileConfig) = {
+    val content =
+      s"""
+         |profile {
+         |    hostname = "$hostname"
+         |    pageTypes = [{
+         |      name = "b"
+         |      condition {
+         |        path = "c"
+         |        selector = "d"
+         |    }
+         |    selectors {
+         |        content = "e"
+         |        title = "f"
+         |        subtitle = "g"
+         |        summary = "h"
+         |        date = "i"
+         |        image = "j"
+         |        video = "k"
+         |        audio = "l"
+         |        breadcrumb = "m"
+         |    }
+         |    examples = ["n", "o", "p"]
+         |    }]
+         |}
+         |""".stripMargin
+    (content, ProfileConfig(ConfigFactory.parseString(content)))
+  }
+
+  /**
+    * Generates a sample / temporary config for the given host name
+    *
+    * @param hostname Host name, the config belongs to
+    * @return The config
+    */
+  def getConfig(hostname: String): ProfileConfig =
+    generateTempConfig(hostname)._2
 }
 
 object ProfileConfigHelper {

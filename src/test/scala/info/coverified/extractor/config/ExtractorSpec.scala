@@ -16,6 +16,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Url
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Url.UrlView
 import info.coverified.test.scalatest.{SttpStubbing, ZioSpec}
+import org.scalatest.prop.TableDrivenPropertyChecks
 import sttp.client3.asynchttpclient.zio.SttpClient
 import zio.console.Console
 import zio.{UIO, ZIO}
@@ -23,7 +24,10 @@ import zio.{UIO, ZIO}
 import java.io.File
 import java.nio.file.Files
 
-class ExtractorSpec extends ZioSpec with ProfileConfigHelper {
+class ExtractorSpec
+    extends ZioSpec
+    with ProfileConfigHelper
+    with TableDrivenPropertyChecks {
   "Given an extractor" when {
     val extractor = Extractor(Config("", ""))
     val validViews = List(
@@ -90,7 +94,7 @@ class ExtractorSpec extends ZioSpec with ProfileConfigHelper {
 
       "return correct mapping from valid file" in {
         val expectedConfigs = Seq("a", "b", "c").map { hostName =>
-          hostName -> createTempConfig(tempDirectory, hostName)
+          hostName -> writeTempConfig(tempDirectory, hostName)
         }
 
         val urlToConfig = evaluate(
@@ -113,7 +117,7 @@ class ExtractorSpec extends ZioSpec with ProfileConfigHelper {
 
       "not be bothered by additional directories in there" in {
         val expectedConfigs = Seq("a", "b", "c").map { hostName =>
-          hostName -> createTempConfig(tempDirectory, hostName)
+          hostName -> writeTempConfig(tempDirectory, hostName)
         }
         val additionalDirectory =
           Files.createTempDirectory(tempDirectoryPath, "additionalDirectory")
@@ -219,7 +223,7 @@ class ExtractorSpec extends ZioSpec with ProfileConfigHelper {
         val tempDirectory = tempDirectoryPath.toFile
         tempDirectory.deleteOnExit()
         val expectedConfigs = Seq("a", "b", "c").map { hostName =>
-          hostName -> createTempConfig(tempDirectory, hostName)
+          hostName -> writeTempConfig(tempDirectory, hostName)
         }
 
         /* Preparation of url query response */
@@ -242,6 +246,38 @@ class ExtractorSpec extends ZioSpec with ProfileConfigHelper {
             /* --- Only checking existence, as content is tested in other tests */
             hostNameToProfileConfig.size shouldBe expectedConfigs.size
             availableUrlViews.size shouldBe validViews.size
+        }
+      }
+    }
+
+    "filtering for matching config" when {
+      val getProfile4Url =
+        PrivateMethod[Option[ProfileConfig]](Symbol("getProfile4Url"))
+
+      "return none, if no matching config is available" in {
+        Extractor invokePrivate getProfile4Url(
+          "https://www.coverified.info",
+          Map.empty[String, ProfileConfig]
+        ) shouldBe None
+      }
+
+      "return correct profile config" in {
+        val hostnameToConfig = Seq("coverified.info", "ard.de")
+          .map(hostname => hostname -> getConfig(hostname))
+          .toMap
+        val expectedConfig = hostnameToConfig
+          .get("coverified.info")
+          .orElse(fail("Unable to acquire config, I just created"))
+
+        forAll(
+          Table(
+            "url",
+            "https://www.coverified.info/",
+            "https://www.coverified.info/impressum",
+            "https://www.coverified.info/about"
+          )
+        ) { url =>
+          (Extractor invokePrivate getProfile4Url(url, hostnameToConfig)) shouldBe expectedConfig
         }
       }
     }
