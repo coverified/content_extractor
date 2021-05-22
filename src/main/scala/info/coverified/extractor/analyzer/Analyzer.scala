@@ -11,10 +11,11 @@ import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
-import net.ruippeixotog.scalascraper.model.Document
-import java.time.ZonedDateTime
+import net.ruippeixotog.scalascraper.model.{Document, Element}
 
+import java.time.ZonedDateTime
 import com.typesafe.scalalogging.LazyLogging
+import net.ruippeixotog.scalascraper.scraper.HtmlExtractor
 
 import scala.util.{Failure, Success, Try}
 

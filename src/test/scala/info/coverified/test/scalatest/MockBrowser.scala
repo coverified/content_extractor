@@ -72,8 +72,9 @@ class MockBrowser extends Browser {
 
 object MockBrowser {
   val dislikedUrl: String = "dontLikeThatUrl"
+  val validSelector: String = "validSelector"
 
-  class MockDoc extends Document {
+  case class MockDoc() extends Document {
     override type ElementType = MockElement
 
     override def location: String =
@@ -81,10 +82,7 @@ object MockBrowser {
         "That feature is not implemented in mocked document."
       )
 
-    override def root: MockElement =
-      throw new NotImplementedError(
-        "That feature is not implemented in mocked document."
-      )
+    override def root: MockElement = new MockElement
 
     override def toHtml: String =
       throw new NotImplementedError(
@@ -155,10 +153,14 @@ object MockBrowser {
         "That feature is not implemented in mocked element."
       )
 
-    override def select(query: String): ElementQuery[MockElement] =
-      throw new NotImplementedError(
-        "That feature is not implemented in mocked element."
-      )
+    override def select(query: String): ElementQuery[MockElement] = {
+      if (query == validSelector)
+        ElementQuery(this)
+      else
+        throw new NotImplementedError(
+          "That feature is not implemented in mocked element."
+        )
+    }
   }
 
   final case class DislikeThatUrlException(

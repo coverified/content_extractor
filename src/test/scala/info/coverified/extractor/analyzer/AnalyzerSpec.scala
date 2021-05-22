@@ -12,10 +12,13 @@ import info.coverified.extractor.profile.ProfileConfig.PageType.{
   Selectors
 }
 import info.coverified.test.scalatest.{MockBrowser, ZioSpec}
+import net.ruippeixotog.scalascraper.model.Document
 
 class AnalyzerSpec extends ZioSpec with ProfileConfigHelper {
   "Given an analyzer" when {
     "determining the page type" should {
+      val validPageDoc: Document = MockBrowser.MockDoc()
+
       val validPageType = ProfileConfig.PageType(
         condition = Condition(
           path = Some("https://wwww.coverified.info/impressum"),
@@ -36,7 +39,53 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper {
         )
       )
 
+      val selectorMatches = PrivateMethod[Boolean](Symbol("selectorMatches"))
+
+      "refuse matching selector, if selector does not lead to entries" in {
+        val pageTypeWithoutSelectors = validPageType.copy(
+          condition = validPageType.condition
+            .copy(selector = Some("this won't work"))
+        )
+        Analyzer invokePrivate selectorMatches(
+          validPageDoc,
+          pageTypeWithoutSelectors
+        ) shouldBe false
+      }
+
+      "confirm matching selector, if selector leads to entries" in {
+        val pageTypeWithoutSelectors = validPageType.copy(
+          condition = validPageType.condition
+            .copy(selector = Some(MockBrowser.validSelector))
+        )
+        Analyzer invokePrivate selectorMatches(
+          validPageDoc,
+          pageTypeWithoutSelectors
+        ) shouldBe true
+      }
+
+      "confirm matching selector, if no selector is set" in {
+        val pageTypeWithoutSelectors = validPageType.copy(
+          condition = validPageType.condition
+            .copy(selector = None)
+        )
+        Analyzer invokePrivate selectorMatches(
+          validPageDoc,
+          pageTypeWithoutSelectors
+        ) shouldBe true
+      }
+
       val pathMatches = PrivateMethod[Boolean](Symbol("pathMatches"))
+
+      "deny matching path, if path does not match" in {
+        val pageTypeWithPath = validPageType.copy(
+          condition = validPageType.condition
+            .copy(path = Some("https://wwww.ard.de"))
+        )
+        Analyzer invokePrivate pathMatches(
+          "https://wwww.coverified.info/impressum/subpage",
+          pageTypeWithPath
+        ) shouldBe false
+      }
 
       "confirm matching path, if path actually matches" in {
         val pageTypeWithPath = validPageType.copy(
