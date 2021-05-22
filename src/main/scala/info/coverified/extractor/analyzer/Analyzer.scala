@@ -38,7 +38,7 @@ object Analyzer extends LazyLogging {
       browser.get(url)
     } match {
       case Success(pageDoc: browser.DocumentType) =>
-        analyze(url, pageDoc, sourceId, cfg)
+        analyze(url, pageDoc, sourceId, cfg).toOption
       case Failure(exception) =>
         logger.error(
           "Exception during analysis of url '{}': {}\nStacktrace: {}",
@@ -67,15 +67,17 @@ object Analyzer extends LazyLogging {
   ) = {
     // todo use type name enums
     // TODO CK: Improve control flow at this point (nested options, unhandled exception, ...)
-    Some(determinePageType(url, pageDoc, profileConfig).map {
-      case ("url", selectors) =>
-        // build url entry
-        buildUrlEntry(pageDoc, url, selectors, sourceId)
-      case ("video", selectors) =>
-        buildVideoEntry(pageDoc, url, selectors, sourceId)
-      case (unknown, _) =>
-        throw new RuntimeException(s"Unknown page type: $unknown")
-    })
+    Try {
+      determinePageType(url, pageDoc, profileConfig).map {
+        case ("url", selectors) =>
+          // build url entry
+          buildUrlEntry(pageDoc, url, selectors, sourceId)
+        case ("video", selectors) =>
+          buildVideoEntry(pageDoc, url, selectors, sourceId)
+        case (unknown, _) =>
+          throw new RuntimeException(s"Unknown page type: $unknown")
+      }
+    }
   }
 
   /**
