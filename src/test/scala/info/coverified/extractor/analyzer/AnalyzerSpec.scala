@@ -11,6 +11,7 @@ import info.coverified.extractor.profile.ProfileConfig.PageType.{
   Condition,
   Selectors
 }
+import info.coverified.extractor.profile.ProfileConfig.Profile
 import info.coverified.test.scalatest.{MockBrowser, ZioSpec}
 import net.ruippeixotog.scalascraper.model.Document
 
@@ -107,6 +108,67 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper {
           "https://wwww.coverified.info/impressum/subpage",
           pageTypeWithPath
         ) shouldBe true
+      }
+
+      val determinePageType =
+        PrivateMethod[Option[(String, Selectors)]](Symbol("determinePageType"))
+      val validPath = Some("https://wwww.coverified.info/impressum")
+
+      "fail, if one of either conditions is not satisfied" in {
+        forAll(
+          Table(
+            ("selector", "path"),
+            (Some("some invalid selector"), Some("some invalid path")),
+            (Some(MockBrowser.validSelector), Some("some invalid path")),
+            (Some("some invalid selector"), validPath)
+          )
+        ) { (selector, path) =>
+          val pageType = validPageType.copy(
+            condition =
+              validPageType.condition.copy(path = path, selector = selector)
+          )
+
+          val profileConfig = ProfileConfig(
+            Profile("https://www.coverified.info", List(pageType))
+          )
+
+          Analyzer invokePrivate determinePageType(
+            "https://wwww.coverified.info/impressum/subpage",
+            validPageDoc,
+            profileConfig
+          ) shouldBe None
+        }
+      }
+
+      "succeed, if both conditions are satisfied" in {
+        forAll(
+          Table(
+            ("selector", "path"),
+            (None, None),
+            (Some(MockBrowser.validSelector), None),
+            (None, validPath)
+          )
+        ) { (selector, path) =>
+          val pageType = validPageType.copy(
+            condition =
+              validPageType.condition.copy(path = path, selector = selector)
+          )
+
+          val profileConfig = ProfileConfig(
+            Profile("https://www.coverified.info", List(pageType))
+          )
+
+          Analyzer invokePrivate determinePageType(
+            "https://wwww.coverified.info/impressum/subpage",
+            validPageDoc,
+            profileConfig
+          ) match {
+            case Some((name, selectors)) =>
+              name shouldBe validPageType.name
+              selectors shouldBe validPageType.selectors
+            case None => fail("Page type should be determined.")
+          }
+        }
       }
     }
 
