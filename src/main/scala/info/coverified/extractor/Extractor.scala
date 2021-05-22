@@ -5,6 +5,8 @@
 
 package info.coverified.extractor
 
+import caliban.client.Operations.RootQuery
+import caliban.client.{CalibanClientError, SelectionBuilder}
 import com.typesafe.config.ConfigFactory
 import info.coverified.extractor.Extractor.NeededInformation
 import info.coverified.extractor.analyzer.Analyzer
@@ -24,6 +26,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Url,
   _QueryMeta
 }
+import sttp.client3.Request
 import sttp.client3.asynchttpclient.zio.{SttpClient, send}
 import sttp.model.Uri
 import zio.{RIO, UIO, ZIO}
@@ -100,18 +103,30 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
     * @return An effect, that evaluates to a list of [[UrlView]]s
     */
   private def getAllUrlViews
-      : ZIO[Console with SttpClient, Throwable, List[Extractor.UrlView]] = {
-    val urlsQuery = Query.allUrls()(
+      : ZIO[Console with SttpClient, Throwable, List[Extractor.UrlView]] =
+    Connector
+      .sendRequest {
+        val request: Request[Either[CalibanClientError, Option[
+          List[Option[Extractor.UrlView]]
+        ]], Any] = buildUrlQuery.toRequest(apiUrl)
+        request
+      }
+      .map(_.map(_.flatten).getOrElse(List.empty))
+
+  /**
+    * Build up a query to get all urls
+    *
+    * @return A selection builder with the equivalent query
+    */
+  private def buildUrlQuery
+      : SelectionBuilder[RootQuery, Option[List[Option[Extractor.UrlView]]]] =
+    Query.allUrls()(
       Url.view(
         Source.view(
           GeoLocation.view(LocationGoogle.view)
         )
       )
     )
-    Connector
-      .sendRequest(urlsQuery.toRequest(apiUrl))
-      .map(_.map(_.flatten).getOrElse(List.empty))
-  }
 
   /**
     * Based on the received url view, try to find matching profile and acquire and view onto the entry, that it forms
