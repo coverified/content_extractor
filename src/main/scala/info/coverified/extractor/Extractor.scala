@@ -26,6 +26,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Url,
   _QueryMeta
 }
+import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import sttp.client3.Request
 import sttp.client3.asynchttpclient.zio.{SttpClient, send}
 import sttp.model.Uri
@@ -58,7 +59,7 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
       neededInformation <- acquireNeededInformation
       _ <- ZIO.collectAllPar(
         neededInformation.availableUrlViews.flatMap(
-          urlViewToEntryView(_, neededInformation.hostNameToProfileConfig)
+          extractInformation(_, neededInformation.hostNameToProfileConfig)
         )
       )
     } yield ()
@@ -134,16 +135,18 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
     *
     * @param urlView              View onto the url
     * @param urlToProfileConfigs  Mapping from url to profile config to use
+    * @param browser              The browser to be used for content extraction
     * @return An effect, that evaluates to an [[Option]] of [[Extractor.EntryView]]
     */
-  private def urlViewToEntryView(
+  private def extractInformation(
       urlView: Extractor.UrlView,
-      urlToProfileConfigs: Map[String, ProfileConfig]
+      urlToProfileConfigs: Map[String, ProfileConfig],
+      browser: Browser = JsoupBrowser()
   ): Option[RIO[Console with SttpClient, Option[Extractor.EntryView]]] =
     urlView match {
       case UrlView(_, _, Some(url), Some(source)) =>
         getProfile4Url(url, urlToProfileConfigs).flatMap(
-          profileCfg => getMutations(url, source.id, profileCfg)
+          getMutations(url, source.id, _, browser)
         )
       case _ => None
     }
@@ -154,15 +157,17 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
     * @param url      Queried url
     * @param sourceId The id of the source
     * @param cfg      [[ProfileConfig]] to use
+    * @param browser  The browser to be used for content extraction
     * @return An [[Option]] onto an effect, that evaluates to an [[Option]] onto an [[Extractor.EntryView]]
     */
-  def getMutations(
+  private def getMutations(
       url: String,
       sourceId: String,
-      cfg: ProfileConfig
+      cfg: ProfileConfig,
+      browser: Browser = JsoupBrowser()
   ): Option[RIO[Console with SttpClient, Option[Extractor.EntryView]]] = {
     Analyzer
-      .run(url, sourceId, cfg)
+      .run(url, sourceId, cfg, browser)
       .flatMap(_.map(mut => Connector.sendRequest(mut.toRequest(apiUrl))))
   }
 

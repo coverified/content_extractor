@@ -8,18 +8,23 @@ package info.coverified.extractor
 import caliban.client.CalibanClientError
 import caliban.client.CalibanClientError.CommunicationError
 import info.coverified.extractor.Extractor.NeededInformation
+import info.coverified.extractor.analyzer.BrowserHelper
 import info.coverified.extractor.config.ProfileConfigHelper.TempConfig
 import info.coverified.extractor.config.{Config, ProfileConfigHelper}
 import info.coverified.extractor.profile.ProfileConfig
+import info.coverified.graphql.schema.CoVerifiedClientSchema.Entry.EntryView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.LocationGoogle.LocationGoogleView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Url
+import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  EntryTypeType,
+  Url
+}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Url.UrlView
-import info.coverified.test.scalatest.{SttpStubbing, ZioSpec}
+import info.coverified.test.scalatest.{MockBrowser, SttpStubbing, ZioSpec}
 import org.scalatest.prop.TableDrivenPropertyChecks
 import sttp.client3.asynchttpclient.zio.SttpClient
 import zio.console.Console
-import zio.{UIO, ZIO}
+import zio.{RIO, UIO, ZIO}
 
 import java.io.File
 import java.nio.file.Files
@@ -27,6 +32,7 @@ import java.nio.file.Files
 class ExtractorSpec
     extends ZioSpec
     with ProfileConfigHelper
+    with BrowserHelper
     with TableDrivenPropertyChecks {
   "Given an extractor" when {
     val extractor = Extractor(Config("", ""))
@@ -278,6 +284,93 @@ class ExtractorSpec
           )
         ) { url =>
           (Extractor invokePrivate getProfile4Url(url, hostnameToConfig)) shouldBe expectedConfig
+        }
+      }
+    }
+
+    "extracting information" when {
+      val getMutations = PrivateMethod[Option[
+        RIO[Console with SttpClient, Option[Extractor.EntryView]]
+      ]](Symbol("getMutations"))
+
+      "sending mutations to API responds okay" in {
+        val url = coverifiedUrl
+        val sourceId = "coverified"
+        val profileConfig = getConfig(coverifiedUrl)
+        val mockBrowser = MockBrowser(Map(coverifiedUrl -> validUrlPageDoc))
+
+        extractor invokePrivate getMutations(
+          url,
+          sourceId,
+          profileConfig,
+          mockBrowser
+        ) match {
+          case Some(effect) =>
+            evaluate(SttpStubbing.okayEntry(effect)) match {
+              case Some(entryView) =>
+                entryView.url shouldBe Some(coverifiedUrl)
+              case None => fail("Didn't got an entry view.")
+            }
+          case None => fail("Expected to get an analysis effect")
+        }
+      }
+
+      val extractInformation = PrivateMethod[Option[
+        RIO[Console with SttpClient, Option[Extractor.EntryView]]
+      ]](Symbol("extractInformation"))
+      val mockBrowser = MockBrowser(Map(coverifiedUrl -> validUrlPageDoc))
+
+      "fails either given no url or source id" in {
+        forAll(
+          Table(
+            ("url", "sourceId"),
+            (None, None),
+            (Some("url"), None),
+            (None, Some("sourceId"))
+          )
+        ) { (url, sourceId) =>
+          val maliciousUrlView = UrlView(
+            _label_ = None,
+            id = "malicious view",
+            url = url,
+            source = sourceId
+          )
+          (extractor invokePrivate extractInformation(
+            maliciousUrlView,
+            Map("test" -> getConfig("test")),
+            mockBrowser
+          )) shouldBe None
+        }
+      }
+
+      "succeeds if given proper information" in {
+        val url = coverifiedUrl
+
+        val urlView = UrlView(
+          _label_ = None,
+          id = "malicious view",
+          url = Some(url),
+          source = Some(
+            SourceView(
+              _label_ = None,
+              id = "source id",
+              name = None,
+              acronym = None,
+              url = Some(url),
+              location = None,
+              description = None,
+              updatedAt = None,
+              createdAt = None
+            )
+          )
+        )
+        extractor invokePrivate extractInformation(
+          urlView,
+          Map(url -> getConfig(url)),
+          mockBrowser
+        ) match {
+          case Some(_) => succeed
+          case None    => fail("Extraction of information was not meant to fail.")
         }
       }
     }
