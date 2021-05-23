@@ -11,11 +11,10 @@ import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
-import net.ruippeixotog.scalascraper.model.{Document, Element}
+import net.ruippeixotog.scalascraper.model.Document
 
 import java.time.ZonedDateTime
 import com.typesafe.scalalogging.LazyLogging
-import net.ruippeixotog.scalascraper.scraper.HtmlExtractor
 
 import scala.util.{Failure, Success, Try}
 
@@ -66,17 +65,11 @@ object Analyzer extends LazyLogging {
       sourceId: String,
       profileConfig: ProfileConfig
   ) = {
-    // todo use type name enums
     // TODO CK: Improve control flow at this point (nested options, unhandled exception, ...)
     Try {
       determinePageType(url, pageDoc, profileConfig).map {
-        case ("url", selectors) =>
-          // build url entry
-          buildUrlEntry(pageDoc, url, selectors, sourceId)
-        case ("video", selectors) =>
-          buildVideoEntry(pageDoc, url, selectors, sourceId)
-        case (unknown, _) =>
-          throw new RuntimeException(s"Unknown page type: $unknown")
+        case (pageType, selectors) =>
+          buildEntry(url, pageDoc, pageType, sourceId, selectors)
       }
     }
   }
@@ -94,6 +87,7 @@ object Analyzer extends LazyLogging {
       pageDoc: Document,
       profileConfig: ProfileConfig
   ) = {
+    // todo use type name enums
     profileConfig.profile.pageTypes
       .find(
         pageType =>
@@ -133,6 +127,32 @@ object Analyzer extends LazyLogging {
   ): Boolean = pageType.condition.path.forall(url.contains(_))
 
   /**
+    * Build entry for extracted page information based on the different page types available.
+    *
+    * @param url        Url of page
+    * @param pageDoc    Page document
+    * @param pageType   Type of page
+    * @param sourceId   Identifier of the source
+    * @param selectors  Selector description to gather information
+    * @return
+    */
+  private def buildEntry(
+      url: String,
+      pageDoc: Document,
+      pageType: String,
+      sourceId: String,
+      selectors: Selectors
+  ) = (pageType, selectors) match {
+    case ("url", selectors) =>
+      // build url entry
+      buildUrlEntry(pageDoc, url, selectors, sourceId)
+    case ("video", selectors) =>
+      buildVideoEntry(pageDoc, url, selectors, sourceId)
+    case (unknown, _) =>
+      throw new RuntimeException(s"Unknown page type: $unknown")
+  }
+
+  /**
     * Build an entry with extracted page information for a typical url entry
     *
     * @param pageDoc    Page document
@@ -146,24 +166,58 @@ object Analyzer extends LazyLogging {
       url: String,
       selectors: Selectors,
       sourceId: String
-  ) = {
-    // extract data
-    val title = pageDoc >?> text(selectors.title)
-    val content = pageDoc >?> text(selectors.content)
-    //    val image = selectors.image.flatMap(pageDoc >?> attr("src")(_)) todo
-    val subtitle = selectors.subtitle.flatMap(pageDoc >?> text(_))
-    //    val breadcrumb = selectors.breadcrumb.flatMap(pageDoc >?> text(_)) todo
+  ) = extractUrlViewInformation(pageDoc, selectors) match {
+    case UrlViewInformation(title, subTitle, content, publishDate) =>
+      createUrlEntry(url, sourceId, title, subTitle, content, publishDate)
+  }
 
-    // build entry mutation
+  /**
+    * Extract the needed information from page document
+    *
+    * @param pageDoc    Page document to use
+    * @param selectors  Selectors to use
+    * @return Gathered information for url page
+    */
+  private def extractUrlViewInformation(
+      pageDoc: Document,
+      selectors: Selectors
+  ): UrlViewInformation = UrlViewInformation(
+    pageDoc >?> text(selectors.title),
+    selectors.subtitle.flatMap(query => pageDoc >?> text(query)),
+    pageDoc >?> text(selectors.content),
+    Some(ZonedDateTime.now().toLocalDate.toString) // todo
+    //    val image = selectors.image.flatMap(pageDoc >?> attr("src")(_)) todo
+    //    val breadcrumb = selectors.breadcrumb.flatMap(pageDoc >?> text(_)) todo
+  )
+
+  /**
+    * Actually building the entry with all needed information
+    *
+    * @param url              Url of page
+    * @param sourceId         Source identifier
+    * @param maybeTitle       Option onto title
+    * @param maybeSubTitle    Option onto subtitle
+    * @param maybeContent     Option onto content
+    * @param maybePublishDate Option onto publication date
+    * @return Entry for url page
+    */
+  private def createUrlEntry(
+      url: String,
+      sourceId: String,
+      maybeTitle: Option[String],
+      maybeSubTitle: Option[String],
+      maybeContent: Option[String],
+      maybePublishDate: Option[String]
+  ) = {
     Mutation.createEntry(
       Some(
         EntryCreateInput(
-          title = title,
-          subTitle = subtitle,
-          content = content,
+          title = maybeTitle,
+          subTitle = maybeSubTitle,
+          content = maybeContent,
           url = Some(url),
           `type` = Some(EntryTypeType.url),
-          publishDate = Some(ZonedDateTime.now().toLocalDate.toString), // todo
+          publishDate = maybePublishDate,
           source = Some(
             SourceRelateToOneInput(
               connect = Some(
@@ -201,24 +255,59 @@ object Analyzer extends LazyLogging {
       selectors: Selectors,
       sourceId: String
   ) = {
-    // extract data
-    val title = pageDoc >?> text(selectors.title)
-    val content = pageDoc >?> text(selectors.content)
-    //    val video = pageDoc >?> text(selectors.video) todo
-    val subtitle = selectors.subtitle.flatMap(pageDoc >?> text(_))
-    //    val breadcrumb = selectors.breadcrumb.flatMap(pageDoc >?> text(_)) todo
-    //    val date = selectors.date.flatMap(pageDoc >?> text(_)) // todo
+    extractVideoViewInformation(pageDoc, selectors) match {
+      case VideoViewInformation(title, subTitle, content, publishDate) =>
+        createVideoEntry(url, sourceId, title, subTitle, content, publishDate)
+    }
+  }
 
-    // build entry mutation
+  /**
+    * Extract the needed information from page document
+    *
+    * @param pageDoc    Page document to use
+    * @param selectors  Selectors to use
+    * @return Gathered information for video page
+    */
+  private def extractVideoViewInformation(
+      pageDoc: Document,
+      selectors: Selectors
+  ): VideoViewInformation = VideoViewInformation(
+    pageDoc >?> text(selectors.title),
+    selectors.subtitle.flatMap(query => pageDoc >?> text(query)),
+    pageDoc >?> text(selectors.content),
+    Some(ZonedDateTime.now().toLocalDate.toString) // todo
+    //    val image = selectors.image.flatMap(pageDoc >?> attr("src")(_)) todo
+    //    val breadcrumb = selectors.breadcrumb.flatMap(pageDoc >?> text(_)) todo
+  )
+
+  /**
+    * Actually building the entry with all needed information
+    *
+    * @param url              Url of page
+    * @param sourceId         Source identifier
+    * @param maybeTitle       Option onto title
+    * @param maybeSubTitle    Option onto subtitle
+    * @param maybeContent     Option onto content
+    * @param maybePublishDate Option onto publication date
+    * @return Entry for url page
+    */
+  private def createVideoEntry(
+      url: String,
+      sourceId: String,
+      maybeTitle: Option[String],
+      maybeSubTitle: Option[String],
+      maybeContent: Option[String],
+      maybePublishDate: Option[String]
+  ) = {
     Mutation.createEntry(
       Some(
         EntryCreateInput(
-          title = title,
-          subTitle = subtitle,
-          content = content,
+          title = maybeTitle,
+          subTitle = maybeSubTitle,
+          content = maybeContent,
           url = Some(url),
           `type` = Some(EntryTypeType.video),
-          publishDate = Some(ZonedDateTime.now().toLocalDate.toString), // todo
+          publishDate = maybePublishDate,
           source = Some(
             SourceRelateToOneInput(
               connect = Some(
@@ -240,5 +329,4 @@ object Analyzer extends LazyLogging {
       )
     )
   }
-
 }
