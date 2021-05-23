@@ -46,10 +46,10 @@ trait ProfileConfigHelper {
          |profile {
          |    hostname = "$hostname"
          |    pageTypes = [{
-         |      name = "b"
+         |      name = "url"
          |      condition {
-         |        path = "c"
-         |        selector = "d"
+         |        path = "$hostname"
+         |        selector = "title"
          |    }
          |    selectors {
          |        content = "e"

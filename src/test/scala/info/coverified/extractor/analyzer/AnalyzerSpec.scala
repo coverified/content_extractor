@@ -27,20 +27,21 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   _QueryMeta
 }
 import info.coverified.test.scalatest.{MockBrowser, ZioSpec}
-import net.ruippeixotog.scalascraper.browser.JsoupBrowser
 import net.ruippeixotog.scalascraper.model.Document
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.Inside.inside
 
 import scala.util.{Failure, Success, Try}
 
-class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
+class AnalyzerSpec
+    extends ZioSpec
+    with ProfileConfigHelper
+    with BrowserHelper
+    with MockitoSugar {
   "Given an analyzer" when {
-    val validPageDoc: Document = MockBrowser.MockDoc()
-
     val validPageType = ProfileConfig.PageType(
       condition = Condition(
-        path = Some("https://wwww.coverified.info/impressum"),
+        path = Some(coverifiedUrl + "/impressum"),
         selector = None
       ),
       examples = List("a", "b"),
@@ -67,7 +68,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
             .copy(selector = Some("this won't work"))
         )
         Analyzer invokePrivate selectorMatches(
-          validPageDoc,
+          validUrlPageDoc,
           pageTypeWithoutSelectors
         ) shouldBe false
       }
@@ -75,10 +76,10 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
       "confirm matching selector, if selector leads to entries" in {
         val pageTypeWithoutSelectors = validPageType.copy(
           condition = validPageType.condition
-            .copy(selector = Some(MockBrowser.validSelector))
+            .copy(selector = Some("title"))
         )
         Analyzer invokePrivate selectorMatches(
-          validPageDoc,
+          validUrlPageDoc,
           pageTypeWithoutSelectors
         ) shouldBe true
       }
@@ -89,7 +90,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
             .copy(selector = None)
         )
         Analyzer invokePrivate selectorMatches(
-          validPageDoc,
+          validUrlPageDoc,
           pageTypeWithoutSelectors
         ) shouldBe true
       }
@@ -102,7 +103,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
             .copy(path = Some("https://wwww.ard.de"))
         )
         Analyzer invokePrivate pathMatches(
-          "https://wwww.coverified.info/impressum/subpage",
+          coverifiedUrl + "/impressum/subpage",
           pageTypeWithPath
         ) shouldBe false
       }
@@ -110,10 +111,10 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
       "confirm matching path, if path actually matches" in {
         val pageTypeWithPath = validPageType.copy(
           condition = validPageType.condition
-            .copy(path = Some("https://wwww.coverified.info/impressum"))
+            .copy(path = Some(coverifiedUrl + "/impressum"))
         )
         Analyzer invokePrivate pathMatches(
-          "https://wwww.coverified.info/impressum/subpage",
+          coverifiedUrl + "/impressum/subpage",
           pageTypeWithPath
         ) shouldBe true
       }
@@ -124,14 +125,14 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
             .copy(path = None)
         )
         Analyzer invokePrivate pathMatches(
-          "https://wwww.coverified.info/impressum/subpage",
+          coverifiedUrl + "/impressum/subpage",
           pageTypeWithPath
         ) shouldBe true
       }
 
       val determinePageType =
         PrivateMethod[Option[(String, Selectors)]](Symbol("determinePageType"))
-      val validPath = Some("https://wwww.coverified.info/impressum")
+      val validPath = Some(coverifiedUrl + "/impressum")
 
       "fail, if one of either conditions is not satisfied" in {
         forAll(
@@ -148,12 +149,12 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
           )
 
           val profileConfig = ProfileConfig(
-            Profile("https://www.coverified.info", List(pageType))
+            Profile(coverifiedUrl, List(pageType))
           )
 
           Analyzer invokePrivate determinePageType(
-            "https://wwww.coverified.info/impressum/subpage",
-            validPageDoc,
+            coverifiedUrl + "/impressum/subpage",
+            validUrlPageDoc,
             profileConfig
           ) shouldBe None
         }
@@ -164,7 +165,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
           Table(
             ("selector", "path"),
             (None, None),
-            (Some(MockBrowser.validSelector), None),
+            (Some("title"), None),
             (None, validPath)
           )
         ) { (selector, path) =>
@@ -174,12 +175,12 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
           )
 
           val profileConfig = ProfileConfig(
-            Profile("https://www.coverified.info", List(pageType))
+            Profile(coverifiedUrl, List(pageType))
           )
 
           Analyzer invokePrivate determinePageType(
-            "https://wwww.coverified.info/impressum/subpage",
-            validPageDoc,
+            coverifiedUrl + "/impressum/subpage",
+            validUrlPageDoc,
             profileConfig
           ) match {
             case Some((name, selectors)) =>
@@ -207,7 +208,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
         ]]]](Symbol("buildEntry"))
 
       "fail on attempt to extract information from unsupported page type" in {
-        val url = "https://www.coverified.info"
+        val url = coverifiedUrl
         val pageType = "unicornPageType"
         val pageDoc = mock[Document]
         val sourceId = "Some Source"
@@ -229,29 +230,9 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
       val extractUrlViewInformation =
         PrivateMethod[UrlViewInformation](Symbol("extractUrlViewInformation"))
       "extract information correctly from url page" in {
-        val urlPageWithAllInformationAvailable =
-          """
-          |<!DOCTYPE html>
-          |
-          |<head>
-          |    <title id="title">Url page with all information available</title>
-          |</head>
-          |
-          |<body>
-          |    <h1>This is an url page with all information available</h1>
-          |    <h2 id="subtitle">... with a subtitle</h2>
-          |
-          |    <p id="content">
-          |        And with all the content.
-          |    </p>
-          |</body>
-          |""".stripMargin
-        val pageDoc =
-          JsoupBrowser.apply().parseString(urlPageWithAllInformationAvailable)
-
         inside(
           Analyzer invokePrivate extractUrlViewInformation(
-            pageDoc,
+            validUrlPageDoc,
             validPageType.selectors
           )
         ) {
@@ -268,24 +249,9 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
       }
 
       "extract information correctly from url page, if optional entries are not apparent" in {
-        val urlPageWithAllInformationAvailable =
-          """
-          |<!DOCTYPE html>
-          |
-          |<head>
-          |    <title id="title">Url page with all information available</title>
-          |</head>
-          |
-          |<body>
-          |    <h1>This is an url page with all information available</h1>
-          |</body>
-          |""".stripMargin
-        val pageDoc =
-          JsoupBrowser.apply().parseString(urlPageWithAllInformationAvailable)
-
         inside(
           Analyzer invokePrivate extractUrlViewInformation(
-            pageDoc,
+            validUrlPageDocWithoutOptionalInformation,
             validPageType.selectors
           )
         ) {
@@ -306,29 +272,9 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
           Symbol("extractVideoViewInformation")
         )
       "extract information correctly from video page" in {
-        val videoPageWithAllInformationAvailable =
-          """
-          |<!DOCTYPE html>
-          |
-          |<head>
-          |    <title id="title">Url page with all information available</title>
-          |</head>
-          |
-          |<body>
-          |    <h1>This is an url page with all information available</h1>
-          |    <h2 id="subtitle">... with a subtitle</h2>
-          |
-          |    <p id="content">
-          |        And with all the content.
-          |    </p>
-          |</body>
-          |""".stripMargin
-        val pageDoc =
-          JsoupBrowser.apply().parseString(videoPageWithAllInformationAvailable)
-
         inside(
           Analyzer invokePrivate extractVideoViewInformation(
-            pageDoc,
+            validVideoPageDoc,
             validPageType.selectors
           )
         ) {
@@ -345,24 +291,9 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
       }
 
       "extract information correctly from video page, if optional entries are not apparent" in {
-        val videoPageWithAllInformationAvailable =
-          """
-          |<!DOCTYPE html>
-          |
-          |<head>
-          |    <title id="title">Url page with all information available</title>
-          |</head>
-          |
-          |<body>
-          |    <h1>This is an url page with all information available</h1>
-          |</body>
-          |""".stripMargin
-        val pageDoc =
-          JsoupBrowser.apply().parseString(videoPageWithAllInformationAvailable)
-
         inside(
           Analyzer invokePrivate extractVideoViewInformation(
-            pageDoc,
+            validVideoPageDocWithoutOptionalInformation,
             validPageType.selectors
           )
         ) {
@@ -393,7 +324,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
         ]]]](Symbol("createUrlEntry"))
       "creates url entry correctly" in {
         val selectionBuilder = Analyzer invokePrivate createUrlEntry(
-          "https://www.coverified.info",
+          coverifiedUrl,
           "Coverified",
           Some("Title"),
           Some("Subtitle"),
@@ -416,7 +347,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
                     eci.image shouldBe None
                     eci.content shouldBe Some("content")
                     eci.summary shouldBe None
-                    eci.url shouldBe Some("https://www.coverified.info")
+                    eci.url shouldBe Some(coverifiedUrl)
                     eci.tags shouldBe None
                     eci.language shouldBe None
                     eci.source match {
@@ -449,7 +380,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
         ]]]](Symbol("createVideoEntry"))
       "creates video entry correctly" in {
         val selectionBuilder = Analyzer invokePrivate createVideoEntry(
-          "https://www.coverified.info",
+          coverifiedUrl,
           "Coverified",
           Some("Title"),
           Some("Subtitle"),
@@ -472,7 +403,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
                     eci.image shouldBe None
                     eci.content shouldBe Some("content")
                     eci.summary shouldBe None
-                    eci.url shouldBe Some("https://www.coverified.info")
+                    eci.url shouldBe Some(coverifiedUrl)
                     eci.tags shouldBe None
                     eci.language shouldBe None
                     eci.source match {
@@ -491,22 +422,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
       }
 
       "return correct url entry based on identified page type" in {
-        val url = "https://www.coverified.info"
-        val validUrlPageDoc = JsoupBrowser
-          .apply()
-          .parseString(
-            """
-            |<!DOCTYPE html>
-            |
-            |<head>
-            |    <title id="title">Url page with all information available</title>
-            |</head>
-            |
-            |<body>
-            |    <h1>This is an url page with all information available</h1>
-            |</body>
-            |""".stripMargin
-          )
+        val url = coverifiedUrl
         val pageType = "url"
         val sourceId = "coverified"
         val selectors = validPageType.selectors
@@ -535,22 +451,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
       }
 
       "return correct video entry based on identified page type" in {
-        val url = "https://www.coverified.info"
-        val validUrlPageDoc = JsoupBrowser
-          .apply()
-          .parseString(
-            """
-              |<!DOCTYPE html>
-              |
-              |<head>
-              |    <title id="title">Url page with all information available</title>
-              |</head>
-              |
-              |<body>
-              |    <h1>This is an url page with all information available</h1>
-              |</body>
-              |""".stripMargin
-          )
+        val url = coverifiedUrl
         val pageType = "video"
         val sourceId = "coverified"
         val selectors = validPageType.selectors
@@ -559,7 +460,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
         inside(
           Analyzer invokePrivate buildEntry(
             url,
-            validUrlPageDoc,
+            validVideoPageDoc,
             pageType,
             sourceId,
             selectors
@@ -598,7 +499,7 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
       "skip pages, that are not meant to be analyzed" in {
         val profileConfig = ProfileConfig(
           Profile(
-            "https://www.coverified.info",
+            coverifiedUrl,
             List(
               validPageType.copy(
                 condition = validPageType.condition.copy(
@@ -611,34 +512,19 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
         )
 
         Analyzer invokePrivate analyze(
-          "https://wwww.coverified.info/impressum/subpage",
-          validPageDoc,
+          coverifiedUrl + "/impressum/subpage",
+          validUrlPageDoc,
           "coverified",
           profileConfig
         ) shouldBe Success(None)
       }
 
       "succeed, if analysis was successful" in {
-        val url = "https://www.coverified.info"
-        val validUrlPageDoc = JsoupBrowser
-          .apply()
-          .parseString(
-            """
-              |<!DOCTYPE html>
-              |
-              |<head>
-              |    <title id="title">Url page with all information available</title>
-              |</head>
-              |
-              |<body>
-              |    <h1>This is an url page with all information available</h1>
-              |</body>
-              |""".stripMargin
-          )
+        val url = coverifiedUrl
         val sourceId = "coverified"
         val profileConfig = ProfileConfig(
           Profile(
-            "https://www.coverified.info",
+            coverifiedUrl,
             List(
               validPageType.copy(
                 condition = validPageType.condition.copy(path = Some(url))
@@ -659,19 +545,29 @@ class AnalyzerSpec extends ZioSpec with ProfileConfigHelper with MockitoSugar {
             fail("Analysis was meant to succeed, but failed.", exception)
         }
       }
-
-      // TODO CK: Outcome, if page type can be determined
     }
 
     "running the analysis" should {
-      val browser = new MockBrowser()
-      val profileConfig = getConfig(MockBrowser.dislikedUrl)
+      val validUrl = coverifiedUrl
+      val mockBrowser = new MockBrowser(Map(validUrl -> validUrlPageDoc))
 
       "return None, when browser fails" in {
-        Analyzer.run(MockBrowser.dislikedUrl, "", profileConfig, browser) shouldBe None
+        val profileConfig = getConfig(MockBrowser.dislikedUrl)
+        Analyzer.run(
+          MockBrowser.dislikedUrl,
+          "coverified",
+          profileConfig,
+          mockBrowser
+        ) shouldBe None
+      }
+
+      "return something, if browser does not fail and analysis does not fail" in {
+        Analyzer.run(validUrl, "coverified", getConfig(validUrl), mockBrowser) match {
+          case Some(Some(_)) => succeed
+          case Some(None)    => fail("Browser did not fail, but analysis failed")
+          case None          => fail("Some result should have been returned")
+        }
       }
     }
-
-    // TODO CK: Outcome if analysis succeeds or fails
   }
 }
