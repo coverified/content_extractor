@@ -48,5 +48,22 @@ class ConfigSpec extends UnitSpec {
         }
       }
     }
+
+    "parsed from environment variables" should {
+      "succeed" in {
+        inside(Config.fromEnv()) {
+          case Success(Config(apiUri, profileDirectoryPath)) =>
+            /* The values expected here, have to placed within the environment during the build CI-stage.
+             * Cf. .gitlab-ci.yml file in root directory */
+            apiUri shouldBe uri"https://www.coverified.info"
+            profileDirectoryPath shouldBe "in/some/directory"
+          case Failure(exception) =>
+            fail(
+              "Parsing config from environment variables was meant to succeed, but failed.",
+              exception
+            )
+        }
+      }
+    }
   }
 }

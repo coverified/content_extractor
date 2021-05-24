@@ -1,4 +1,0 @@
-{
-  "query": "mutation{createEntry(data:{publishDate:\"2021-05-23\",url:\"https://wwww.coverified.info\",source:{connect:{id:\"coverified\"}},type:url}){_label_ id publishDate title subTitle image{id path filename originalFilename mimetype encoding publicUrl publicUrlTransformed} content summary url tags{_label_ id name language{_label_ id name updatedAt createdAt} description relevance image{id path filename originalFilename mimetype encoding publicUrl publicUrlTransformed} updatedAt createdAt} _tagsMeta{count} language{_label_ id name updatedAt createdAt} source{_label_ id name acronym url location{_label_ id name location{id googlePlaceID formattedAddress lat lng} radius updatedAt createdAt} description updatedAt createdAt} hasBeenTagged type updatedAt createdAt}}",
-  "variables": {}
-}

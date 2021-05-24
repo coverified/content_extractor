@@ -6,6 +6,7 @@ plugins {
 	id 'com.github.johnrengelman.shadow' version '7.0.0' // fat jar
 	id 'de.undercouch.download' version '4.1.1' // downloads plugin
 	id 'com.github.maiflai.scalatest' version '0.31' // testing scala source code
+	id 'org.scoverage' version '5.0.0'
 }
 
 ext {
@@ -20,6 +21,8 @@ ext {
 
 apply from: scriptsLocation + 'spotless.gradle'
 apply from: scriptsLocation + 'tscfg.gradle'
+apply from: scriptsLocation + 'scoverage.gradle'
+apply from: scriptsLocation + 'prepareEnv.gradle'
 
 group = 'info.coverified'
 version = '0.1-SNAPSHOT'
