@@ -2,11 +2,16 @@ plugins {
 	id 'groovy' // groovy support
 	id 'java' // java support
 	id 'scala' // scala support
+	id 'application'
 	id 'com.diffplug.spotless' version '5.12.5'//code format
 	id 'com.github.johnrengelman.shadow' version '7.0.0' // fat jar
 	id 'de.undercouch.download' version '4.1.1' // downloads plugin
 	id 'com.github.maiflai.scalatest' version '0.31' // testing scala source code
 	id 'org.scoverage' version '5.0.0'
+}
+
+application {
+	mainClassName = 'info.coverified.extractor.Run'
 }
 
 ext {
