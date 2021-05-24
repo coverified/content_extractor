@@ -1,0 +1,12 @@
+task prepareEnvironment {
+	description "Preparing the environemnt for GitLab's CI/ CD pipeline"
+
+	doFirst {
+		def content = """|EXTRACTOR_API_URL=$apiUrl
+        |EXTRACTOR_PAGE_PROFILE_PATH=$profilePath
+        |""".stripMargin()
+		def file = new File("build.env")
+		file.write(content)
+		println "Wrote apiUrl '$apiUrl' and profileDirectory '$profilePath' to build.env"
+	}
+}

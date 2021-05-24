@@ -1,0 +1,23 @@
+stages:
+    - build
+    - test
+
+build:
+    stage: build
+    image: registry.gitlab.com/coverified/infrastructure/scala-base:latest
+    script: ./gradlew prepareEnvironment -PapiUrl="https://www.coverified.info" -PprofilePath="in/some/directory"
+    artifacts:
+        reports:
+            dotenv: build.env
+        expire_in: 12 hours
+
+test:
+    stage: test
+    image: registry.gitlab.com/coverified/infrastructure/scala-base:latest
+    script: ./gradlew checkScoverage
+    artifacts:
+        reports:
+            junit: build/test-results/test/**/TEST-*.xml
+            cobertura: build/reports/scoverage/cobertura.xml
+    dependencies:
+        - build

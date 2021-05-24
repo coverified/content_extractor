@@ -12,13 +12,9 @@ import info.coverified.extractor.analyzer.BrowserHelper
 import info.coverified.extractor.config.ProfileConfigHelper.TempConfig
 import info.coverified.extractor.config.{Config, ProfileConfigHelper}
 import info.coverified.extractor.profile.ProfileConfig
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Entry.EntryView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.LocationGoogle.LocationGoogleView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
-import info.coverified.graphql.schema.CoVerifiedClientSchema.{
-  EntryTypeType,
-  Url
-}
+import info.coverified.graphql.schema.CoVerifiedClientSchema.Url
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Url.UrlView
 import info.coverified.test.scalatest.{MockBrowser, SttpStubbing, ZioSpec}
 import org.scalatest.prop.TableDrivenPropertyChecks
