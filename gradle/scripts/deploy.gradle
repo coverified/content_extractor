@@ -7,7 +7,7 @@ task buildDotEnv {
                    |PROJECT_VERSION=${project.version.toString()}
                    |MAIN_CLASS=${project.property("mainClass").toString()}
                    |""".stripMargin()
-		def file = new File("build.env")
+		def file = new File("dockerBuild.env")
 		file.write(content)
 		println "Wrote build.env for container deployment."
 	}
