@@ -41,7 +41,7 @@ buildDockerImage:
         - docker:dind
     script:
         - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-        - docker build --pull $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG --build-arg PROJECT_NAME --build-arg PROJECT_VERSION --build-arg MAIN_CLASS .
+        - docker build --pull -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG --build-arg PROJECT_NAME --build-arg PROJECT_VERSION --build-arg MAIN_CLASS .
         - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
     dependencies:
         - build4dockerImage
