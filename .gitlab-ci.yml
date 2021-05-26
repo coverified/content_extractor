@@ -1,8 +1,9 @@
 stages:
     - build
     - test
+    - containerize
 
-build:
+prepareEnv4test:
     stage: build
     image: registry.gitlab.com/coverified/infrastructure/scala-base:latest
     script: ./gradlew prepareEnvironment -PapiUrl="https://www.coverified.info" -PprofilePath="in/some/directory"
@@ -20,4 +21,4 @@ test:
             junit: build/test-results/test/**/TEST-*.xml
             cobertura: build/reports/scoverage/cobertura.xml
     dependencies:
-        - build
+        - prepareEnv4test
