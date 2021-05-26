@@ -1,0 +1,14 @@
+task buildDotEnv {
+	description "Build an environment information to later set up the docker container"
+
+	doFirst {
+		def content =
+				"""|PROJECT_NAME=${project.name}
+                   |PROJECT_VERSION=${project.version.toString()}
+                   |MAIN_CLASS=${project.property("mainClass").toString()}
+                   |""".stripMargin()
+		def file = new File("build.env")
+		file.write(content)
+		println "Wrote build.env for container deployment."
+	}
+}

@@ -12,6 +12,17 @@ prepareEnv4test:
             dotenv: build.env
         expire_in: 12 hours
 
+build4dockerImage:
+    stage: build
+    image: registry.gitlab.com/coverified/infrastructure/scala-base:latest
+    script:
+        - ./gradlew shadowJar
+        - ./gradlew buildDotEnv
+    artifacts:
+        reports:
+            dotenv: dockerBuild.env
+        expire_in: 12 hours
+
 test:
     stage: test
     image: registry.gitlab.com/coverified/infrastructure/scala-base:latest
@@ -22,3 +33,17 @@ test:
             cobertura: build/reports/scoverage/cobertura.xml
     dependencies:
         - prepareEnv4test
+
+buildDockerImage:
+    stage: containerize
+    image: docker:latest
+    services:
+        - docker:dind
+    script:
+        - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+        - docker build --pull $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG --build-arg PROJECT_NAME --build-arg PROJECT_VERSION --build-arg MAIN_CLASS .
+        - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+    dependencies:
+        - build4dockerImage
+    only:
+        - main
