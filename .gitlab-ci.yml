@@ -21,6 +21,8 @@ build4dockerImage:
     artifacts:
         reports:
             dotenv: dockerBuild.env
+        paths:
+            - build/libs/
         expire_in: 12 hours
 
 test:
