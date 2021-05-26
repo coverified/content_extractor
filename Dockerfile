@@ -7,12 +7,13 @@ ARG PROJECT_NAME
 ARG PROJECT_VERSION
 ARG MAIN_CLASS
 
+# Copy build arguments to environment variables
+ENV ENV_PROJECT_NAME=$PROJECT_NAME
+ENV ENV_PROJECT_VERSION=$PROJECT_VERSION
+ENV ENV_MAIN_CLASS=$MAIN_CLASS
+
 # Copy jar to container
 COPY build/libs/$PROJECT_NAME-$PROJECT_VERSION-all.jar $WORKDIR
 
-# Set the environment variables
-#ENV EXTRACTOR_API_URL=""
-#ENV EXTRACTOR_PAGE_PROFILE_PATH="" TODO: Also add profile configs in her
-
 # Actually executing the extractor
-CMD "java -cp $WORKDIR/$PROJECT_NAME-$PROJECT_VERSION-all.jar $MAIN_CLASS"
+CMD java -cp $WORKDIR/$ENV_PROJECT_NAME-$ENV_PROJECT_VERSION-all.jar $ENV_MAIN_CLASS
