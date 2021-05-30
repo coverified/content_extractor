@@ -5,7 +5,7 @@
 
 package info.coverified.extractor
 
-import caliban.client.Operations.RootQuery
+import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.{CalibanClientError, SelectionBuilder}
 import com.typesafe.config.ConfigFactory
 import info.coverified.extractor.Extractor.{NeededInformation, getProfile4Url}
@@ -13,6 +13,7 @@ import info.coverified.extractor.analyzer.Analyzer
 import info.coverified.extractor.config.Config
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.Connector
+import info.coverified.graphql.schema.CoVerifiedClientSchema.Entry.EntryView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Url.UrlView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   CloudinaryImage_File,
@@ -58,9 +59,12 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
     for {
       neededInformation <- acquireNeededInformation
       _ <- ZIO.collectAllPar(
-        neededInformation.availableUrlViews.flatMap(
-          extractInformation(_, neededInformation.hostNameToProfileConfig)
-        )
+        neededInformation.availableUrlViews.flatMap { urlView =>
+          extractInformation(urlView, neededInformation.hostNameToProfileConfig)
+            .map { mutation =>
+              Connector.sendRequest(mutation.toRequest(apiUrl))
+            }
+        }
       )
     } yield ()
   }
@@ -142,7 +146,7 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
       urlView: Extractor.UrlView,
       urlToProfileConfigs: Map[String, ProfileConfig],
       browser: Browser = JsoupBrowser()
-  ): Option[RIO[Console with SttpClient, Option[Extractor.EntryView]]] =
+  ): Option[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
     urlView match {
       case UrlView(_, _, Some(url), Some(source)) =>
         getProfile4Url(url, urlToProfileConfigs).flatMap(
@@ -165,14 +169,8 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
       sourceId: String,
       cfg: ProfileConfig,
       browser: Browser = JsoupBrowser()
-  ): Option[RIO[Console with SttpClient, Option[Extractor.EntryView]]] = {
-    Analyzer
-      .run(url, sourceId, cfg, browser)
-      .flatMap(_.map(mut => Connector.sendRequest(mut.toRequest(apiUrl))))
-  }
-
-  def getExistingEntries: ZIO[Console with SttpClient, Throwable, List[_]] = ???
-
+  ): Option[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
+    Analyzer.run(url, sourceId, cfg, browser).flatten
 }
 
 object Extractor {
