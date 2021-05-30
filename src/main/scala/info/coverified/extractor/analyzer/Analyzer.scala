@@ -5,6 +5,8 @@
 
 package info.coverified.extractor.analyzer
 
+import caliban.client.Operations.RootMutation
+import caliban.client.SelectionBuilder
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.schema.CoVerifiedClientSchema._
 import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors
@@ -15,6 +17,7 @@ import net.ruippeixotog.scalascraper.model.Document
 
 import java.time.ZonedDateTime
 import com.typesafe.scalalogging.LazyLogging
+import info.coverified.extractor.Extractor
 
 import scala.util.{Failure, Success, Try}
 
@@ -31,7 +34,9 @@ object Analyzer extends LazyLogging {
       sourceId: String,
       cfg: ProfileConfig,
       browser: Browser = JsoupBrowser()
-  ) = {
+  ): Option[
+    Option[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]]
+  ] = {
 
     // get page doc
     Try {
@@ -64,7 +69,14 @@ object Analyzer extends LazyLogging {
       pageDoc: Document,
       sourceId: String,
       profileConfig: ProfileConfig
-  ) = {
+  ): Try[Option[SelectionBuilder[RootMutation, Option[
+    Entry.EntryView[CloudinaryImage_File.CloudinaryImage_FileView, Tag.TagView[
+      Language.LanguageView,
+      CloudinaryImage_File.CloudinaryImage_FileView
+    ], _QueryMeta._QueryMetaView, Language.LanguageView, Source.SourceView[
+      GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
+    ]]
+  ]]]] = {
     // TODO CK: Improve control flow at this point (nested options, unhandled exception, ...)
     Try {
       determinePageType(url, pageDoc, profileConfig).map {
@@ -142,15 +154,16 @@ object Analyzer extends LazyLogging {
       pageType: String,
       sourceId: String,
       selectors: Selectors
-  ) = (pageType, selectors) match {
-    case ("url", selectors) =>
-      // build url entry
-      buildUrlEntry(pageDoc, url, selectors, sourceId)
-    case ("video", selectors) =>
-      buildVideoEntry(pageDoc, url, selectors, sourceId)
-    case (unknown, _) =>
-      throw new RuntimeException(s"Unknown page type: $unknown")
-  }
+  ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] =
+    (pageType, selectors) match {
+      case ("url", selectors) =>
+        // build url entry
+        buildUrlEntry(pageDoc, url, selectors, sourceId)
+      case ("video", selectors) =>
+        buildVideoEntry(pageDoc, url, selectors, sourceId)
+      case (unknown, _) =>
+        throw new RuntimeException(s"Unknown page type: $unknown")
+    }
 
   /**
     * Build an entry with extracted page information for a typical url entry
@@ -166,10 +179,11 @@ object Analyzer extends LazyLogging {
       url: String,
       selectors: Selectors,
       sourceId: String
-  ) = extractUrlViewInformation(pageDoc, selectors) match {
-    case UrlViewInformation(title, subTitle, content, publishDate) =>
-      createUrlEntry(url, sourceId, title, subTitle, content, publishDate)
-  }
+  ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] =
+    extractUrlViewInformation(pageDoc, selectors) match {
+      case UrlViewInformation(title, subTitle, content, publishDate) =>
+        createUrlEntry(url, sourceId, title, subTitle, content, publishDate)
+    }
 
   /**
     * Extract the needed information from page document
@@ -208,7 +222,7 @@ object Analyzer extends LazyLogging {
       maybeSubTitle: Option[String],
       maybeContent: Option[String],
       maybePublishDate: Option[String]
-  ) = {
+  ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] = {
     Mutation.createEntry(
       Some(
         EntryCreateInput(
@@ -254,7 +268,7 @@ object Analyzer extends LazyLogging {
       url: String,
       selectors: Selectors,
       sourceId: String
-  ) = {
+  ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] = {
     extractVideoViewInformation(pageDoc, selectors) match {
       case VideoViewInformation(title, subTitle, content, publishDate) =>
         createVideoEntry(url, sourceId, title, subTitle, content, publishDate)
@@ -298,7 +312,7 @@ object Analyzer extends LazyLogging {
       maybeSubTitle: Option[String],
       maybeContent: Option[String],
       maybePublishDate: Option[String]
-  ) = {
+  ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] = {
     Mutation.createEntry(
       Some(
         EntryCreateInput(
