@@ -10,6 +10,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.CloudinaryImage_Fil
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Entry.EntryView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Language.LanguageView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
+import info.coverified.graphql.schema.CoVerifiedClientSchema.Url.UrlView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   CloudinaryImage_File,
   EntryTypeType,
@@ -20,15 +21,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Tag,
   _QueryMeta
 }
-import sttp.client3.{
-  BasicRequestBody,
-  MultipartBody,
-  NoBody,
-  RequestT,
-  Response,
-  StreamBody,
-  StringBody
-}
+import sttp.client3.{RequestT, Response, StringBody}
 import sttp.client3.asynchttpclient.zio.{AsyncHttpClientZioBackend, SttpClient}
 import sttp.client3.asynchttpclient.zio.stubbing.whenRequestMatchesPartial
 import sttp.model.Method.POST
@@ -62,12 +55,13 @@ object SttpStubbing {
     responseEffect.provideCustomLayer(AsyncHttpClientZioBackend.stubLayer)
   }
 
-  def okayEntry[E <: Throwable, T](
+  def postOkay[E <: Throwable, T](
       queryEffect: ZIO[Console with SttpClient, E, T]
   ): ZIO[zio.ZEnv, Throwable, T] = {
     val stubEffect = for {
       _ <- whenRequestMatchesPartial {
-        case RequestT(POST, _, StringBody(queryString, _, _), _, _, _, _) =>
+        case RequestT(POST, _, StringBody(queryString, _, _), _, _, _, _)
+            if queryString.contains("mutation{createEntry") =>
           val responseBody: Right[CalibanClientError, Option[EntryView[
             CloudinaryImage_File.CloudinaryImage_FileView,
             Tag.TagView[
@@ -104,6 +98,26 @@ object SttpStubbing {
                 `type` = Some(EntryTypeType.url),
                 updatedAt = None,
                 createdAt = None
+              )
+            )
+          )
+          Response.ok(responseBody)
+        case RequestT(POST, _, StringBody(queryString, _, _), _, _, _, _)
+            if queryString.contains("mutation{updateUrl") =>
+          val responseBody: Right[CalibanClientError, Option[UrlView[
+            GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
+          ]]] = Right(
+            Some(
+              UrlView(
+                _label_ = None,
+                id = "id:\\\\\"([^\"]*)\\\\\"".r
+                  .findFirstMatchIn(queryString)
+                  .map(_.group(1))
+                  .getOrElse("ID_NOT_FOUND"),
+                url = "url:\\\\\"([^\"]*)\\\\\"".r
+                  .findFirstMatchIn(queryString)
+                  .map(_.group(1)),
+                source = None
               )
             )
           )

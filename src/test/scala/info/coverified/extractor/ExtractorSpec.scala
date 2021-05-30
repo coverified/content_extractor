@@ -5,9 +5,11 @@
 
 package info.coverified.extractor
 
-import caliban.client.CalibanClientError
+import caliban.client.{Argument, CalibanClientError, SelectionBuilder}
 import caliban.client.CalibanClientError.CommunicationError
-import info.coverified.extractor.Extractor.NeededInformation
+import caliban.client.Operations.RootMutation
+import caliban.client.SelectionBuilder.Field
+import info.coverified.extractor.Extractor.{EntryView, NeededInformation}
 import info.coverified.extractor.analyzer.BrowserHelper
 import info.coverified.extractor.config.ProfileConfigHelper.TempConfig
 import info.coverified.extractor.config.{Config, ProfileConfigHelper}
@@ -16,9 +18,26 @@ import info.coverified.extractor.exceptions.{
   ExtractionException
 }
 import info.coverified.extractor.profile.ProfileConfig
+import info.coverified.graphql.schema.CoVerifiedClientSchema.GeoLocation.GeoLocationView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.LocationGoogle.LocationGoogleView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Url
+import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  CloudinaryImage_File,
+  Entry,
+  EntryCreateInput,
+  EntryTypeType,
+  GeoLocation,
+  Language,
+  LocationGoogle,
+  Mutation,
+  Source,
+  SourceRelateToOneInput,
+  SourceWhereUniqueInput,
+  Tag,
+  Url,
+  UrlUpdateInput,
+  _QueryMeta
+}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Url.UrlView
 import info.coverified.test.scalatest.{MockBrowser, SttpStubbing, ZioSpec}
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -37,39 +56,51 @@ class ExtractorSpec
     with TableDrivenPropertyChecks {
   "Given an extractor" when {
     val extractor = Extractor(Config("", ""))
-    val validViews = List(
-      UrlView(
-        _label_ = None,
-        id = "CoVerified",
-        url = Some("https://www.coverified.info"),
-        Some(
-          SourceView(
-            _label_ = None,
-            id = "Test id",
-            name = Some("Test name"),
-            acronym = Some("T"),
-            url = Some("https://www.coverified.info"),
-            location = Some(
-              LocationGoogleView(
-                id = Some("Random place"),
-                googlePlaceID = Some("random id"),
-                formattedAddress = Some("Here Street 12"),
-                lat = Some(7.689946),
-                lng = Some(51.534592)
-              )
-            ),
-            description = Some("Some useful description"),
-            updatedAt = Some("now"),
-            createdAt = Some("now")
-          )
+    val coVerifiedView: Extractor.UrlView = UrlView(
+      _label_ = None,
+      id = "CoVerified",
+      url = Some("https://www.coverified.info"),
+      Some(
+        SourceView(
+          _label_ = None,
+          id = "Test id",
+          name = Some("Test name"),
+          acronym = Some("T"),
+          url = Some("https://www.coverified.info"),
+          location = Some(
+            GeoLocationView(
+              _label_ = Some("location label"),
+              id = "location id",
+              name = Some("random place"),
+              location = Some(
+                LocationGoogleView(
+                  id = Some("Random place"),
+                  googlePlaceID = Some("random id"),
+                  formattedAddress = Some("Here Street 12"),
+                  lat = Some(7.689946),
+                  lng = Some(51.534592)
+                )
+              ),
+              radius = Some(42d),
+              updatedAt = Some("2021-05-30T17:46:00[UTC]"),
+              createdAt = Some("2021-05-30T17:46:00[UTC]")
+            )
+          ),
+          description = Some("Some useful description"),
+          updatedAt = Some("now"),
+          createdAt = Some("now")
         )
-      ),
-      UrlView(
-        _label_ = None,
-        id = "ARD",
-        url = Some("https://www.ard.de"),
-        source = None
       )
+    )
+    val ardView: Extractor.UrlView = UrlView(
+      _label_ = None,
+      id = "ARD",
+      url = Some("https://www.ard.de"),
+      source = None
+    )
+    val validViews: List[Extractor.UrlView] = List(
+      coVerifiedView,
+      ardView
     )
 
     "gathering all profile configs" should {
@@ -193,7 +224,7 @@ class ExtractorSpec
 
       "return correct views" in {
         val body: Either[CalibanClientError, Some[
-          List[Some[Url.UrlView[_ <: SourceView[LocationGoogleView]]]]
+          List[Some[Extractor.UrlView]]
         ]] =
           Right(Some(validViews.map(Some(_))))
         val queryEffect = extractor invokePrivate getAllUrlViews()
@@ -235,7 +266,7 @@ class ExtractorSpec
 
         /* Preparation of url query response */
         val responseBody: Either[CalibanClientError, Some[
-          List[Some[Url.UrlView[_ <: SourceView[LocationGoogleView]]]]
+          List[Some[Extractor.UrlView]]
         ]] =
           Right(Some(validViews.map(Some(_))))
 
@@ -348,7 +379,7 @@ class ExtractorSpec
             mockBrowser
           ) match {
             case Failure(exception: ExtractionException) =>
-              exception.msg shouldBe s"Unable to extract information, as at least url or source are not known for url view '${maliciousUrlView}'."
+              exception.msg shouldBe s"Unable to extract information, as at least url or source are not known for url view '$maliciousUrlView'."
             case Failure(exception) =>
               fail("Test failed with wrong exception.", exception)
             case Success(_) =>
@@ -388,6 +419,151 @@ class ExtractorSpec
           case Success(_) => succeed
           case Failure(exception) =>
             fail("Extraction of information was not meant to fail.", exception)
+        }
+      }
+    }
+
+    "updating url entries" when {
+      "building the update mutation" should {
+        val buildUrlUpdateMutation = PrivateMethod[
+          SelectionBuilder[RootMutation, Option[Extractor.UrlView]]
+        ](Symbol("buildUrlUpdateMutation"))
+        "succeed" in {
+          Extractor invokePrivate buildUrlUpdateMutation(
+            "foo",
+            coverifiedUrl,
+            "bar"
+          ) match {
+            case Field(name, _, _, arguments, _) =>
+              name shouldBe "updateUrl"
+              arguments.size shouldBe 2
+              arguments.foreach {
+                case Argument("id", value) => value shouldBe "foo"
+                case Argument("data", value) =>
+                  value match {
+                    case Some(UrlUpdateInput(url, _)) =>
+                      url shouldBe Some(coverifiedUrl)
+                    case _ => fail("Got wrong entry.")
+                  }
+              }
+            case _ => fail("Got wrong mutation.")
+          }
+        }
+      }
+
+      "sending update mutation to API" should {
+        val updateUrlView = PrivateMethod[
+          RIO[Console with SttpClient, Option[Extractor.UrlView]]
+        ](Symbol("updateUrlView"))
+
+        "succeed, if API replies okay" in {
+          val updateEffect = extractor invokePrivate updateUrlView(
+            coVerifiedView
+          )
+
+          evaluate(SttpStubbing.postOkay(updateEffect)) match {
+            case Some(UrlView(_, id, url, _)) =>
+              id shouldBe coVerifiedView.id
+              url shouldBe coVerifiedView.url
+            case Some(unexpected) =>
+              fail(s"Passed with unexpected outcome: '$unexpected'.")
+            case None => fail("Updating url entry was meant to succeed.")
+          }
+        }
+      }
+    }
+
+    "inserting entries" when {
+      val storeMutation =
+        PrivateMethod[RIO[Console with SttpClient, Option[EntryView]]](
+          Symbol("storeMutation")
+        )
+
+      "succeeds, if API replies okay" in {
+        val mutation = Mutation.createEntry(
+          Some(
+            EntryCreateInput(
+              title = Some("Title"),
+              subTitle = Some("SubTitle"),
+              content = Some("content"),
+              url = Some(coverifiedUrl),
+              `type` = Some(EntryTypeType.url),
+              publishDate = Some("2021-05-30T17:12:00[UTC]"),
+              source = Some(
+                SourceRelateToOneInput(
+                  connect = Some(
+                    SourceWhereUniqueInput(
+                      "sourceId"
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )(
+          Entry.view()(
+            CloudinaryImage_File.view(),
+            Tag.view(Language.view, CloudinaryImage_File.view()),
+            _QueryMeta.view,
+            Language.view,
+            Source.view(GeoLocation.view(LocationGoogle.view))
+          )
+        )
+
+        evaluate(
+          SttpStubbing.postOkay(extractor invokePrivate storeMutation(mutation))
+        ) match {
+          case Some(entryView: Extractor.EntryView) =>
+            entryView.url shouldBe Some(coverifiedUrl)
+          case Some(unexpected) =>
+            fail(s"Passed with unexpected outcome: '$unexpected'.")
+          case None => fail("Updating entries should succeed.")
+        }
+      }
+    }
+
+    "handling urls" when {
+      val handleUrl = PrivateMethod[Option[
+        RIO[
+          Console with SttpClient,
+          (Option[EntryView], Option[Extractor.UrlView])
+        ]
+      ]](Symbol("handleUrl"))
+
+      "handing in invalid information" should {
+        "fail" in {
+          extractor invokePrivate handleUrl(
+            coVerifiedView,
+            Map.empty[String, ProfileConfig]
+          ) match {
+            case None => succeed
+            case Some(value) =>
+              fail(
+                s"Handling an url with invalid accompanying information passed with '$value', although was meant to fail."
+              )
+          }
+        }
+      }
+
+      "handing in proper information" should {
+        "pass" in {
+          val hostNameToConfig = Seq(
+            coVerifiedView.url.getOrElse("unknwon_url")
+          ).map(hostname => hostname -> getConfig(hostname)).toMap
+          extractor invokePrivate handleUrl(coVerifiedView, hostNameToConfig) match {
+            case Some(effect) =>
+              evaluate(SttpStubbing.postOkay(effect)) match {
+                case (Some(_: EntryView), Some(_: Extractor.UrlView)) => succeed
+                case (maybeEntryView, maybeUrlView) =>
+                  fail(
+                    s"Handling url failed with: '$maybeEntryView', '$maybeUrlView'."
+                  )
+              }
+            case None =>
+              fail(
+                "Handling an url with proper information was meant to succeed."
+              )
+          }
         }
       }
     }

@@ -9,7 +9,12 @@ import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.{CalibanClientError, SelectionBuilder}
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
-import info.coverified.extractor.Extractor.{NeededInformation, getProfile4Url}
+import info.coverified.extractor.Extractor.{
+  EntryView,
+  NeededInformation,
+  buildUrlUpdateMutation,
+  getProfile4Url
+}
 import info.coverified.extractor.analyzer.Analyzer
 import info.coverified.extractor.config.Config
 import info.coverified.extractor.exceptions.{
@@ -25,17 +30,21 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   GeoLocation,
   Language,
   LocationGoogle,
+  Mutation,
   Query,
   Source,
+  SourceRelateToOneInput,
+  SourceWhereUniqueInput,
   Tag,
   Url,
+  UrlUpdateInput,
   _QueryMeta
 }
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import sttp.client3.Request
 import sttp.client3.asynchttpclient.zio.SttpClient
 import sttp.model.Uri
-import zio.{UIO, ZIO}
+import zio.{RIO, UIO, ZIO}
 import zio.console.Console
 
 import java.io.File
@@ -63,21 +72,10 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
   def buildExtractionEffect(): ZIO[Console with SttpClient, Throwable, Unit] = {
     /* Getting hands on that ZIO stuff - flat mapping by for-comprehension */
     for {
-      neededInformation <- acquireNeededInformation
-      _ <- ZIO.collectAllPar(
-        neededInformation.availableUrlViews.flatMap { urlView =>
-          extractInformation(urlView, neededInformation.hostNameToProfileConfig)
-            .map { mutation =>
-              Connector.sendRequest(mutation.toRequest(apiUrl))
-            } match {
-            case Success(effect) => Some(effect)
-            case Failure(exception) =>
-              logger
-                .warn("Analysis of url '{}' failed.", urlView.url, exception)
-              None
-          }
-        }
-      )
+      NeededInformation(hostNameToProfileConfig, urlViews) <- acquireNeededInformation
+      _ <- ZIO.collectAllPar {
+        urlViews.flatMap(handleUrl(_, hostNameToProfileConfig))
+      }
     } yield ()
   }
 
@@ -146,6 +144,31 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
     )
 
   /**
+    * Handle the received url. At first, needed information are extracted and then, parallely, entry as well as updated
+    * mutation are sent to API.
+    *
+    * @param urlView              View onto the url
+    * @param hostToProfileConfig  Mapping from host name to it's profile config
+    * @return [[Option]] onto an effect, that might be put to API
+    */
+  def handleUrl(
+      urlView: Extractor.UrlView,
+      hostToProfileConfig: Map[String, ProfileConfig]
+  ): Option[
+    RIO[Console with SttpClient, (Option[EntryView], Option[Extractor.UrlView])]
+  ] =
+    extractInformation(urlView, hostToProfileConfig) match {
+      case Success(mutation) =>
+        val storeMutationEffect = storeMutation(mutation)
+        val urlUpdateEffect = updateUrlView(urlView)
+        Some(storeMutationEffect.zipPar(urlUpdateEffect))
+      case Failure(exception) =>
+        logger
+          .warn("Analysis of url '{}' failed.", urlView.url, exception)
+        None
+    }
+
+  /**
     * Based on the received url view, try to find matching profile and acquire and view onto the entry, that it forms
     * together
     *
@@ -188,6 +211,31 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
       browser: Browser = JsoupBrowser()
   ): Try[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
     Analyzer.run(url, sourceId, cfg, browser)
+
+  /**
+    * Announce the derived view to API
+    *
+    * @param mutation Mutation to denote the content
+    * @return The equivalent effect
+    */
+  private def storeMutation(
+      mutation: SelectionBuilder[RootMutation, Option[EntryView]]
+  ): RIO[Console with SttpClient, Option[EntryView]] =
+    Connector.sendRequest(mutation.toRequest(apiUrl))
+
+  /**
+    * Build a mutation and send it to API in order to update the url entry
+    *
+    * @param view The original view to update
+    * @return An equivalent effect
+    */
+  private def updateUrlView(
+      view: Extractor.UrlView
+  ): RIO[Console with SttpClient, Option[Extractor.UrlView]] = view match {
+    case UrlView(_, id, Some(url), Some(source)) =>
+      val mutation = buildUrlUpdateMutation(id, url, source.id)
+      Connector.sendRequest(mutation.toRequest(apiUrl))
+  }
 }
 
 object Extractor {
@@ -236,4 +284,41 @@ object Extractor {
       .fold[Try[ProfileConfig]] {
         Failure(ConfigException(s"Unable to get config for url '$url'."))
       } { case (_, config) => Success(config) }
+
+  /**
+    * Build the mutation, that is used for updating the url entry in database
+    *
+    * @param id       Id of entry
+    * @param url      Url
+    * @param sourceId Id of source
+    * @return The needed mutation
+    */
+  private def buildUrlUpdateMutation(
+      id: String,
+      url: String,
+      sourceId: String
+  ): SelectionBuilder[RootMutation, Option[Extractor.UrlView]] =
+    Mutation.updateUrl(
+      id,
+      Some(
+        UrlUpdateInput(
+          url = Some(url),
+          source = Some(
+            SourceRelateToOneInput(
+              connect = Some(
+                SourceWhereUniqueInput(
+                  sourceId
+                )
+              )
+            )
+          )
+        )
+      )
+    )(
+      Url.view(
+        Source.view(
+          GeoLocation.view(LocationGoogle.view)
+        )
+      )
+    )
 }
