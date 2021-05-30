@@ -47,6 +47,7 @@ import zio.{RIO, UIO, ZIO}
 
 import java.io.File
 import java.nio.file.Files
+import java.time.Duration
 import scala.util.{Failure, Success, Try}
 
 class ExtractorSpec
@@ -55,7 +56,7 @@ class ExtractorSpec
     with BrowserHelper
     with TableDrivenPropertyChecks {
   "Given an extractor" when {
-    val extractor = Extractor(Config("", ""))
+    val extractor = Extractor(Config("", "", Duration.ofHours(48L)))
     val coVerifiedView: Extractor.UrlView = UrlView(
       _label_ = None,
       id = "CoVerified",
@@ -272,7 +273,13 @@ class ExtractorSpec
 
         /* Point Extractor to correct config directory */
         val extractor =
-          Extractor(Config("", tempDirectoryPath.toAbsolutePath.toString))
+          Extractor(
+            Config(
+              "",
+              tempDirectoryPath.toAbsolutePath.toString,
+              Duration.ofHours(48L)
+            )
+          )
 
         /* Build complete effect */
         val queryEffect = extractor invokePrivate acquireNeededInformation()

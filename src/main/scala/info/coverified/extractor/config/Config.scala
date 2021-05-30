@@ -10,6 +10,7 @@ import info.coverified.extractor.exceptions.ConfigException
 import sttp.client3.UriContext
 import sttp.model.Uri
 
+import java.time.Duration
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -17,15 +18,25 @@ import scala.util.{Failure, Success, Try}
   *
   * @param apiUri                URI of the API that needs to be queried for the sites to extract content from
   * @param profileDirectoryPath  Directory path, where to find the site profiles
+  * @param reAnalysisInterval    Interval, after which the content may be analyzed once again
   */
-final case class Config(apiUri: Uri, profileDirectoryPath: String)
+final case class Config(
+    apiUri: Uri,
+    profileDirectoryPath: String,
+    reAnalysisInterval: Duration
+)
 
 object Config {
-  def apply(apiUrl: String, profileDirectoryPath: String): Config =
-    new Config(uri"$apiUrl", profileDirectoryPath)
+  def apply(
+      apiUrl: String,
+      profileDirectoryPath: String,
+      reAnalysisInterval: Duration
+  ): Config =
+    new Config(uri"$apiUrl", profileDirectoryPath, reAnalysisInterval)
 
   private val API_URL_KEY = "EXTRACTOR_API_URL"
   private val PROFILE_DIRECTORY_PATH = "EXTRACTOR_PAGE_PROFILE_PATH"
+  private val RE_ANALYSIS_INTERVAL = "RE_ANALYSIS_INTERVAL"
 
   /**
     * Build config from parsed CLI input
@@ -34,8 +45,18 @@ object Config {
     * @return A try to create a [[Config]]
     */
   def fromArgs(args: Args): Try[Config] = args match {
-    case Args(Some(apiUrl), Some(pageProfileFolderPath)) =>
-      Success(Config(apiUrl, pageProfileFolderPath))
+    case Args(
+        Some(apiUrl),
+        Some(pageProfileFolderPath),
+        Some(reAnalyzeInterval)
+        ) =>
+      Success(
+        Config(
+          apiUrl,
+          pageProfileFolderPath,
+          Duration.ofHours(reAnalyzeInterval.toLong)
+        )
+      )
     case _ =>
       Failure(
         ConfigException(
@@ -53,8 +74,13 @@ object Config {
     for {
       apiUrl <- fromEnv(API_URL_KEY)
       profileDirectory <- fromEnv(PROFILE_DIRECTORY_PATH)
+      reAnalysisInterval <- fromEnv(RE_ANALYSIS_INTERVAL)
     } yield {
-      Config(apiUrl, profileDirectory)
+      Config(
+        apiUrl,
+        profileDirectory,
+        Duration.ofHours(reAnalysisInterval.toLong)
+      )
     }
 
   /**

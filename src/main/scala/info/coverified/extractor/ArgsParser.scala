@@ -17,7 +17,8 @@ object ArgsParser {
 
   final case class Args(
       apiUrl: Option[String] = None,
-      pageProfileFolderPath: Option[String] = None
+      pageProfileFolderPath: Option[String] = None,
+      reAnalyzeInterval: Option[Int] = None
   )
 
   private def buildParser: scoptOptionParser[Args] = {
@@ -49,7 +50,20 @@ object ArgsParser {
         )
         .text("full path to all page profile config files")
         .minOccurs(1)
-
+      opt[Int]("reAnalyzeInterval")
+        .action((value, args) => {
+          args.copy(
+            reAnalyzeInterval = Option(value)
+          )
+        })
+        .validate(
+          value =>
+            if (value < 0)
+              failure("re analysis interval must be greater than zero!")
+            else success
+        )
+        .text("frequency of re-analyzing content in hours")
+        .minOccurs(1)
     }
 
   }

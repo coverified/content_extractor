@@ -11,6 +11,7 @@ import info.coverified.test.scalatest.UnitSpec
 import org.scalatest.Inside.inside
 import sttp.client3.UriContext
 
+import java.time.Duration
 import scala.util.{Failure, Success}
 
 class ConfigSpec extends UnitSpec {
@@ -37,10 +38,13 @@ class ConfigSpec extends UnitSpec {
       }
 
       "deliver proper config on proper input" in {
-        inside(Config.fromArgs(Args(Some("foo"), Some("bar")))) {
-          case Success(Config(apiUri, profileDirectoryPath)) =>
+        inside(Config.fromArgs(Args(Some("foo"), Some("bar"), Some(48)))) {
+          case Success(
+              Config(apiUri, profileDirectoryPath, reAnalysisInterval)
+              ) =>
             apiUri shouldBe uri"foo"
             profileDirectoryPath shouldBe "bar"
+            reAnalysisInterval shouldBe Duration.ofHours(48L)
           case Failure(exception) =>
             fail(
               s"Parsing was meant to pass, but failed with exception '$exception'."
@@ -52,11 +56,14 @@ class ConfigSpec extends UnitSpec {
     "parsed from environment variables" should {
       "succeed" in {
         inside(Config.fromEnv()) {
-          case Success(Config(apiUri, profileDirectoryPath)) =>
+          case Success(
+              Config(apiUri, profileDirectoryPath, reAnalysisInterval)
+              ) =>
             /* The values expected here, have to placed within the environment during the build CI-stage.
              * Cf. .gitlab-ci.yml file in root directory */
             apiUri shouldBe uri"https://www.coverified.info"
             profileDirectoryPath shouldBe "in/some/directory"
+            reAnalysisInterval shouldBe Duration.ofHours(48L)
           case Failure(exception) =>
             fail(
               "Parsing config from environment variables was meant to succeed, but failed.",
