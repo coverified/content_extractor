@@ -18,6 +18,8 @@ import net.ruippeixotog.scalascraper.model.Document
 import java.time.ZonedDateTime
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.Extractor
+import info.coverified.extractor.exceptions.AnalysisException
+import info.coverified.extractor.profile.ProfileConfig.PageType
 
 import scala.util.{Failure, Success, Try}
 
@@ -34,26 +36,8 @@ object Analyzer extends LazyLogging {
       sourceId: String,
       cfg: ProfileConfig,
       browser: Browser = JsoupBrowser()
-  ): Option[
-    Option[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]]
-  ] = {
-
-    // get page doc
-    Try {
-      browser.get(url)
-    } match {
-      case Success(pageDoc: browser.DocumentType) =>
-        analyze(url, pageDoc, sourceId, cfg).toOption
-      case Failure(exception) =>
-        logger.error(
-          "Exception during analysis of url '{}': {}\nStacktrace: {}",
-          url,
-          exception.getMessage,
-          exception.getStackTrace.toVector
-        )
-        None
-    }
-  }
+  ): Try[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
+    Try(browser.get(url)).flatMap(analyze(url, _, sourceId, cfg))
 
   /**
     * Analyze the given page document and extract information
@@ -69,22 +53,11 @@ object Analyzer extends LazyLogging {
       pageDoc: Document,
       sourceId: String,
       profileConfig: ProfileConfig
-  ): Try[Option[SelectionBuilder[RootMutation, Option[
-    Entry.EntryView[CloudinaryImage_File.CloudinaryImage_FileView, Tag.TagView[
-      Language.LanguageView,
-      CloudinaryImage_File.CloudinaryImage_FileView
-    ], _QueryMeta._QueryMetaView, Language.LanguageView, Source.SourceView[
-      GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
-    ]]
-  ]]]] = {
-    // TODO CK: Improve control flow at this point (nested options, unhandled exception, ...)
-    Try {
-      determinePageType(url, pageDoc, profileConfig).map {
-        case (pageType, selectors) =>
-          buildEntry(url, pageDoc, pageType, sourceId, selectors)
-      }
+  ): Try[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
+    determinePageType(url, pageDoc, profileConfig).flatMap {
+      case (pageType, selectors) =>
+        buildEntry(url, pageDoc, pageType, sourceId, selectors)
     }
-  }
 
   /**
     * Determine the page type (in terms of it's "name") as well as the associated selectors for this type of document
@@ -98,14 +71,20 @@ object Analyzer extends LazyLogging {
       url: String,
       pageDoc: Document,
       profileConfig: ProfileConfig
-  ) = {
+  ): Try[(String, Selectors)] = {
     // todo use type name enums
     profileConfig.profile.pageTypes
       .find(
         pageType =>
           selectorMatches(pageDoc, pageType) && pathMatches(url, pageType)
       )
-      .map(pt => (pt.name, pt.selectors))
+      .fold[Try[(String, Selectors)]] {
+        Failure(
+          AnalysisException(s"Unable to gather profile config for url '$url'.")
+        )
+      } {
+        case PageType(_, _, name, selectors) => Success((name, selectors))
+      }
   }
 
   /**
@@ -154,15 +133,15 @@ object Analyzer extends LazyLogging {
       pageType: String,
       sourceId: String,
       selectors: Selectors
-  ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] =
+  ): Try[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
     (pageType, selectors) match {
       case ("url", selectors) =>
         // build url entry
-        buildUrlEntry(pageDoc, url, selectors, sourceId)
+        Success(buildUrlEntry(pageDoc, url, selectors, sourceId))
       case ("video", selectors) =>
-        buildVideoEntry(pageDoc, url, selectors, sourceId)
+        Success(buildVideoEntry(pageDoc, url, selectors, sourceId))
       case (unknown, _) =>
-        throw new RuntimeException(s"Unknown page type: $unknown")
+        Failure(AnalysisException(s"Unknown page type: $unknown"))
     }
 
   /**

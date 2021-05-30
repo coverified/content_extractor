@@ -8,12 +8,16 @@ package info.coverified.extractor
 import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.{CalibanClientError, SelectionBuilder}
 import com.typesafe.config.ConfigFactory
+import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.Extractor.{NeededInformation, getProfile4Url}
 import info.coverified.extractor.analyzer.Analyzer
 import info.coverified.extractor.config.Config
+import info.coverified.extractor.exceptions.{
+  ConfigException,
+  ExtractionException
+}
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.Connector
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Entry.EntryView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Url.UrlView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   CloudinaryImage_File,
@@ -29,12 +33,13 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
 }
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import sttp.client3.Request
-import sttp.client3.asynchttpclient.zio.{SttpClient, send}
+import sttp.client3.asynchttpclient.zio.SttpClient
 import sttp.model.Uri
-import zio.{RIO, UIO, ZIO}
+import zio.{UIO, ZIO}
 import zio.console.Console
 
 import java.io.File
+import scala.util.{Failure, Success, Try}
 
 /**
   * //ToDo: Class Description
@@ -42,7 +47,8 @@ import java.io.File
   * @version 0.1
   * @since 26.02.21
   */
-final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
+final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
+    extends LazyLogging {
 
   /**
     * Build the extraction effect. It consists of the following steps:
@@ -63,7 +69,13 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
           extractInformation(urlView, neededInformation.hostNameToProfileConfig)
             .map { mutation =>
               Connector.sendRequest(mutation.toRequest(apiUrl))
-            }
+            } match {
+            case Success(effect) => Some(effect)
+            case Failure(exception) =>
+              logger
+                .warn("Analysis of url '{}' failed.", urlView.url, exception)
+              None
+          }
         }
       )
     } yield ()
@@ -146,13 +158,18 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
       urlView: Extractor.UrlView,
       urlToProfileConfigs: Map[String, ProfileConfig],
       browser: Browser = JsoupBrowser()
-  ): Option[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
+  ): Try[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
     urlView match {
       case UrlView(_, _, Some(url), Some(source)) =>
         getProfile4Url(url, urlToProfileConfigs).flatMap(
-          getMutations(url, source.id, _, browser)
+          getMutation(url, source.id, _, browser)
         )
-      case _ => None
+      case _ =>
+        Failure(
+          ExtractionException(
+            s"Unable to extract information, as at least url or source are not known for url view '$urlView'."
+          )
+        )
     }
 
   /**
@@ -164,13 +181,13 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String) {
     * @param browser  The browser to be used for content extraction
     * @return An [[Option]] onto an effect, that evaluates to an [[Option]] onto an [[Extractor.EntryView]]
     */
-  private def getMutations(
+  private def getMutation(
       url: String,
       sourceId: String,
       cfg: ProfileConfig,
       browser: Browser = JsoupBrowser()
-  ): Option[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
-    Analyzer.run(url, sourceId, cfg, browser).flatten
+  ): Try[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
+    Analyzer.run(url, sourceId, cfg, browser)
 }
 
 object Extractor {
@@ -210,11 +227,13 @@ object Extractor {
   private def getProfile4Url(
       url: String,
       hostNameToConfig: Map[String, ProfileConfig]
-  ): Option[ProfileConfig] =
+  ): Try[ProfileConfig] =
     hostNameToConfig
       .find {
         case (hostname, _) =>
           url.contains(hostname)
       }
-      .map(_._2)
+      .fold[Try[ProfileConfig]] {
+        Failure(ConfigException(s"Unable to get config for url '$url'."))
+      } { case (_, config) => Success(config) }
 }

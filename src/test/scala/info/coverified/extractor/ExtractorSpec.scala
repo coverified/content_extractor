@@ -11,6 +11,10 @@ import info.coverified.extractor.Extractor.NeededInformation
 import info.coverified.extractor.analyzer.BrowserHelper
 import info.coverified.extractor.config.ProfileConfigHelper.TempConfig
 import info.coverified.extractor.config.{Config, ProfileConfigHelper}
+import info.coverified.extractor.exceptions.{
+  ConfigException,
+  ExtractionException
+}
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.schema.CoVerifiedClientSchema.LocationGoogle.LocationGoogleView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
@@ -24,6 +28,7 @@ import zio.{RIO, UIO, ZIO}
 
 import java.io.File
 import java.nio.file.Files
+import scala.util.{Failure, Success, Try}
 
 class ExtractorSpec
     extends ZioSpec
@@ -254,22 +259,30 @@ class ExtractorSpec
 
     "filtering for matching config" when {
       val getProfile4Url =
-        PrivateMethod[Option[ProfileConfig]](Symbol("getProfile4Url"))
+        PrivateMethod[Try[ProfileConfig]](Symbol("getProfile4Url"))
 
       "return none, if no matching config is available" in {
         Extractor invokePrivate getProfile4Url(
           "https://www.coverified.info",
           Map.empty[String, ProfileConfig]
-        ) shouldBe None
+        ) match {
+          case Failure(exception: ConfigException) =>
+            exception.msg shouldBe "Unable to get config for url 'https://www.coverified.info'."
+          case Failure(exception) =>
+            fail("Failed with wrong exception.", exception)
+          case Success(_) =>
+            fail("Gathering config was meant to fail, but succeeded.")
+        }
       }
 
       "return correct profile config" in {
         val hostnameToConfig = Seq("coverified.info", "ard.de")
           .map(hostname => hostname -> getConfig(hostname))
           .toMap
-        val expectedConfig = hostnameToConfig
-          .get("coverified.info")
-          .orElse(fail("Unable to acquire config, I just created"))
+        val expectedConfig = hostnameToConfig.getOrElse(
+          "coverified.info",
+          fail("Unable to acquire config, I just created")
+        )
 
         forAll(
           Table(
@@ -279,39 +292,37 @@ class ExtractorSpec
             "https://www.coverified.info/about"
           )
         ) { url =>
-          (Extractor invokePrivate getProfile4Url(url, hostnameToConfig)) shouldBe expectedConfig
+          (Extractor invokePrivate getProfile4Url(url, hostnameToConfig)) shouldBe Success(
+            expectedConfig
+          )
         }
       }
     }
 
     "extracting information" when {
-      val getMutations = PrivateMethod[Option[
+      val getMutation = PrivateMethod[Try[
         RIO[Console with SttpClient, Option[Extractor.EntryView]]
-      ]](Symbol("getMutations"))
+      ]](Symbol("getMutation"))
 
-      "sending mutations to API responds okay" in {
+      "getting mutation with correct information, it succeeds" in {
         val url = coverifiedUrl
         val sourceId = "coverified"
         val profileConfig = getConfig(coverifiedUrl)
         val mockBrowser = MockBrowser(Map(coverifiedUrl -> validUrlPageDoc))
 
-        extractor invokePrivate getMutations(
+        extractor invokePrivate getMutation(
           url,
           sourceId,
           profileConfig,
           mockBrowser
         ) match {
-          case Some(effect) =>
-            evaluate(SttpStubbing.okayEntry(effect)) match {
-              case Some(entryView) =>
-                entryView.url shouldBe Some(coverifiedUrl)
-              case None => fail("Didn't got an entry view.")
-            }
-          case None => fail("Expected to get an analysis effect")
+          case Success(_) => succeed
+          case Failure(exception) =>
+            fail("Failed with an exception.", exception)
         }
       }
 
-      val extractInformation = PrivateMethod[Option[
+      val extractInformation = PrivateMethod[Try[
         RIO[Console with SttpClient, Option[Extractor.EntryView]]
       ]](Symbol("extractInformation"))
       val mockBrowser = MockBrowser(Map(coverifiedUrl -> validUrlPageDoc))
@@ -331,11 +342,20 @@ class ExtractorSpec
             url = url,
             source = sourceId
           )
-          (extractor invokePrivate extractInformation(
+          extractor invokePrivate extractInformation(
             maliciousUrlView,
             Map("test" -> getConfig("test")),
             mockBrowser
-          )) shouldBe None
+          ) match {
+            case Failure(exception: ExtractionException) =>
+              exception.msg shouldBe s"Unable to extract information, as at least url or source are not known for url view '${maliciousUrlView}'."
+            case Failure(exception) =>
+              fail("Test failed with wrong exception.", exception)
+            case Success(_) =>
+              fail(
+                "Extraction of information should fail with incomplete information."
+              )
+          }
         }
       }
 
@@ -365,8 +385,9 @@ class ExtractorSpec
           Map(url -> getConfig(url)),
           mockBrowser
         ) match {
-          case Some(_) => succeed
-          case None    => fail("Extraction of information was not meant to fail.")
+          case Success(_) => succeed
+          case Failure(exception) =>
+            fail("Extraction of information was not meant to fail.", exception)
         }
       }
     }

@@ -7,7 +7,9 @@ package info.coverified.extractor.analyzer
 
 import caliban.client.Operations.RootMutation
 import caliban.client.{Argument, SelectionBuilder}
+import info.coverified.extractor.Extractor
 import info.coverified.extractor.config.ProfileConfigHelper
+import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.extractor.profile.ProfileConfig.PageType.{
   Condition,
@@ -26,6 +28,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Tag,
   _QueryMeta
 }
+import info.coverified.test.scalatest.MockBrowser.DislikeThatUrlException
 import info.coverified.test.scalatest.{MockBrowser, ZioSpec}
 import net.ruippeixotog.scalascraper.model.Document
 import org.mockito.scalatest.MockitoSugar
@@ -131,7 +134,7 @@ class AnalyzerSpec
       }
 
       val determinePageType =
-        PrivateMethod[Option[(String, Selectors)]](Symbol("determinePageType"))
+        PrivateMethod[Try[(String, Selectors)]](Symbol("determinePageType"))
       val validPath = Some(coverifiedUrl + "/impressum")
 
       "fail, if one of either conditions is not satisfied" in {
@@ -156,7 +159,14 @@ class AnalyzerSpec
             coverifiedUrl + "/impressum/subpage",
             validUrlPageDoc,
             profileConfig
-          ) shouldBe None
+          ) match {
+            case Failure(exception: AnalysisException) =>
+              exception.msg shouldBe s"Unable to gather profile config for url '${coverifiedUrl + "/impressum/subpage"}'."
+            case Failure(exception) =>
+              fail("Failed with wrong exception.", exception)
+            case Success(_) =>
+              fail("Determination of page type was meant to fail.")
+          }
         }
       }
 
@@ -183,10 +193,14 @@ class AnalyzerSpec
             validUrlPageDoc,
             profileConfig
           ) match {
-            case Some((name, selectors)) =>
+            case Success((name, selectors)) =>
               name shouldBe validPageType.name
               selectors shouldBe validPageType.selectors
-            case None => fail("Page type should be determined.")
+            case Failure(exception) =>
+              fail(
+                "Page type should be determined. Failed with exception.",
+                exception
+              )
           }
         }
       }
@@ -194,18 +208,9 @@ class AnalyzerSpec
 
     "building the entries with extracted information" should {
       val buildEntry =
-        PrivateMethod[SelectionBuilder[RootMutation, Option[Entry.EntryView[
-          CloudinaryImage_File.CloudinaryImage_FileView,
-          Tag.TagView[
-            Language.LanguageView,
-            CloudinaryImage_File.CloudinaryImage_FileView
-          ],
-          _QueryMeta._QueryMetaView,
-          Language.LanguageView,
-          Source.SourceView[
-            GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
-          ]
-        ]]]](Symbol("buildEntry"))
+        PrivateMethod[Try[
+          SelectionBuilder[RootMutation, Option[Extractor.EntryView]]
+        ]](Symbol("buildEntry"))
 
       "fail on attempt to extract information from unsupported page type" in {
         val url = coverifiedUrl
@@ -214,15 +219,19 @@ class AnalyzerSpec
         val sourceId = "Some Source"
         val selectors = validPageType.selectors
 
-        intercept[RuntimeException] {
-          Analyzer invokePrivate buildEntry(
-            url,
-            pageDoc,
-            pageType,
-            sourceId,
-            selectors
-          )
-        }.getMessage shouldBe s"Unknown page type: $pageType"
+        Analyzer invokePrivate buildEntry(
+          url,
+          pageDoc,
+          pageType,
+          sourceId,
+          selectors
+        ) match {
+          case Failure(exception: AnalysisException) =>
+            exception.msg shouldBe s"Unknown page type: $pageType"
+          case Failure(exception) =>
+            fail("Failed with wrong exception.", exception)
+          case Success(_) => fail("Building of entry was meant to fail.")
+        }
       }
 
       // TODO CK: Test delegation to correct method
@@ -428,16 +437,14 @@ class AnalyzerSpec
         val selectors = validPageType.selectors
 
         /* Only checking correct type. Rest of content has been tested already */
-        inside(
-          Analyzer invokePrivate buildEntry(
-            url,
-            validUrlPageDoc,
-            pageType,
-            sourceId,
-            selectors
-          )
-        ) {
-          case field: SelectionBuilder.Field[_, _] =>
+        Analyzer invokePrivate buildEntry(
+          url,
+          validUrlPageDoc,
+          pageType,
+          sourceId,
+          selectors
+        ) match {
+          case Success(field: SelectionBuilder.Field[_, _]) =>
             field.arguments.headOption match {
               case Some(argument) =>
                 argument.value match {
@@ -447,6 +454,12 @@ class AnalyzerSpec
                 }
               case None => fail("Wanted to get at least one argument")
             }
+          case Success(_) => fail("Succeeded with wrong output")
+          case Failure(exception) =>
+            fail(
+              "Building an entry was meant to succeed, but failed with exception.",
+              exception
+            )
         }
       }
 
@@ -457,16 +470,14 @@ class AnalyzerSpec
         val selectors = validPageType.selectors
 
         /* Only checking correct type. Rest of content has been tested already */
-        inside(
-          Analyzer invokePrivate buildEntry(
-            url,
-            validVideoPageDoc,
-            pageType,
-            sourceId,
-            selectors
-          )
-        ) {
-          case field: SelectionBuilder.Field[_, _] =>
+        Analyzer invokePrivate buildEntry(
+          url,
+          validVideoPageDoc,
+          pageType,
+          sourceId,
+          selectors
+        ) match {
+          case Success(field: SelectionBuilder.Field[_, _]) =>
             field.arguments.headOption match {
               case Some(argument) =>
                 argument.value match {
@@ -476,24 +487,19 @@ class AnalyzerSpec
                 }
               case None => fail("Wanted to get at least one argument")
             }
+          case Success(_) => fail("Succeeded with wrong output")
+          case Failure(exception) =>
+            fail(
+              "Building an entry was meant to succeed, but failed with exception.",
+              exception
+            )
         }
       }
     }
 
     "analysing received content" should {
       val analyze = PrivateMethod[Try[
-        Option[SelectionBuilder[RootMutation, Option[Entry.EntryView[
-          CloudinaryImage_File.CloudinaryImage_FileView,
-          Tag.TagView[
-            Language.LanguageView,
-            CloudinaryImage_File.CloudinaryImage_FileView
-          ],
-          _QueryMeta._QueryMetaView,
-          Language.LanguageView,
-          Source.SourceView[
-            GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
-          ]
-        ]]]]
+        SelectionBuilder[RootMutation, Option[Extractor.EntryView]]
       ]](Symbol("analyze"))
 
       "skip pages, that are not meant to be analyzed" in {
@@ -516,7 +522,14 @@ class AnalyzerSpec
           validUrlPageDoc,
           "coverified",
           profileConfig
-        ) shouldBe Success(None)
+        ) match {
+          case Failure(exception: AnalysisException) =>
+            exception.msg shouldBe s"Unable to gather profile config for url '${coverifiedUrl + "/impressum/subpage"}'."
+          case Failure(exception) =>
+            fail("Failed with wrong exception.", exception)
+          case Success(_) =>
+            fail("Analysis content of unsupported url was meant to fail.")
+        }
       }
 
       "succeed, if analysis was successful" in {
@@ -539,8 +552,7 @@ class AnalyzerSpec
           sourceId,
           profileConfig
         ) match {
-          case Success(Some(_)) => succeed
-          case Success(_)       => fail("Analysis succeeded but without result.")
+          case Success(_) => succeed
           case Failure(exception) =>
             fail("Analysis was meant to succeed, but failed.", exception)
         }
@@ -551,21 +563,27 @@ class AnalyzerSpec
       val validUrl = coverifiedUrl
       val mockBrowser = new MockBrowser(Map(validUrl -> validUrlPageDoc))
 
-      "return None, when browser fails" in {
+      "return Failure, when browser fails" in {
         val profileConfig = getConfig(MockBrowser.dislikedUrl)
         Analyzer.run(
           MockBrowser.dislikedUrl,
           "coverified",
           profileConfig,
           mockBrowser
-        ) shouldBe None
+        ) match {
+          case Failure(exception: DislikeThatUrlException) =>
+            exception.msg shouldBe "I don't like that url."
+          case Failure(exception) =>
+            fail("Browser failed with wrong exception.", exception)
+          case Success(_) => fail("Browser was meant to fail, but succeeded.")
+        }
       }
 
       "return something, if browser does not fail and analysis does not fail" in {
         Analyzer.run(validUrl, "coverified", getConfig(validUrl), mockBrowser) match {
-          case Some(Some(_)) => succeed
-          case Some(None)    => fail("Browser did not fail, but analysis failed")
-          case None          => fail("Some result should have been returned")
+          case Success(_) => succeed
+          case Failure(exception) =>
+            fail("Browser did not fail, but analysis failed.", exception)
         }
       }
     }
