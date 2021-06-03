@@ -47,31 +47,30 @@ repositories {
 
 dependencies {
 	// coverified dependencies
-	implementation 'com.github.coverified:graphQLConnector:00a1abc245'
+	implementation 'com.github.coverified:graphQLConnector:main-SNAPSHOT'
 
 	// cmd args parser //
-	implementation "com.github.scopt:scopt_${scalaVersion}:4.0.0"
+	implementation "com.github.scopt:scopt_$scalaVersion:4.0.0"
 	implementation "net.ruippeixotog:scala-scraper_2.13:2.2.0"
-	implementation "com.github.ghostdogpr:caliban_${scalaVersion}:0.9.5"
-	implementation "com.github.ghostdogpr:caliban-client_${scalaVersion}:0.9.5"
-	//implementation "com.github.ghostdogpr:caliban-codegen_${scalaVersion}:0.8.1"
-	implementation "com.github.ghostdogpr:caliban-tools_${scalaVersion}:0.9.5"
+	implementation "com.github.ghostdogpr:caliban_$scalaVersion:0.9.5"
+	implementation "com.github.ghostdogpr:caliban-client_$scalaVersion:0.9.5"
+	implementation "com.github.ghostdogpr:caliban-tools_$scalaVersion:0.9.5"
 
 	// logging
-	implementation "org.slf4j:slf4j-api:${slf4jVersion}"  // slf4j wrapper
+	implementation "org.slf4j:slf4j-api:$slf4jVersion"  // slf4j wrapper
 	implementation 'com.lmax:disruptor:3.4.2' // async logging
 	implementation 'org.apache.logging.log4j:log4j-api:2.14.0' // log4j
 	implementation 'org.apache.logging.log4j:log4j-core:2.14.0' // log4j
 	implementation 'org.apache.logging.log4j:log4j-slf4j-impl:2.14.0' // log4j -> slf4j
 
-	implementation "com.typesafe.scala-logging:scala-logging_${scalaVersion}:3.9.2" // akka scala logging
+	implementation "com.typesafe.scala-logging:scala-logging_$scalaVersion:3.9.2" // akka scala logging
 	implementation 'com.typesafe.scala-logging:scala-logging-slf4j_2.11:2.1.2'// scala logging
-	implementation "org.slf4j:log4j-over-slf4j:${slf4jVersion}" // slf4j -> log4j
+	implementation "org.slf4j:log4j-over-slf4j:$slf4jVersion" // slf4j -> log4j
 
 	// CORE Scala //
-	implementation "org.scala-lang:scala-library:${scalaBinaryVersion}"
+	implementation "org.scala-lang:scala-library:$scalaBinaryVersion"
 	/* Testing scala */
-	testImplementation "org.scalatest:scalatest_${scalaVersion}:3.2.8"
+	testImplementation "org.scalatest:scalatest_$scalaVersion:3.2.8"
 	testImplementation 'com.vladsch.flexmark:flexmark-all:0.35.10'
 	implementation 'org.mockito:mockito-core:3.10.0'
 	implementation "org.mockito:mockito-scala-scalatest_$scalaVersion:1.16.37"

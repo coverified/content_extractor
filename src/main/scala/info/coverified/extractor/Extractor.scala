@@ -121,10 +121,7 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
       : ZIO[Console with SttpClient, Throwable, List[Extractor.UrlView]] =
     Connector
       .sendRequest {
-        val request: Request[Either[CalibanClientError, Option[
-          List[Option[Extractor.UrlView]]
-        ]], Any] = buildUrlQuery.toRequest(apiUrl)
-        request
+        buildUrlQuery.toRequest(apiUrl)
       }
       .map(_.map(_.flatten).getOrElse(List.empty))
 
