@@ -24,7 +24,8 @@ import info.coverified.extractor.profile.ProfileConfig.PageType
 import scala.util.{Failure, Success, Try}
 
 /**
-  * //ToDo: Class Description
+  * Instance that is able to fetch information from a given url and analyse it's content with respect to a given profile
+  * defined for that url
   *
   * @version 0.1
   * @since 26.02.21

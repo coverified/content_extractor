@@ -51,7 +51,7 @@ import java.io.File
 import scala.util.{Failure, Success, Try}
 
 /**
-  * //ToDo: Class Description
+  * Extracting the content from available urls and post the content to data base
   *
   * @version 0.1
   * @since 26.02.21

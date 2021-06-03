@@ -8,7 +8,7 @@ package info.coverified.extractor
 import scopt.{OptionParser => scoptOptionParser}
 
 /**
-  * //ToDo: Class Description
+  * Parsing needed extractor configuration from CLI arguments
   *
   * @version 0.1
   * @since 27.02.21

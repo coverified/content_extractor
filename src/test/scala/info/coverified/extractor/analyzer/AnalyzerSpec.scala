@@ -234,8 +234,6 @@ class AnalyzerSpec
         }
       }
 
-      // TODO CK: Test delegation to correct method
-
       val extractUrlViewInformation =
         PrivateMethod[UrlViewInformation](Symbol("extractUrlViewInformation"))
       "extract information correctly from url page" in {

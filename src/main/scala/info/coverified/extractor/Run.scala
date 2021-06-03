@@ -13,7 +13,7 @@ import zio.{App, ExitCode, URIO, ZIO}
 import scala.util.{Failure, Success}
 
 /**
-  * //ToDo: Class Description
+  * Actually running the analysis
   *
   * @version 0.1
   * @since 26.02.21
