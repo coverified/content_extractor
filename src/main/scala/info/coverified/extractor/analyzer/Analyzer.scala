@@ -72,7 +72,6 @@ object Analyzer extends LazyLogging {
       pageDoc: Document,
       profileConfig: ProfileConfig
   ): Try[(String, Selectors)] = {
-    // todo use type name enums
     profileConfig.profile.pageTypes
       .find(
         pageType =>
@@ -160,8 +159,26 @@ object Analyzer extends LazyLogging {
       sourceId: String
   ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] =
     extractUrlViewInformation(pageDoc, selectors) match {
-      case UrlViewInformation(title, subTitle, content, publishDate) =>
-        createUrlEntry(url, sourceId, title, subTitle, content, publishDate)
+      case UrlViewInformation(
+          title,
+          subTitle,
+          summary,
+          content,
+          publishDate,
+          breadCrumbs,
+          imageSrc
+          ) =>
+        createUrlEntry(
+          url,
+          sourceId,
+          title,
+          subTitle,
+          summary,
+          content,
+          publishDate,
+          breadCrumbs,
+          imageSrc
+        )
     }
 
   /**
@@ -175,12 +192,13 @@ object Analyzer extends LazyLogging {
       pageDoc: Document,
       selectors: Selectors
   ): UrlViewInformation = UrlViewInformation(
-    pageDoc >?> text(selectors.title),
-    selectors.subtitle.flatMap(query => pageDoc >?> text(query)),
-    pageDoc >?> text(selectors.content),
-    Some(ZonedDateTime.now().toLocalDate.toString) // todo
-    //    val image = selectors.image.flatMap(pageDoc >?> attr("src")(_)) todo
-    //    val breadcrumb = selectors.breadcrumb.flatMap(pageDoc >?> text(_)) todo
+    title = pageDoc >?> text(selectors.title),
+    subTitle = selectors.subtitle.flatMap(pageDoc >?> text(_)),
+    summary = selectors.summary.flatMap(pageDoc >?> text(_)),
+    content = pageDoc >?> text(selectors.content),
+    publishDate = selectors.date.flatMap(pageDoc >?> text(_)),
+    breadCrumbs = selectors.breadcrumb.flatMap(pageDoc >?> text(_)),
+    imageSrc = selectors.image.flatMap(pageDoc >?> attr("src")(_))
   )
 
   /**
@@ -190,8 +208,11 @@ object Analyzer extends LazyLogging {
     * @param sourceId         Source identifier
     * @param maybeTitle       Option onto title
     * @param maybeSubTitle    Option onto subtitle
+    * @param maybeSummary     Option onto summary of the page
     * @param maybeContent     Option onto content
     * @param maybePublishDate Option onto publication date
+    * @param maybeBreadCrumbs Option onto bread crumbs
+    * @param maybeImageSrc    Option onto the source of an image
     * @return Entry for url page
     */
   private def createUrlEntry(
@@ -199,15 +220,20 @@ object Analyzer extends LazyLogging {
       sourceId: String,
       maybeTitle: Option[String],
       maybeSubTitle: Option[String],
+      maybeSummary: Option[String],
       maybeContent: Option[String],
-      maybePublishDate: Option[String]
+      maybePublishDate: Option[String],
+      maybeBreadCrumbs: Option[String],
+      maybeImageSrc: Option[String]
   ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] = {
     Mutation.createEntry(
       Some(
         EntryCreateInput(
           title = maybeTitle,
           subTitle = maybeSubTitle,
+          summary = maybeSummary,
           content = maybeContent,
+          image = maybeImageSrc,
           url = Some(url),
           `type` = Some(EntryTypeType.url),
           publishDate = maybePublishDate,
@@ -249,8 +275,26 @@ object Analyzer extends LazyLogging {
       sourceId: String
   ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] = {
     extractVideoViewInformation(pageDoc, selectors) match {
-      case VideoViewInformation(title, subTitle, content, publishDate) =>
-        createVideoEntry(url, sourceId, title, subTitle, content, publishDate)
+      case VideoViewInformation(
+          title,
+          subTitle,
+          summary,
+          content,
+          publishDate,
+          breadCrumbs,
+          videoSrc
+          ) =>
+        createVideoEntry(
+          url,
+          sourceId,
+          title,
+          subTitle,
+          summary,
+          content,
+          publishDate,
+          breadCrumbs,
+          videoSrc
+        )
     }
   }
 
@@ -265,12 +309,14 @@ object Analyzer extends LazyLogging {
       pageDoc: Document,
       selectors: Selectors
   ): VideoViewInformation = VideoViewInformation(
-    pageDoc >?> text(selectors.title),
-    selectors.subtitle.flatMap(query => pageDoc >?> text(query)),
-    pageDoc >?> text(selectors.content),
-    Some(ZonedDateTime.now().toLocalDate.toString) // todo
-    //    val image = selectors.image.flatMap(pageDoc >?> attr("src")(_)) todo
-    //    val breadcrumb = selectors.breadcrumb.flatMap(pageDoc >?> text(_)) todo
+    title = pageDoc >?> text(selectors.title),
+    subTitle = selectors.subtitle.flatMap(pageDoc >?> text(_)),
+    summary = selectors.summary.flatMap(pageDoc >?> text(_)),
+    content = pageDoc >?> text(selectors.content),
+    publishDate = selectors.date.flatMap(pageDoc >?> text(_)),
+    breadCrumbs = selectors.breadcrumb.flatMap(pageDoc >?> text(_)),
+    videoSrc =
+      selectors.video.flatMap(pageDoc >?> element(_) >> attr("src")("source"))
   )
 
   /**
@@ -280,8 +326,11 @@ object Analyzer extends LazyLogging {
     * @param sourceId         Source identifier
     * @param maybeTitle       Option onto title
     * @param maybeSubTitle    Option onto subtitle
+    * @param maybeSummary     Option onto summary of the page
     * @param maybeContent     Option onto content
     * @param maybePublishDate Option onto publication date
+    * @param maybeBreadCrumbs Option onto bread crumbs
+    * @param maybeVideoSrc    Option onto the source of an image
     * @return Entry for url page
     */
   private def createVideoEntry(
@@ -289,15 +338,20 @@ object Analyzer extends LazyLogging {
       sourceId: String,
       maybeTitle: Option[String],
       maybeSubTitle: Option[String],
+      maybeSummary: Option[String],
       maybeContent: Option[String],
-      maybePublishDate: Option[String]
+      maybePublishDate: Option[String],
+      maybeBreadCrumbs: Option[String],
+      maybeVideoSrc: Option[String]
   ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] = {
     Mutation.createEntry(
       Some(
         EntryCreateInput(
           title = maybeTitle,
           subTitle = maybeSubTitle,
+          summary = maybeSummary,
           content = maybeContent,
+          image = maybeVideoSrc,
           url = Some(url),
           `type` = Some(EntryTypeType.video),
           publishDate = maybePublishDate,

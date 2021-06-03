@@ -51,14 +51,14 @@ class AnalyzerSpec
       name = "url",
       selectors = Selectors(
         audio = None,
-        breadcrumb = None,
+        breadcrumb = Some("#breadcrumb"),
         content = "#content",
-        date = None,
-        image = None,
+        date = Some("#publishedAt"),
+        image = Some("#pic"),
         subtitle = Some("#subtitle"),
-        summary = None,
+        summary = Some("#summary"),
         title = "#title",
-        video = None
+        video = Some("#vid")
       )
     )
 
@@ -245,15 +245,22 @@ class AnalyzerSpec
             validPageType.selectors
           )
         ) {
-          case UrlViewInformation(title, subTitle, content, publishDate) =>
+          case UrlViewInformation(
+              title,
+              subTitle,
+              summary,
+              content,
+              publishDate,
+              breadCrumbs,
+              imageSrc
+              ) =>
             title shouldBe Some("Url page with all information available")
             subTitle shouldBe Some("... with a subtitle")
+            summary.getOrElse(fail("Expected to get a summary.")) shouldBe "This is a summary"
             content shouldBe Some("And with all the content.")
-            publishDate match {
-              case Some(_) => succeed
-              case None =>
-                fail("Expected to get a dummy value as publication date")
-            }
+            publishDate.getOrElse(fail("Expected to get a date.")) shouldBe "2021-06-03T13:37:00[UTC]"
+            breadCrumbs.getOrElse(fail("Expected to get bread crumbs.")) shouldBe "Some bread crumbs"
+            imageSrc.getOrElse(fail("Expected to get an image source.")) shouldBe "find/me/here"
         }
       }
 
@@ -264,15 +271,21 @@ class AnalyzerSpec
             validPageType.selectors
           )
         ) {
-          case UrlViewInformation(title, subTitle, content, publishDate) =>
+          case UrlViewInformation(
+              title,
+              subTitle,
+              summary,
+              content,
+              publishDate,
+              breadCrumbs,
+              imageSrc
+              ) =>
             title shouldBe Some("Url page with all information available")
             subTitle shouldBe None
             content shouldBe None
-            publishDate match {
-              case Some(_) => succeed
-              case None =>
-                fail("Expected to get a dummy value as publication date")
-            }
+            publishDate shouldBe None
+            breadCrumbs shouldBe None
+            imageSrc shouldBe None
         }
       }
 
@@ -287,15 +300,21 @@ class AnalyzerSpec
             validPageType.selectors
           )
         ) {
-          case VideoViewInformation(title, subTitle, content, publishDate) =>
+          case VideoViewInformation(
+              title,
+              subTitle,
+              summary,
+              content,
+              publishDate,
+              breadCrumbs,
+              videoSrc
+              ) =>
             title shouldBe Some("Url page with all information available")
-            subTitle shouldBe Some("... with a subtitle")
+            summary.getOrElse(fail("Expected to get a summary.")) shouldBe "This is a summary"
             content shouldBe Some("And with all the content.")
-            publishDate match {
-              case Some(_) => succeed
-              case None =>
-                fail("Expected to get a dummy value as publication date")
-            }
+            publishDate.getOrElse(fail("Expected to get a date.")) shouldBe "2021-06-03T13:37:00[UTC]"
+            breadCrumbs.getOrElse(fail("Expected to get bread crumbs.")) shouldBe "Some bread crumbs"
+            videoSrc.getOrElse(fail("Expected to get an video source.")) shouldBe "find/me/here"
         }
       }
 
@@ -306,15 +325,21 @@ class AnalyzerSpec
             validPageType.selectors
           )
         ) {
-          case VideoViewInformation(title, subTitle, content, publishDate) =>
+          case VideoViewInformation(
+              title,
+              subTitle,
+              summary,
+              content,
+              publishDate,
+              breadCrumbs,
+              videoSrc
+              ) =>
             title shouldBe Some("Url page with all information available")
             subTitle shouldBe None
             content shouldBe None
-            publishDate match {
-              case Some(_) => succeed
-              case None =>
-                fail("Expected to get a dummy value as publication date")
-            }
+            publishDate shouldBe None
+            breadCrumbs shouldBe None
+            videoSrc shouldBe None
         }
       }
 
@@ -337,8 +362,11 @@ class AnalyzerSpec
           "Coverified",
           Some("Title"),
           Some("Subtitle"),
+          Some("Summary"),
           Some("content"),
-          Some("2020-05-23T11:00:00Z")
+          Some("2020-05-23T11:00:00Z"),
+          Some("Some bread crumbs"),
+          Some("img/source/path")
         )
 
         selectionBuilder match {
@@ -353,9 +381,9 @@ class AnalyzerSpec
                     eci.publishDate shouldBe Some("2020-05-23T11:00:00Z")
                     eci.title shouldBe Some("Title")
                     eci.subTitle shouldBe Some("Subtitle")
-                    eci.image shouldBe None
+                    eci.image shouldBe Some("img/source/path")
                     eci.content shouldBe Some("content")
-                    eci.summary shouldBe None
+                    eci.summary shouldBe Some("Summary")
                     eci.url shouldBe Some(coverifiedUrl)
                     eci.tags shouldBe None
                     eci.language shouldBe None
@@ -393,8 +421,11 @@ class AnalyzerSpec
           "Coverified",
           Some("Title"),
           Some("Subtitle"),
+          Some("Summary"),
           Some("content"),
-          Some("2020-05-23T11:00:00Z")
+          Some("2020-05-23T11:00:00Z"),
+          Some("Some bread crumbs"),
+          Some("vid/source/path")
         )
 
         selectionBuilder match {
@@ -409,9 +440,9 @@ class AnalyzerSpec
                     eci.publishDate shouldBe Some("2020-05-23T11:00:00Z")
                     eci.title shouldBe Some("Title")
                     eci.subTitle shouldBe Some("Subtitle")
-                    eci.image shouldBe None
+                    eci.image shouldBe Some("vid/source/path")
                     eci.content shouldBe Some("content")
-                    eci.summary shouldBe None
+                    eci.summary shouldBe Some("Summary")
                     eci.url shouldBe Some(coverifiedUrl)
                     eci.tags shouldBe None
                     eci.language shouldBe None
