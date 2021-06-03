@@ -6,7 +6,7 @@
 package info.coverified.extractor
 
 import caliban.client.Operations.{RootMutation, RootQuery}
-import caliban.client.{CalibanClientError, SelectionBuilder}
+import caliban.client.SelectionBuilder
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.Extractor.{
@@ -41,7 +41,6 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   _QueryMeta
 }
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
-import sttp.client3.Request
 import sttp.client3.asynchttpclient.zio.SttpClient
 import sttp.model.Uri
 import zio.{RIO, UIO, ZIO}
@@ -100,6 +99,7 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
   private def getAllConfigs(
       cfgDirectoryPath: String
   ): UIO[Map[String, ProfileConfig]] = ZIO.effectTotal {
+    logger.info("Reading in all configs")
     val cfgDirectory = new File(cfgDirectoryPath)
     if (cfgDirectory.exists() && cfgDirectory.isDirectory) {
       cfgDirectory.listFiles
@@ -118,12 +118,14 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
     * @return An effect, that evaluates to a list of [[UrlView]]s
     */
   private def getAllUrlViews
-      : ZIO[Console with SttpClient, Throwable, List[Extractor.UrlView]] =
+      : ZIO[Console with SttpClient, Throwable, List[Extractor.UrlView]] = {
+    logger.info("Querying all relevant urls")
     Connector
       .sendRequest {
         buildUrlQuery.toRequest(apiUrl)
       }
       .map(_.map(_.flatten).getOrElse(List.empty))
+  }
 
   /**
     * Build up a query to get all urls
@@ -153,7 +155,8 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
       hostToProfileConfig: Map[String, ProfileConfig]
   ): Option[
     RIO[Console with SttpClient, (Option[EntryView], Option[Extractor.UrlView])]
-  ] =
+  ] = {
+    logger.info("Handling url: {}", urlView.url)
     extractInformation(urlView, hostToProfileConfig) match {
       case Success(mutation) =>
         val storeMutationEffect = storeMutation(mutation)
@@ -164,6 +167,7 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
           .warn("Analysis of url '{}' failed.", urlView.url, exception)
         None
     }
+  }
 
   /**
     * Based on the received url view, try to find matching profile and acquire and view onto the entry, that it forms

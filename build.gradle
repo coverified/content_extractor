@@ -19,6 +19,7 @@ ext {
 	scalaBinaryVersion = '2.13.1'
 	javaVersion = JavaVersion.VERSION_1_8
 
+	tscfgVersion = '0.9.985'
 	slf4jVersion = '1.7.26'
 
 	scriptsLocation = 'gradle' + File.separator + 'scripts' + File.separator //location of script plugins
@@ -55,6 +56,9 @@ dependencies {
 	implementation "com.github.ghostdogpr:caliban_$scalaVersion:0.9.5"
 	implementation "com.github.ghostdogpr:caliban-client_$scalaVersion:0.9.5"
 	implementation "com.github.ghostdogpr:caliban-tools_$scalaVersion:0.9.5"
+
+	// type safe config handling //
+	implementation "com.github.carueda:tscfg_$scalaVersion:$tscfgVersion"
 
 	// logging
 	implementation "org.slf4j:slf4j-api:$slf4jVersion"  // slf4j wrapper

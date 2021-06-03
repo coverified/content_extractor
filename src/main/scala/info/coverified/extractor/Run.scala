@@ -21,6 +21,7 @@ import scala.util.{Failure, Success}
 object Run extends App with LazyLogging {
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = {
+    logger.info("Starting extraction")
 
     /* Try to gather config from CLI args or environment variables */
     val config = ArgsParser
