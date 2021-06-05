@@ -6,21 +6,18 @@
 package info.coverified.test.scalatest
 
 import caliban.client.CalibanClientError
-import info.coverified.graphql.schema.CoVerifiedClientSchema.CloudinaryImage_File.CloudinaryImage_FileView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Entry.EntryView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Language.LanguageView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Url.UrlView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
-  CloudinaryImage_File,
-  EntryTypeType,
-  GeoLocation,
   Language,
-  LocationGoogle,
   Source,
   Tag,
   _QueryMeta
 }
+import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
+import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import sttp.client3.{RequestT, Response, StringBody}
 import sttp.client3.asynchttpclient.zio.{AsyncHttpClientZioBackend, SttpClient}
 import sttp.client3.asynchttpclient.zio.stubbing.whenRequestMatchesPartial
@@ -62,65 +59,55 @@ object SttpStubbing {
       _ <- whenRequestMatchesPartial {
         case RequestT(POST, _, StringBody(queryString, _, _), _, _, _, _)
             if queryString.contains("mutation{createEntry") =>
-          val responseBody: Right[CalibanClientError, Option[EntryView[
-            CloudinaryImage_File.CloudinaryImage_FileView,
-            Tag.TagView[
-              Language.LanguageView,
-              CloudinaryImage_File.CloudinaryImage_FileView
-            ],
-            _QueryMeta._QueryMetaView,
-            Language.LanguageView,
-            Source.SourceView[
-              GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
-            ]
-          ]]] = Right(
+          val responseBody: Right[CalibanClientError, Option[
+            SimpleEntryView[SimpleUrlView]
+          ]] = Right(
             Some(
-              EntryView(
-                _label_ = None,
+              SimpleEntryView(
                 id = "a",
-                publishDate = "publishDate:\\\\\"(.+)\\\\\",".r
+                name = "name:\\\\\"([^\"]*)\\\\\"".r
                   .findFirstMatchIn(queryString)
                   .map(_.group(1)),
-                title = None,
-                subTitle = None,
-                image = None,
-                content = None,
-                summary = None,
-                url = "url:\\\\\"(.+)\\\\\",".r
+                summary = "summary:\\\\\"([^\"]*)\\\\\"".r
                   .findFirstMatchIn(queryString)
                   .map(_.group(1)),
-                tags =
-                  List.empty[TagView[LanguageView, CloudinaryImage_FileView]],
-                _tagsMeta = None,
-                language = None,
-                source = None,
-                hasBeenTagged = Some(false),
-                `type` = Some(EntryTypeType.url),
-                updatedAt = None,
-                createdAt = None
+                content = "content:\\\\\"([^\"]*)\\\\\"".r
+                  .findFirstMatchIn(queryString)
+                  .map(_.group(1)),
+                url = {
+                  if (queryString.contains("url:{connect:{id:\\\"1\\\"}}"))
+                    Some(
+                      SimpleUrlView(
+                        id = "1",
+                        name = Some("https://coverified.info"),
+                        sourceId = Some("1")
+                      )
+                    )
+                  else None
+                }
               )
             )
           )
           Response.ok(responseBody)
         case RequestT(POST, _, StringBody(queryString, _, _), _, _, _, _)
             if queryString.contains("mutation{updateUrl") =>
-          val responseBody: Right[CalibanClientError, Option[UrlView[
-            GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
-          ]]] = Right(
-            Some(
-              UrlView(
-                _label_ = None,
-                id = "id:\\\\\"([^\"]*)\\\\\"".r
-                  .findFirstMatchIn(queryString)
-                  .map(_.group(1))
-                  .getOrElse("ID_NOT_FOUND"),
-                url = "url:\\\\\"([^\"]*)\\\\\"".r
-                  .findFirstMatchIn(queryString)
-                  .map(_.group(1)),
-                source = None
+          val responseBody: Right[CalibanClientError, Option[SimpleUrlView]] =
+            Right(
+              Some(
+                SimpleUrlView(
+                  id = "id:\\\\\"([^\"]*)\\\\\"".r
+                    .findFirstMatchIn(queryString)
+                    .map(_.group(1))
+                    .getOrElse("ID_NOT_FOUND"),
+                  name = "name:\\\\\"([^\"]*)\\\\\"".r
+                    .findFirstMatchIn(queryString)
+                    .map(_.group(1)),
+                  sourceId = "source:\\{connect:\\{id\\\\\"([^\"]*)\\\\\"".r
+                    .findFirstMatchIn(queryString)
+                    .map(_.group(1))
+                )
               )
             )
-          )
           Response.ok(responseBody)
       }
     } yield ()

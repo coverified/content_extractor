@@ -10,7 +10,6 @@ import caliban.client.SelectionBuilder
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.Extractor.{
-  EntryView,
   NeededInformation,
   buildUrlUpdateMutation,
   getProfile4Url
@@ -23,23 +22,16 @@ import info.coverified.extractor.exceptions.{
 }
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.Connector
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Url.UrlView
+import info.coverified.graphql.schema.CoVerifiedClientSchema.Entry.EntryView
+import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
-  CloudinaryImage_File,
-  Entry,
-  GeoLocation,
-  Language,
-  LocationGoogle,
   Mutation,
   Query,
-  Source,
   SourceRelateToOneInput,
   SourceWhereUniqueInput,
-  Tag,
-  Url,
-  UrlUpdateInput,
-  _QueryMeta
+  UrlUpdateInput
 }
+import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import sttp.client3.asynchttpclient.zio.SttpClient
 import sttp.model.Uri
@@ -118,7 +110,7 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
     * @return An effect, that evaluates to a list of [[UrlView]]s
     */
   private def getAllUrlViews
-      : ZIO[Console with SttpClient, Throwable, List[Extractor.UrlView]] = {
+      : ZIO[Console with SttpClient, Throwable, List[SimpleUrlView]] = {
     logger.info("Querying all relevant urls")
     Connector
       .sendRequest {
@@ -133,13 +125,9 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
     * @return A selection builder with the equivalent query
     */
   private def buildUrlQuery
-      : SelectionBuilder[RootQuery, Option[List[Option[Extractor.UrlView]]]] =
+      : SelectionBuilder[RootQuery, Option[List[Option[SimpleUrlView]]]] =
     Query.allUrls()(
-      Url.view(
-        Source.view(
-          GeoLocation.view(LocationGoogle.view)
-        )
-      )
+      SimpleUrl.view
     )
 
   /**
@@ -151,12 +139,13 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
     * @return [[Option]] onto an effect, that might be put to API
     */
   def handleUrl(
-      urlView: Extractor.UrlView,
+      urlView: SimpleUrlView,
       hostToProfileConfig: Map[String, ProfileConfig]
-  ): Option[
-    RIO[Console with SttpClient, (Option[EntryView], Option[Extractor.UrlView])]
-  ] = {
-    logger.info("Handling url: {}", urlView.url)
+  ): Option[RIO[
+    Console with SttpClient,
+    (Option[SimpleEntry.SimpleEntryView[SimpleUrlView]], Option[SimpleUrlView])
+  ]] = {
+    logger.info("Handling url: {}", urlView.name)
     extractInformation(urlView, hostToProfileConfig) match {
       case Success(mutation) =>
         val storeMutationEffect = storeMutation(mutation)
@@ -164,7 +153,7 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
         Some(storeMutationEffect.zipPar(urlUpdateEffect))
       case Failure(exception) =>
         logger
-          .warn("Analysis of url '{}' failed.", urlView.url, exception)
+          .warn("Analysis of url '{}' failed.", urlView.name, exception)
         None
     }
   }
@@ -176,17 +165,19 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
     * @param urlView              View onto the url
     * @param urlToProfileConfigs  Mapping from url to profile config to use
     * @param browser              The browser to be used for content extraction
-    * @return An effect, that evaluates to an [[Option]] of [[Extractor.EntryView]]
+    * @return A trial to get a written mutation
     */
   private def extractInformation(
-      urlView: Extractor.UrlView,
+      urlView: SimpleUrlView,
       urlToProfileConfigs: Map[String, ProfileConfig],
       browser: Browser = JsoupBrowser()
-  ): Try[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
+  ): Try[SelectionBuilder[RootMutation, Option[
+    SimpleEntry.SimpleEntryView[SimpleUrlView]
+  ]]] =
     urlView match {
-      case UrlView(_, _, Some(url), Some(source)) =>
+      case SimpleUrlView(_, Some(url), Some(sourceId)) =>
         getProfile4Url(url, urlToProfileConfigs).flatMap(
-          getMutation(url, source.id, _, browser)
+          getMutation(url, sourceId, _, browser)
         )
       case _ =>
         Failure(
@@ -200,18 +191,20 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
     * Issue the analyser and try to mutate the given url together with the config into an entry
     *
     * @param url      Queried url
-    * @param sourceId The id of the source
+    * @param urlId    The id of the url
     * @param cfg      [[ProfileConfig]] to use
     * @param browser  The browser to be used for content extraction
-    * @return An [[Option]] onto an effect, that evaluates to an [[Option]] onto an [[Extractor.EntryView]]
+    * @return A trial to get a writte mutation back
     */
   private def getMutation(
       url: String,
-      sourceId: String,
+      urlId: String,
       cfg: ProfileConfig,
       browser: Browser = JsoupBrowser()
-  ): Try[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
-    Analyzer.run(url, sourceId, cfg, browser)
+  ): Try[SelectionBuilder[RootMutation, Option[
+    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+  ]]] =
+    Analyzer.run(url, urlId, cfg, browser)
 
   /**
     * Announce the derived view to API
@@ -220,8 +213,12 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
     * @return The equivalent effect
     */
   private def storeMutation(
-      mutation: SelectionBuilder[RootMutation, Option[EntryView]]
-  ): RIO[Console with SttpClient, Option[EntryView]] =
+      mutation: SelectionBuilder[RootMutation, Option[
+        SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+      ]]
+  ): RIO[Console with SttpClient, Option[
+    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+  ]] =
     Connector.sendRequest(mutation.toRequest(apiUrl))
 
   /**
@@ -231,27 +228,15 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
     * @return An equivalent effect
     */
   private def updateUrlView(
-      view: Extractor.UrlView
-  ): RIO[Console with SttpClient, Option[Extractor.UrlView]] = view match {
-    case UrlView(_, id, Some(url), Some(source)) =>
-      val mutation = buildUrlUpdateMutation(id, url, source.id)
+      view: SimpleUrlView
+  ): RIO[Console with SttpClient, Option[SimpleUrlView]] = view match {
+    case SimpleUrlView(id, url, sourceId) =>
+      val mutation = buildUrlUpdateMutation(id, url, sourceId)
       Connector.sendRequest(mutation.toRequest(apiUrl))
   }
 }
 
 object Extractor {
-  /* Defining types as shorthands */
-  type UrlView = Url.UrlView[Source.SourceView[
-    GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
-  ]]
-  type EntryView =
-    Entry.EntryView[CloudinaryImage_File.CloudinaryImage_FileView, Tag.TagView[
-      Language.LanguageView,
-      CloudinaryImage_File.CloudinaryImage_FileView
-    ], _QueryMeta._QueryMetaView, Language.LanguageView, Source.SourceView[
-      GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
-    ]]
-
   def apply(config: Config): Extractor =
     new Extractor(config.apiUri, config.profileDirectoryPath)
 
@@ -263,7 +248,7 @@ object Extractor {
     */
   final case class NeededInformation(
       hostNameToProfileConfig: Map[String, ProfileConfig],
-      availableUrlViews: List[UrlView]
+      availableUrlViews: List[SimpleUrlView]
   )
 
   /**
@@ -291,35 +276,26 @@ object Extractor {
     *
     * @param id       Id of entry
     * @param url      Url
-    * @param sourceId Id of source
+    * @param maybeSourceId Id of source
     * @return The needed mutation
     */
   private def buildUrlUpdateMutation(
       id: String,
-      url: String,
-      sourceId: String
-  ): SelectionBuilder[RootMutation, Option[Extractor.UrlView]] =
+      url: Option[String],
+      maybeSourceId: Option[String]
+  ): SelectionBuilder[RootMutation, Option[SimpleUrlView]] =
     Mutation.updateUrl(
       id,
       Some(
         UrlUpdateInput(
-          url = Some(url),
-          source = Some(
-            SourceRelateToOneInput(
-              connect = Some(
-                SourceWhereUniqueInput(
-                  sourceId
-                )
+          name = url,
+          source = maybeSourceId.map(
+            sourceId =>
+              SourceRelateToOneInput(
+                connect = Some(SourceWhereUniqueInput(sourceId))
               )
-            )
           )
         )
       )
-    )(
-      Url.view(
-        Source.view(
-          GeoLocation.view(LocationGoogle.view)
-        )
-      )
-    )
+    )(SimpleUrl.view)
 }

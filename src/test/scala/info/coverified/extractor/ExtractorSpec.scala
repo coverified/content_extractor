@@ -9,7 +9,7 @@ import caliban.client.{Argument, CalibanClientError, SelectionBuilder}
 import caliban.client.CalibanClientError.CommunicationError
 import caliban.client.Operations.RootMutation
 import caliban.client.SelectionBuilder.Field
-import info.coverified.extractor.Extractor.{EntryView, NeededInformation}
+import info.coverified.extractor.Extractor.NeededInformation
 import info.coverified.extractor.analyzer.BrowserHelper
 import info.coverified.extractor.config.ProfileConfigHelper.TempConfig
 import info.coverified.extractor.config.{Config, ProfileConfigHelper}
@@ -18,27 +18,16 @@ import info.coverified.extractor.exceptions.{
   ExtractionException
 }
 import info.coverified.extractor.profile.ProfileConfig
-import info.coverified.graphql.schema.CoVerifiedClientSchema.GeoLocation.GeoLocationView
-import info.coverified.graphql.schema.CoVerifiedClientSchema.LocationGoogle.LocationGoogleView
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
-  CloudinaryImage_File,
-  Entry,
   EntryCreateInput,
-  EntryTypeType,
-  GeoLocation,
-  Language,
-  LocationGoogle,
   Mutation,
-  Source,
-  SourceRelateToOneInput,
-  SourceWhereUniqueInput,
-  Tag,
-  Url,
+  UrlRelateToOneInput,
   UrlUpdateInput,
-  _QueryMeta
+  UrlWhereUniqueInput
 }
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Url.UrlView
+import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
+import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
+import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import info.coverified.test.scalatest.{MockBrowser, SttpStubbing, ZioSpec}
 import org.scalatest.prop.TableDrivenPropertyChecks
 import sttp.client3.asynchttpclient.zio.SttpClient
@@ -57,49 +46,17 @@ class ExtractorSpec
     with TableDrivenPropertyChecks {
   "Given an extractor" when {
     val extractor = Extractor(Config("", "", Duration.ofHours(48L)))
-    val coVerifiedView: Extractor.UrlView = UrlView(
-      _label_ = None,
-      id = "CoVerified",
-      url = Some("https://www.coverified.info"),
-      Some(
-        SourceView(
-          _label_ = None,
-          id = "Test id",
-          name = Some("Test name"),
-          acronym = Some("T"),
-          url = Some("https://www.coverified.info"),
-          location = Some(
-            GeoLocationView(
-              _label_ = Some("location label"),
-              id = "location id",
-              name = Some("random place"),
-              location = Some(
-                LocationGoogleView(
-                  id = Some("Random place"),
-                  googlePlaceID = Some("random id"),
-                  formattedAddress = Some("Here Street 12"),
-                  lat = Some(7.689946),
-                  lng = Some(51.534592)
-                )
-              ),
-              radius = Some(42d),
-              updatedAt = Some("2021-05-30T17:46:00[UTC]"),
-              createdAt = Some("2021-05-30T17:46:00[UTC]")
-            )
-          ),
-          description = Some("Some useful description"),
-          updatedAt = Some("now"),
-          createdAt = Some("now")
-        )
-      )
+    val coVerifiedView: SimpleUrlView = SimpleUrlView(
+      id = "1",
+      name = Some("https://www.coverified.info"),
+      sourceId = Some("1")
     )
-    val ardView: Extractor.UrlView = UrlView(
-      _label_ = None,
-      id = "ARD",
-      url = Some("https://www.ard.de"),
-      source = None
+    val ardView = SimpleUrlView(
+      id = "2",
+      name = Some("https://www.ard.de"),
+      sourceId = Some("2")
     )
-    val validViews: List[Extractor.UrlView] = List(
+    val validViews: List[SimpleUrlView] = List(
       coVerifiedView,
       ardView
     )
@@ -183,13 +140,12 @@ class ExtractorSpec
 
     "querying all available urls" should {
       val getAllUrlViews = PrivateMethod[
-        ZIO[Console with SttpClient, Throwable, List[Extractor.UrlView]]
+        ZIO[Console with SttpClient, Throwable, List[SimpleUrlView]]
       ](Symbol("getAllUrlViews"))
 
       "fails, if query execution has failed" in {
-        val body: Either[CalibanClientError, Some[
-          List[Option[Extractor.UrlView]]
-        ]] =
+        val body
+            : Either[CalibanClientError, Some[List[Option[SimpleUrlView]]]] =
           Left(CommunicationError("What did you say?"))
         val queryEffect = extractor invokePrivate getAllUrlViews()
         val responseEffect = SttpStubbing.okayCool(queryEffect, body)
@@ -200,7 +156,7 @@ class ExtractorSpec
       }
 
       "returns an empty list, of none has been sent as response" in {
-        val body: Right[Nothing, Option[List[Option[Extractor.UrlView]]]] =
+        val body: Right[Nothing, Option[List[Option[SimpleUrlView]]]] =
           Right(None)
         val queryEffect = extractor invokePrivate getAllUrlViews()
         val responseEffect = SttpStubbing.okayCool(queryEffect, body)
@@ -211,10 +167,9 @@ class ExtractorSpec
       }
 
       "return an empty list, if no urls are available" in {
-        val body: Either[CalibanClientError, Option[
-          List[Option[Extractor.UrlView]]
-        ]] =
-          Right(Some(List.empty[Option[Extractor.UrlView]]))
+        val body
+            : Either[CalibanClientError, Option[List[Option[SimpleUrlView]]]] =
+          Right(Some(List.empty[Option[SimpleUrlView]]))
         val queryEffect = extractor invokePrivate getAllUrlViews()
         val responseEffect = SttpStubbing.okayCool(queryEffect, body)
 
@@ -224,9 +179,7 @@ class ExtractorSpec
       }
 
       "return correct views" in {
-        val body: Either[CalibanClientError, Some[
-          List[Some[Extractor.UrlView]]
-        ]] =
+        val body: Either[CalibanClientError, Some[List[Some[SimpleUrlView]]]] =
           Right(Some(validViews.map(Some(_))))
         val queryEffect = extractor invokePrivate getAllUrlViews()
         val responseEffect = SttpStubbing.okayCool(queryEffect, body)
@@ -244,9 +197,8 @@ class ExtractorSpec
       ](Symbol("acquireNeededInformation"))
 
       "fail, if querying available url fails" in {
-        val body: Either[CalibanClientError, Some[
-          List[Option[Extractor.UrlView]]
-        ]] =
+        val body
+            : Either[CalibanClientError, Some[List[Option[SimpleUrlView]]]] =
           Left(CommunicationError("What did you say?"))
         val queryEffect = extractor invokePrivate acquireNeededInformation()
         val responseEffect = SttpStubbing.okayCool(queryEffect, body)
@@ -266,9 +218,8 @@ class ExtractorSpec
         }
 
         /* Preparation of url query response */
-        val responseBody: Either[CalibanClientError, Some[
-          List[Some[Extractor.UrlView]]
-        ]] =
+        val responseBody
+            : Either[CalibanClientError, Some[List[Some[SimpleUrlView]]]] =
           Right(Some(validViews.map(Some(_))))
 
         /* Point Extractor to correct config directory */
@@ -338,19 +289,20 @@ class ExtractorSpec
     }
 
     "extracting information" when {
-      val getMutation = PrivateMethod[Try[
-        RIO[Console with SttpClient, Option[Extractor.EntryView]]
-      ]](Symbol("getMutation"))
+      val getMutation =
+        PrivateMethod[Try[RIO[Console with SttpClient, Option[SimpleUrlView]]]](
+          Symbol("getMutation")
+        )
 
       "getting mutation with correct information, it succeeds" in {
         val url = coverifiedUrl
-        val sourceId = "coverified"
+        val urlId = coverifiedUrlId
         val profileConfig = getConfig(coverifiedUrl)
         val mockBrowser = MockBrowser(Map(coverifiedUrl -> validUrlPageDoc))
 
         extractor invokePrivate getMutation(
           url,
-          sourceId,
+          urlId,
           profileConfig,
           mockBrowser
         ) match {
@@ -360,9 +312,10 @@ class ExtractorSpec
         }
       }
 
-      val extractInformation = PrivateMethod[Try[
-        RIO[Console with SttpClient, Option[Extractor.EntryView]]
-      ]](Symbol("extractInformation"))
+      val extractInformation =
+        PrivateMethod[Try[RIO[Console with SttpClient, Option[SimpleUrlView]]]](
+          Symbol("extractInformation")
+        )
       val mockBrowser = MockBrowser(Map(coverifiedUrl -> validUrlPageDoc))
 
       "fails either given no url or source id" in {
@@ -374,11 +327,10 @@ class ExtractorSpec
             (None, Some("sourceId"))
           )
         ) { (url, sourceId) =>
-          val maliciousUrlView = UrlView(
-            _label_ = None,
+          val maliciousUrlView = SimpleUrlView(
             id = "malicious view",
-            url = url,
-            source = sourceId
+            name = url,
+            sourceId = sourceId
           )
           extractor invokePrivate extractInformation(
             maliciousUrlView,
@@ -400,23 +352,10 @@ class ExtractorSpec
       "succeeds if given proper information" in {
         val url = coverifiedUrl
 
-        val urlView = UrlView(
-          _label_ = None,
+        val urlView = SimpleUrlView(
           id = "malicious view",
-          url = Some(url),
-          source = Some(
-            SourceView(
-              _label_ = None,
-              id = "source id",
-              name = None,
-              acronym = None,
-              url = Some(url),
-              location = None,
-              description = None,
-              updatedAt = None,
-              createdAt = None
-            )
-          )
+          name = Some(url),
+          sourceId = Some("source id")
         )
         extractor invokePrivate extractInformation(
           urlView,
@@ -432,14 +371,15 @@ class ExtractorSpec
 
     "updating url entries" when {
       "building the update mutation" should {
-        val buildUrlUpdateMutation = PrivateMethod[
-          SelectionBuilder[RootMutation, Option[Extractor.UrlView]]
-        ](Symbol("buildUrlUpdateMutation"))
+        val buildUrlUpdateMutation =
+          PrivateMethod[SelectionBuilder[RootMutation, Option[SimpleUrlView]]](
+            Symbol("buildUrlUpdateMutation")
+          )
         "succeed" in {
           Extractor invokePrivate buildUrlUpdateMutation(
             "foo",
-            coverifiedUrl,
-            "bar"
+            Some(coverifiedUrl),
+            Some("bar")
           ) match {
             case Field(name, _, _, arguments, _) =>
               name shouldBe "updateUrl"
@@ -448,7 +388,7 @@ class ExtractorSpec
                 case Argument("id", value) => value shouldBe "foo"
                 case Argument("data", value) =>
                   value match {
-                    case Some(UrlUpdateInput(url, _)) =>
+                    case Some(UrlUpdateInput(url, _, _, _)) =>
                       url shouldBe Some(coverifiedUrl)
                     case _ => fail("Got wrong entry.")
                   }
@@ -460,7 +400,7 @@ class ExtractorSpec
 
       "sending update mutation to API" should {
         val updateUrlView = PrivateMethod[
-          RIO[Console with SttpClient, Option[Extractor.UrlView]]
+          RIO[Console with SttpClient, Option[SimpleUrlView]]
         ](Symbol("updateUrlView"))
 
         "succeed, if API replies okay" in {
@@ -469,9 +409,10 @@ class ExtractorSpec
           )
 
           evaluate(SttpStubbing.postOkay(updateEffect)) match {
-            case Some(UrlView(_, id, url, _)) =>
+            case Some(SimpleUrlView(id, url, sourceId)) =>
               id shouldBe coVerifiedView.id
-              url shouldBe coVerifiedView.url
+              url shouldBe coVerifiedView.name
+              sourceId shouldBe sourceId
             case Some(unexpected) =>
               fail(s"Passed with unexpected outcome: '$unexpected'.")
             case None => fail("Updating url entry was meant to succeed.")
@@ -482,7 +423,9 @@ class ExtractorSpec
 
     "inserting entries" when {
       val storeMutation =
-        PrivateMethod[RIO[Console with SttpClient, Option[EntryView]]](
+        PrivateMethod[RIO[Console with SttpClient, Option[
+          SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+        ]]](
           Symbol("storeMutation")
         )
 
@@ -490,38 +433,30 @@ class ExtractorSpec
         val mutation = Mutation.createEntry(
           Some(
             EntryCreateInput(
-              title = Some("Title"),
-              subTitle = Some("SubTitle"),
+              name = Some("Title"),
+              summary = Some("summary"),
               content = Some("content"),
-              url = Some(coverifiedUrl),
-              `type` = Some(EntryTypeType.url),
-              publishDate = Some("2021-05-30T17:12:00[UTC]"),
-              source = Some(
-                SourceRelateToOneInput(
-                  connect = Some(
-                    SourceWhereUniqueInput(
-                      "sourceId"
-                    )
-                  )
+              url = Some(
+                UrlRelateToOneInput(
+                  connect = Some(UrlWhereUniqueInput(id = coverifiedUrlId))
                 )
               )
             )
           )
         )(
-          Entry.view()(
-            CloudinaryImage_File.view(),
-            Tag.view(Language.view, CloudinaryImage_File.view()),
-            _QueryMeta.view,
-            Language.view,
-            Source.view(GeoLocation.view(LocationGoogle.view))
-          )
+          SimpleEntry.view(SimpleUrl.view)
         )
 
         evaluate(
           SttpStubbing.postOkay(extractor invokePrivate storeMutation(mutation))
         ) match {
-          case Some(entryView: Extractor.EntryView) =>
-            entryView.url shouldBe Some(coverifiedUrl)
+          case Some(SimpleEntryView(_, name, content, summary, url)) =>
+            name shouldBe Some("Title")
+            summary shouldBe Some("summary")
+            content shouldBe Some("content")
+            url shouldBe Some(
+              SimpleUrlView("1", Some("https://coverified.info"), Some("1"))
+            )
           case Some(unexpected) =>
             fail(s"Passed with unexpected outcome: '$unexpected'.")
           case None => fail("Updating entries should succeed.")
@@ -530,12 +465,13 @@ class ExtractorSpec
     }
 
     "handling urls" when {
-      val handleUrl = PrivateMethod[Option[
-        RIO[
-          Console with SttpClient,
-          (Option[EntryView], Option[Extractor.UrlView])
-        ]
-      ]](Symbol("handleUrl"))
+      val handleUrl = PrivateMethod[Option[RIO[
+        Console with SttpClient,
+        (
+            Option[SimpleEntry.SimpleEntryView[SimpleUrlView]],
+            Option[SimpleUrlView]
+        )
+      ]]](Symbol("handleUrl"))
 
       "handing in invalid information" should {
         "fail" in {
@@ -555,12 +491,16 @@ class ExtractorSpec
       "handing in proper information" should {
         "pass" in {
           val hostNameToConfig = Seq(
-            coVerifiedView.url.getOrElse("unknwon_url")
+            coVerifiedView.name.getOrElse("unknwon_url")
           ).map(hostname => hostname -> getConfig(hostname)).toMap
           extractor invokePrivate handleUrl(coVerifiedView, hostNameToConfig) match {
             case Some(effect) =>
               evaluate(SttpStubbing.postOkay(effect)) match {
-                case (Some(_: EntryView), Some(_: Extractor.UrlView)) => succeed
+                case (
+                    Some(_: SimpleEntryView[SimpleUrlView]),
+                    Some(_: SimpleUrlView)
+                    ) =>
+                  succeed
                 case (maybeEntryView, maybeUrlView) =>
                   fail(
                     s"Handling url failed with: '$maybeEntryView', '$maybeUrlView'."

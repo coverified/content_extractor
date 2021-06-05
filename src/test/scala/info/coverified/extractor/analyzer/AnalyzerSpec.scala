@@ -7,7 +7,6 @@ package info.coverified.extractor.analyzer
 
 import caliban.client.Operations.RootMutation
 import caliban.client.{Argument, SelectionBuilder}
-import info.coverified.extractor.Extractor
 import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig
@@ -17,20 +16,13 @@ import info.coverified.extractor.profile.ProfileConfig.PageType.{
 }
 import info.coverified.extractor.profile.ProfileConfig.Profile
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
-  CloudinaryImage_File,
-  Entry,
   EntryCreateInput,
-  EntryTypeType,
-  GeoLocation,
-  Language,
-  LocationGoogle,
-  Source,
-  Tag,
-  _QueryMeta
+  UrlRelateToOneInput,
+  UrlWhereUniqueInput
 }
+import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 import info.coverified.test.scalatest.MockBrowser.DislikeThatUrlException
 import info.coverified.test.scalatest.{MockBrowser, ZioSpec}
-import net.ruippeixotog.scalascraper.model.Document
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.Inside.inside
 
@@ -62,7 +54,7 @@ class AnalyzerSpec
       )
     )
 
-    "determining the page type" should {
+    "getting applicable selectors" should {
       val selectorMatches = PrivateMethod[Boolean](Symbol("selectorMatches"))
 
       "refuse matching selector, if selector does not lead to entries" in {
@@ -133,8 +125,8 @@ class AnalyzerSpec
         ) shouldBe true
       }
 
-      val determinePageType =
-        PrivateMethod[Try[(String, Selectors)]](Symbol("determinePageType"))
+      val getSelectors =
+        PrivateMethod[Try[Selectors]](Symbol("getSelectors"))
       val validPath = Some(coverifiedUrl + "/impressum")
 
       "fail, if one of either conditions is not satisfied" in {
@@ -155,7 +147,7 @@ class AnalyzerSpec
             Profile(coverifiedUrl, List(pageType))
           )
 
-          Analyzer invokePrivate determinePageType(
+          Analyzer invokePrivate getSelectors(
             coverifiedUrl + "/impressum/subpage",
             validUrlPageDoc,
             profileConfig
@@ -188,13 +180,12 @@ class AnalyzerSpec
             Profile(coverifiedUrl, List(pageType))
           )
 
-          Analyzer invokePrivate determinePageType(
+          Analyzer invokePrivate getSelectors(
             coverifiedUrl + "/impressum/subpage",
             validUrlPageDoc,
             profileConfig
           ) match {
-            case Success((name, selectors)) =>
-              name shouldBe validPageType.name
+            case Success(selectors) =>
               selectors shouldBe validPageType.selectors
             case Failure(exception) =>
               fail(
@@ -207,164 +198,53 @@ class AnalyzerSpec
     }
 
     "building the entries with extracted information" should {
-      val buildEntry =
-        PrivateMethod[Try[
-          SelectionBuilder[RootMutation, Option[Extractor.EntryView]]
-        ]](Symbol("buildEntry"))
-
-      "fail on attempt to extract information from unsupported page type" in {
-        val url = coverifiedUrl
-        val pageType = "unicornPageType"
-        val pageDoc = mock[Document]
-        val sourceId = "Some Source"
-        val selectors = validPageType.selectors
-
-        Analyzer invokePrivate buildEntry(
-          url,
-          pageDoc,
-          pageType,
-          sourceId,
-          selectors
-        ) match {
-          case Failure(exception: AnalysisException) =>
-            exception.msg shouldBe s"Unknown page type: $pageType"
-          case Failure(exception) =>
-            fail("Failed with wrong exception.", exception)
-          case Success(_) => fail("Building of entry was meant to fail.")
-        }
-      }
-
-      val extractUrlViewInformation =
-        PrivateMethod[UrlViewInformation](Symbol("extractUrlViewInformation"))
+      val extractInformation =
+        PrivateMethod[EntryInformation](Symbol("extractInformation"))
       "extract information correctly from url page" in {
         inside(
-          Analyzer invokePrivate extractUrlViewInformation(
+          Analyzer invokePrivate extractInformation(
             validUrlPageDoc,
             validPageType.selectors
           )
         ) {
-          case UrlViewInformation(
+          case EntryInformation(
               title,
-              subTitle,
               summary,
-              content,
-              publishDate,
-              breadCrumbs,
-              imageSrc
+              content
               ) =>
             title shouldBe Some("Url page with all information available")
-            subTitle shouldBe Some("... with a subtitle")
             summary.getOrElse(fail("Expected to get a summary.")) shouldBe "This is a summary"
             content shouldBe Some("And with all the content.")
-            publishDate.getOrElse(fail("Expected to get a date.")) shouldBe "2021-06-03T13:37:00[UTC]"
-            breadCrumbs.getOrElse(fail("Expected to get bread crumbs.")) shouldBe "Some bread crumbs"
-            imageSrc.getOrElse(fail("Expected to get an image source.")) shouldBe "find/me/here"
         }
       }
 
       "extract information correctly from url page, if optional entries are not apparent" in {
         inside(
-          Analyzer invokePrivate extractUrlViewInformation(
+          Analyzer invokePrivate extractInformation(
             validUrlPageDocWithoutOptionalInformation,
             validPageType.selectors
           )
         ) {
-          case UrlViewInformation(
+          case EntryInformation(
               title,
-              subTitle,
               summary,
-              content,
-              publishDate,
-              breadCrumbs,
-              imageSrc
+              content
               ) =>
             title shouldBe Some("Url page with all information available")
-            subTitle shouldBe None
+            summary shouldBe None
             content shouldBe None
-            publishDate shouldBe None
-            breadCrumbs shouldBe None
-            imageSrc shouldBe None
         }
       }
 
-      val extractVideoViewInformation =
-        PrivateMethod[VideoViewInformation](
-          Symbol("extractVideoViewInformation")
-        )
-      "extract information correctly from video page" in {
-        inside(
-          Analyzer invokePrivate extractVideoViewInformation(
-            validVideoPageDoc,
-            validPageType.selectors
-          )
-        ) {
-          case VideoViewInformation(
-              title,
-              subTitle,
-              summary,
-              content,
-              publishDate,
-              breadCrumbs,
-              videoSrc
-              ) =>
-            title shouldBe Some("Url page with all information available")
-            summary.getOrElse(fail("Expected to get a summary.")) shouldBe "This is a summary"
-            content shouldBe Some("And with all the content.")
-            publishDate.getOrElse(fail("Expected to get a date.")) shouldBe "2021-06-03T13:37:00[UTC]"
-            breadCrumbs.getOrElse(fail("Expected to get bread crumbs.")) shouldBe "Some bread crumbs"
-            videoSrc.getOrElse(fail("Expected to get an video source.")) shouldBe "find/me/here"
-        }
-      }
-
-      "extract information correctly from video page, if optional entries are not apparent" in {
-        inside(
-          Analyzer invokePrivate extractVideoViewInformation(
-            validVideoPageDocWithoutOptionalInformation,
-            validPageType.selectors
-          )
-        ) {
-          case VideoViewInformation(
-              title,
-              subTitle,
-              summary,
-              content,
-              publishDate,
-              breadCrumbs,
-              videoSrc
-              ) =>
-            title shouldBe Some("Url page with all information available")
-            subTitle shouldBe None
-            content shouldBe None
-            publishDate shouldBe None
-            breadCrumbs shouldBe None
-            videoSrc shouldBe None
-        }
-      }
-
-      val createUrlEntry =
-        PrivateMethod[SelectionBuilder[RootMutation, Option[Entry.EntryView[
-          CloudinaryImage_File.CloudinaryImage_FileView,
-          Tag.TagView[
-            Language.LanguageView,
-            CloudinaryImage_File.CloudinaryImage_FileView
-          ],
-          _QueryMeta._QueryMetaView,
-          Language.LanguageView,
-          Source.SourceView[
-            GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
-          ]
-        ]]]](Symbol("createUrlEntry"))
-      "creates url entry correctly" in {
-        val selectionBuilder = Analyzer invokePrivate createUrlEntry(
-          coverifiedUrl,
-          "Coverified",
+      val buildEntry = PrivateMethod[SelectionBuilder[RootMutation, Option[
+        SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+      ]]](Symbol("buildEntry"))
+      "creates entry correctly" in {
+        val selectionBuilder = Analyzer invokePrivate buildEntry(
+          "1",
           Some("Title"),
-          Some("Subtitle"),
           Some("Summary"),
-          Some("content"),
-          Some("2020-05-23T11:00:00Z"),
-          Some("Some bread crumbs"),
-          Some("img/source/path")
+          Some("content")
         )
 
         selectionBuilder match {
@@ -376,160 +256,33 @@ class AnalyzerSpec
                 name shouldBe "data"
                 value match {
                   case Some(eci: EntryCreateInput) =>
-                    eci.publishDate shouldBe Some("2020-05-23T11:00:00Z")
-                    eci.title shouldBe Some("Title")
-                    eci.subTitle shouldBe Some("Subtitle")
-                    eci.image shouldBe Some("img/source/path")
+                    eci.name shouldBe Some("Title")
                     eci.content shouldBe Some("content")
                     eci.summary shouldBe Some("Summary")
-                    eci.url shouldBe Some(coverifiedUrl)
+                    eci.url shouldBe Some(
+                      UrlRelateToOneInput(
+                        None,
+                        Some(UrlWhereUniqueInput("1")),
+                        None,
+                        None
+                      )
+                    )
                     eci.tags shouldBe None
                     eci.language shouldBe None
-                    eci.source match {
-                      case Some(_) => succeed
-                      case None =>
-                        fail("Expected to get some source information")
-                    }
                     eci.hasBeenTagged shouldBe None
-                    eci.`type` shouldBe Some(EntryTypeType.url)
                   case None => fail("Data should actually contain data")
                 }
               case None => fail("Expected to get one argument")
             }
           case _ => fail("Got wrong result")
-        }
-      }
-
-      val createVideoEntry =
-        PrivateMethod[SelectionBuilder[RootMutation, Option[Entry.EntryView[
-          CloudinaryImage_File.CloudinaryImage_FileView,
-          Tag.TagView[
-            Language.LanguageView,
-            CloudinaryImage_File.CloudinaryImage_FileView
-          ],
-          _QueryMeta._QueryMetaView,
-          Language.LanguageView,
-          Source.SourceView[
-            GeoLocation.GeoLocationView[LocationGoogle.LocationGoogleView]
-          ]
-        ]]]](Symbol("createVideoEntry"))
-      "creates video entry correctly" in {
-        val selectionBuilder = Analyzer invokePrivate createVideoEntry(
-          coverifiedUrl,
-          "Coverified",
-          Some("Title"),
-          Some("Subtitle"),
-          Some("Summary"),
-          Some("content"),
-          Some("2020-05-23T11:00:00Z"),
-          Some("Some bread crumbs"),
-          Some("vid/source/path")
-        )
-
-        selectionBuilder match {
-          case SelectionBuilder.Field(name, _, _, arguments, _) =>
-            name shouldBe "createEntry"
-            arguments.size shouldBe 1
-            arguments.headOption match {
-              case Some(Argument(name, value)) =>
-                name shouldBe "data"
-                value match {
-                  case Some(eci: EntryCreateInput) =>
-                    eci.publishDate shouldBe Some("2020-05-23T11:00:00Z")
-                    eci.title shouldBe Some("Title")
-                    eci.subTitle shouldBe Some("Subtitle")
-                    eci.image shouldBe Some("vid/source/path")
-                    eci.content shouldBe Some("content")
-                    eci.summary shouldBe Some("Summary")
-                    eci.url shouldBe Some(coverifiedUrl)
-                    eci.tags shouldBe None
-                    eci.language shouldBe None
-                    eci.source match {
-                      case Some(_) => succeed
-                      case None =>
-                        fail("Expected to get some source information")
-                    }
-                    eci.hasBeenTagged shouldBe None
-                    eci.`type` shouldBe Some(EntryTypeType.video)
-                  case None => fail("Data should actually contain data")
-                }
-              case None => fail("Expected to get one argument")
-            }
-          case _ => fail("Got wrong result")
-        }
-      }
-
-      "return correct url entry based on identified page type" in {
-        val url = coverifiedUrl
-        val pageType = "url"
-        val sourceId = "coverified"
-        val selectors = validPageType.selectors
-
-        /* Only checking correct type. Rest of content has been tested already */
-        Analyzer invokePrivate buildEntry(
-          url,
-          validUrlPageDoc,
-          pageType,
-          sourceId,
-          selectors
-        ) match {
-          case Success(field: SelectionBuilder.Field[_, _]) =>
-            field.arguments.headOption match {
-              case Some(argument) =>
-                argument.value match {
-                  case Some(eci: EntryCreateInput) =>
-                    eci.`type` shouldBe Some(EntryTypeType.url)
-                  case _ => fail("Got wrong argument")
-                }
-              case None => fail("Wanted to get at least one argument")
-            }
-          case Success(_) => fail("Succeeded with wrong output")
-          case Failure(exception) =>
-            fail(
-              "Building an entry was meant to succeed, but failed with exception.",
-              exception
-            )
-        }
-      }
-
-      "return correct video entry based on identified page type" in {
-        val url = coverifiedUrl
-        val pageType = "video"
-        val sourceId = "coverified"
-        val selectors = validPageType.selectors
-
-        /* Only checking correct type. Rest of content has been tested already */
-        Analyzer invokePrivate buildEntry(
-          url,
-          validVideoPageDoc,
-          pageType,
-          sourceId,
-          selectors
-        ) match {
-          case Success(field: SelectionBuilder.Field[_, _]) =>
-            field.arguments.headOption match {
-              case Some(argument) =>
-                argument.value match {
-                  case Some(eci: EntryCreateInput) =>
-                    eci.`type` shouldBe Some(EntryTypeType.video)
-                  case _ => fail("Got wrong argument")
-                }
-              case None => fail("Wanted to get at least one argument")
-            }
-          case Success(_) => fail("Succeeded with wrong output")
-          case Failure(exception) =>
-            fail(
-              "Building an entry was meant to succeed, but failed with exception.",
-              exception
-            )
         }
       }
     }
 
     "analysing received content" should {
-      val analyze = PrivateMethod[Try[
-        SelectionBuilder[RootMutation, Option[Extractor.EntryView]]
-      ]](Symbol("analyze"))
+      val analyze = PrivateMethod[Try[SelectionBuilder[RootMutation, Option[
+        SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+      ]]]](Symbol("analyze"))
 
       "skip pages, that are not meant to be analyzed" in {
         val profileConfig = ProfileConfig(
@@ -548,8 +301,8 @@ class AnalyzerSpec
 
         Analyzer invokePrivate analyze(
           coverifiedUrl + "/impressum/subpage",
+          coverifiedUrlId,
           validUrlPageDoc,
-          "coverified",
           profileConfig
         ) match {
           case Failure(exception: AnalysisException) =>
@@ -563,7 +316,7 @@ class AnalyzerSpec
 
       "succeed, if analysis was successful" in {
         val url = coverifiedUrl
-        val sourceId = "coverified"
+        val urlId = coverifiedUrlId
         val profileConfig = ProfileConfig(
           Profile(
             coverifiedUrl,
@@ -577,8 +330,8 @@ class AnalyzerSpec
 
         Analyzer invokePrivate analyze(
           url,
+          urlId,
           validUrlPageDoc,
-          sourceId,
           profileConfig
         ) match {
           case Success(_) => succeed
@@ -596,7 +349,7 @@ class AnalyzerSpec
         val profileConfig = getConfig(MockBrowser.dislikedUrl)
         Analyzer.run(
           MockBrowser.dislikedUrl,
-          "coverified",
+          coverifiedUrlId,
           profileConfig,
           mockBrowser
         ) match {

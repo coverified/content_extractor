@@ -15,11 +15,10 @@ import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.model.Document
 
-import java.time.ZonedDateTime
 import com.typesafe.scalalogging.LazyLogging
-import info.coverified.extractor.Extractor
 import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig.PageType
+import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 
 import scala.util.{Failure, Success, Try}
 
@@ -34,31 +33,36 @@ object Analyzer extends LazyLogging {
 
   def run(
       url: String,
-      sourceId: String,
+      urlId: String,
       cfg: ProfileConfig,
       browser: Browser = JsoupBrowser()
-  ): Try[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
-    Try(browser.get(url)).flatMap(analyze(url, _, sourceId, cfg))
+  ): Try[SelectionBuilder[RootMutation, Option[
+    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+  ]]] =
+    Try(browser.get(url)).flatMap(analyze(url, urlId, _, cfg))
 
   /**
     * Analyze the given page document and extract information
     *
     * @param url            Url of page
+    * @param urlId          Identifier of the url entry in data base
     * @param pageDoc        Page document
-    * @param sourceId       Id of source
     * @param profileConfig  Applicable profile config for this page
     * @return An [[Option]] onto an [[Option]] of a selection builder
     */
   private def analyze(
       url: String,
+      urlId: String,
       pageDoc: Document,
-      sourceId: String,
       profileConfig: ProfileConfig
-  ): Try[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
-    determinePageType(url, pageDoc, profileConfig).flatMap {
-      case (pageType, selectors) =>
-        buildEntry(url, pageDoc, pageType, sourceId, selectors)
+  ): Try[SelectionBuilder[RootMutation, Option[
+    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+  ]]] = getSelectors(url, pageDoc, profileConfig).map {
+    extractInformation(pageDoc, _) match {
+      case EntryInformation(title, summary, content) =>
+        buildEntry(urlId, title, summary, content)
     }
+  }
 
   /**
     * Determine the page type (in terms of it's "name") as well as the associated selectors for this type of document
@@ -68,24 +72,23 @@ object Analyzer extends LazyLogging {
     * @param profileConfig  Applicable profile configuration
     * @return Option onto a tuple of page type and associated selectors
     */
-  private def determinePageType(
+  private def getSelectors(
       url: String,
       pageDoc: Document,
       profileConfig: ProfileConfig
-  ): Try[(String, Selectors)] = {
+  ): Try[Selectors] =
     profileConfig.profile.pageTypes
       .find(
         pageType =>
           selectorMatches(pageDoc, pageType) && pathMatches(url, pageType)
       )
-      .fold[Try[(String, Selectors)]] {
+      .fold[Try[Selectors]] {
         Failure(
           AnalysisException(s"Unable to gather profile config for url '$url'.")
         )
       } {
-        case PageType(_, _, name, selectors) => Success((name, selectors))
+        case PageType(_, _, _, selectors) => Success(selectors)
       }
-  }
 
   /**
     * Check, if the page document is covered by the given profile config. If no selector is set, let it pass.
@@ -120,261 +123,46 @@ object Analyzer extends LazyLogging {
   /**
     * Build entry for extracted page information based on the different page types available.
     *
-    * @param url        Url of page
-    * @param pageDoc    Page document
-    * @param pageType   Type of page
-    * @param sourceId   Identifier of the source
-    * @param selectors  Selector description to gather information
-    * @return
+    * @param urlId    Identifier of url in database
+    * @param title    Title of the page
+    * @param summary  Summary of the page
+    * @param content  Content of the entry
+    * @return A mutation to post to data base
     */
   private def buildEntry(
-      url: String,
-      pageDoc: Document,
-      pageType: String,
-      sourceId: String,
-      selectors: Selectors
-  ): Try[SelectionBuilder[RootMutation, Option[Extractor.EntryView]]] =
-    (pageType, selectors) match {
-      case ("url", selectors) =>
-        // build url entry
-        Success(buildUrlEntry(pageDoc, url, selectors, sourceId))
-      case ("video", selectors) =>
-        Success(buildVideoEntry(pageDoc, url, selectors, sourceId))
-      case (unknown, _) =>
-        Failure(AnalysisException(s"Unknown page type: $unknown"))
-    }
-
-  /**
-    * Build an entry with extracted page information for a typical url entry
-    *
-    * @param pageDoc    Page document
-    * @param url        Url of the page
-    * @param selectors  Applicable selectors
-    * @param sourceId   Id of source
-    * @return Applicable [[caliban.client.SelectionBuilder]] for the target mutation
-    */
-  private def buildUrlEntry(
-      pageDoc: Document,
-      url: String,
-      selectors: Selectors,
-      sourceId: String
-  ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] =
-    extractUrlViewInformation(pageDoc, selectors) match {
-      case UrlViewInformation(
-          title,
-          subTitle,
-          summary,
-          content,
-          publishDate,
-          breadCrumbs,
-          imageSrc
-          ) =>
-        createUrlEntry(
-          url,
-          sourceId,
-          title,
-          subTitle,
-          summary,
-          content,
-          publishDate,
-          breadCrumbs,
-          imageSrc
-        )
-    }
-
-  /**
-    * Extract the needed information from page document
-    *
-    * @param pageDoc    Page document to use
-    * @param selectors  Selectors to use
-    * @return Gathered information for url page
-    */
-  private def extractUrlViewInformation(
-      pageDoc: Document,
-      selectors: Selectors
-  ): UrlViewInformation = UrlViewInformation(
-    title = pageDoc >?> text(selectors.title),
-    subTitle = selectors.subtitle.flatMap(pageDoc >?> text(_)),
-    summary = selectors.summary.flatMap(pageDoc >?> text(_)),
-    content = pageDoc >?> text(selectors.content),
-    publishDate = selectors.date.flatMap(pageDoc >?> text(_)),
-    breadCrumbs = selectors.breadcrumb.flatMap(pageDoc >?> text(_)),
-    imageSrc = selectors.image.flatMap(pageDoc >?> attr("src")(_))
-  )
-
-  /**
-    * Actually building the entry with all needed information
-    *
-    * @param url              Url of page
-    * @param sourceId         Source identifier
-    * @param maybeTitle       Option onto title
-    * @param maybeSubTitle    Option onto subtitle
-    * @param maybeSummary     Option onto summary of the page
-    * @param maybeContent     Option onto content
-    * @param maybePublishDate Option onto publication date
-    * @param maybeBreadCrumbs Option onto bread crumbs
-    * @param maybeImageSrc    Option onto the source of an image
-    * @return Entry for url page
-    */
-  private def createUrlEntry(
-      url: String,
-      sourceId: String,
-      maybeTitle: Option[String],
-      maybeSubTitle: Option[String],
-      maybeSummary: Option[String],
-      maybeContent: Option[String],
-      maybePublishDate: Option[String],
-      maybeBreadCrumbs: Option[String],
-      maybeImageSrc: Option[String]
-  ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] = {
+      urlId: String,
+      title: Option[String],
+      summary: Option[String],
+      content: Option[String]
+  ): SelectionBuilder[RootMutation, Option[
+    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+  ]] =
     Mutation.createEntry(
       Some(
         EntryCreateInput(
-          title = maybeTitle,
-          subTitle = maybeSubTitle,
-          summary = maybeSummary,
-          content = maybeContent,
-          image = maybeImageSrc,
-          url = Some(url),
-          `type` = Some(EntryTypeType.url),
-          publishDate = maybePublishDate,
-          source = Some(
-            SourceRelateToOneInput(
-              connect = Some(
-                SourceWhereUniqueInput(
-                  sourceId
-                )
-              )
-            )
+          name = title,
+          content = content,
+          summary = summary,
+          url = Some(
+            UrlRelateToOneInput(connect = Some(UrlWhereUniqueInput(id = urlId)))
           )
         )
       )
     )(
-      Entry.view()(
-        CloudinaryImage_File.view(),
-        Tag.view(Language.view, CloudinaryImage_File.view()),
-        _QueryMeta.view,
-        Language.view,
-        Source.view(GeoLocation.view(LocationGoogle.view))
-      )
+      SimpleEntry.view(SimpleUrl.view)
     )
-  }
 
   /**
-    * Build an entry with extracted page information for a video based entry
+    * Extract the needed information from the page
     *
     * @param pageDoc    Page document
-    * @param url        Url of the page
-    * @param selectors  Applicable selectors
-    * @param sourceId   Id of source
-    * @return Applicable [[caliban.client.SelectionBuilder]] for the target mutation
-    */
-  private def buildVideoEntry(
-      pageDoc: Document,
-      url: String,
-      selectors: Selectors,
-      sourceId: String
-  ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] = {
-    extractVideoViewInformation(pageDoc, selectors) match {
-      case VideoViewInformation(
-          title,
-          subTitle,
-          summary,
-          content,
-          publishDate,
-          breadCrumbs,
-          videoSrc
-          ) =>
-        createVideoEntry(
-          url,
-          sourceId,
-          title,
-          subTitle,
-          summary,
-          content,
-          publishDate,
-          breadCrumbs,
-          videoSrc
-        )
-    }
-  }
-
-  /**
-    * Extract the needed information from page document
-    *
-    * @param pageDoc    Page document to use
     * @param selectors  Selectors to use
-    * @return Gathered information for video page
+    * @return Needed information
     */
-  private def extractVideoViewInformation(
-      pageDoc: Document,
-      selectors: Selectors
-  ): VideoViewInformation = VideoViewInformation(
-    title = pageDoc >?> text(selectors.title),
-    subTitle = selectors.subtitle.flatMap(pageDoc >?> text(_)),
-    summary = selectors.summary.flatMap(pageDoc >?> text(_)),
-    content = pageDoc >?> text(selectors.content),
-    publishDate = selectors.date.flatMap(pageDoc >?> text(_)),
-    breadCrumbs = selectors.breadcrumb.flatMap(pageDoc >?> text(_)),
-    videoSrc =
-      selectors.video.flatMap(pageDoc >?> element(_) >> attr("src")("source"))
-  )
-
-  /**
-    * Actually building the entry with all needed information
-    *
-    * @param url              Url of page
-    * @param sourceId         Source identifier
-    * @param maybeTitle       Option onto title
-    * @param maybeSubTitle    Option onto subtitle
-    * @param maybeSummary     Option onto summary of the page
-    * @param maybeContent     Option onto content
-    * @param maybePublishDate Option onto publication date
-    * @param maybeBreadCrumbs Option onto bread crumbs
-    * @param maybeVideoSrc    Option onto the source of an image
-    * @return Entry for url page
-    */
-  private def createVideoEntry(
-      url: String,
-      sourceId: String,
-      maybeTitle: Option[String],
-      maybeSubTitle: Option[String],
-      maybeSummary: Option[String],
-      maybeContent: Option[String],
-      maybePublishDate: Option[String],
-      maybeBreadCrumbs: Option[String],
-      maybeVideoSrc: Option[String]
-  ): SelectionBuilder[RootMutation, Option[Extractor.EntryView]] = {
-    Mutation.createEntry(
-      Some(
-        EntryCreateInput(
-          title = maybeTitle,
-          subTitle = maybeSubTitle,
-          summary = maybeSummary,
-          content = maybeContent,
-          image = maybeVideoSrc,
-          url = Some(url),
-          `type` = Some(EntryTypeType.video),
-          publishDate = maybePublishDate,
-          source = Some(
-            SourceRelateToOneInput(
-              connect = Some(
-                SourceWhereUniqueInput(
-                  sourceId
-                )
-              )
-            )
-          )
-        )
-      )
-    )(
-      Entry.view()(
-        CloudinaryImage_File.view(),
-        Tag.view(Language.view, CloudinaryImage_File.view()),
-        _QueryMeta.view,
-        Language.view,
-        Source.view(GeoLocation.view(LocationGoogle.view))
-      )
+  private def extractInformation(pageDoc: Document, selectors: Selectors) =
+    EntryInformation(
+      pageDoc >?> text(selectors.title),
+      selectors.summary.flatMap(pageDoc >?> text(_)),
+      pageDoc >?> text(selectors.content)
     )
-  }
 }
