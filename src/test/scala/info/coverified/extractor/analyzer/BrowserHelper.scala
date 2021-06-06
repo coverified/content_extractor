@@ -9,7 +9,7 @@ import net.ruippeixotog.scalascraper.browser.JsoupBrowser
 import net.ruippeixotog.scalascraper.model.Document
 
 trait BrowserHelper {
-  val coverifiedUrl = "https://wwww.coverified.info"
+  val coverifiedUrl = "https://www.coverified.info"
   val coverifiedUrlId = "1"
 
   val validUrlPageDoc: Document = JsoupBrowser

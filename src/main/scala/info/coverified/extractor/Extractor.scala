@@ -26,8 +26,6 @@ import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Mutation,
   Query,
-  SourceRelateToOneInput,
-  SourceWhereUniqueInput,
   UrlUpdateInput,
   UrlWhereInput
 }
@@ -41,7 +39,6 @@ import zio.console.Console
 import java.io.File
 import java.time.format.DateTimeFormatter
 import java.time.{Duration, ZoneId, ZonedDateTime}
-import java.util.TimeZone
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -196,7 +193,7 @@ final case class Extractor private (
     SimpleEntry.SimpleEntryView[SimpleUrlView]
   ]]] =
     urlView match {
-      case SimpleUrlView(_, Some(url), Some(sourceId)) =>
+      case SimpleUrlView(_, Some(url), Some(sourceId), hasBeenCrawled) =>
         getProfile4Url(url, urlToProfileConfigs).flatMap(
           getMutation(url, sourceId, _, browser)
         )
@@ -251,7 +248,7 @@ final case class Extractor private (
   private def updateUrlView(
       view: SimpleUrlView
   ): RIO[Console with SttpClient, Option[SimpleUrlView]] = view match {
-    case SimpleUrlView(id, url, sourceId) =>
+    case SimpleUrlView(id, url, sourceId, hasBeenCrawled) =>
       val mutation = buildUrlUpdateMutation(id, url, sourceId)
       Connector.sendRequest(mutation.toRequest(apiUrl))
   }
@@ -269,7 +266,7 @@ object Extractor {
     * Data structure to group all data, that can be loaded in parallel prior to actual information extraction
     *
     * @param hostNameToProfileConfig  Mapping a hostname string to applicable [[ProfileConfig]]
-    * @param availableUrlViews        List of all available [[UrlView]]s
+    * @param availableUrlViews        List of all available [[SimpleUrlView]]s
     */
   final case class NeededInformation(
       hostNameToProfileConfig: Map[String, ProfileConfig],
@@ -313,12 +310,12 @@ object Extractor {
       id,
       Some(
         UrlUpdateInput(
-          name = url,
-          source = maybeSourceId.map(
-            sourceId =>
-              SourceRelateToOneInput(
-                connect = Some(SourceWhereUniqueInput(sourceId))
-              )
+          lastCrawl = Some(
+            "\\[UTC]$".r.replaceAllIn(
+              DateTimeFormatter.ISO_DATE_TIME
+                .format(ZonedDateTime.now(ZoneId.of("UTC"))),
+              ""
+            )
           )
         )
       )

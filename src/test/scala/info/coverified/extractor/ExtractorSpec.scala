@@ -29,6 +29,7 @@ import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import info.coverified.test.scalatest.{MockBrowser, SttpStubbing, ZioSpec}
+import org.scalatest.Inside.inside
 import org.scalatest.prop.TableDrivenPropertyChecks
 import sttp.client3.asynchttpclient.zio.SttpClient
 import zio.console.Console
@@ -36,8 +37,7 @@ import zio.{RIO, UIO, ZIO}
 
 import java.io.File
 import java.nio.file.Files
-import java.time.format.DateTimeFormatter
-import java.time.{Duration, ZoneId, ZonedDateTime}
+import java.time.Duration
 import scala.util.{Failure, Success, Try}
 
 class ExtractorSpec
@@ -50,12 +50,14 @@ class ExtractorSpec
     val coVerifiedView: SimpleUrlView = SimpleUrlView(
       id = "1",
       name = Some("https://www.coverified.info"),
-      sourceId = Some("1")
+      sourceId = Some("1"),
+      hasBeenCrawled = false
     )
     val ardView = SimpleUrlView(
       id = "2",
       name = Some("https://www.ard.de"),
-      sourceId = Some("2")
+      sourceId = Some("2"),
+      hasBeenCrawled = false
     )
     val validViews: List[SimpleUrlView] = List(
       coVerifiedView,
@@ -147,7 +149,7 @@ class ExtractorSpec
 
         "return correct GraphQL query" in {
           val pattern =
-            "query\\{allUrls\\(where:\\{lastCrawl_lte:\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.\\d{3}Z\"}\\)\\{id name source\\{id name acronym url}}}".r
+            "query\\{allUrls\\(where:\\{lastCrawl_lte:\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.\\d{3}Z\"}\\)\\{id name source\\{id name acronym url} lastCrawl}}".r
 
           pattern.matches(
             (extractor invokePrivate buildUrlQuery()).toGraphQL().query
@@ -350,7 +352,8 @@ class ExtractorSpec
           val maliciousUrlView = SimpleUrlView(
             id = "malicious view",
             name = url,
-            sourceId = sourceId
+            sourceId = sourceId,
+            hasBeenCrawled = false
           )
           extractor invokePrivate extractInformation(
             maliciousUrlView,
@@ -375,7 +378,8 @@ class ExtractorSpec
         val urlView = SimpleUrlView(
           id = "malicious view",
           name = Some(url),
-          sourceId = Some("source id")
+          sourceId = Some("source id"),
+          hasBeenCrawled = false
         )
         extractor invokePrivate extractInformation(
           urlView,
@@ -408,8 +412,15 @@ class ExtractorSpec
                 case Argument("id", value) => value shouldBe "foo"
                 case Argument("data", value) =>
                   value match {
-                    case Some(UrlUpdateInput(url, _, _, _)) =>
-                      url shouldBe Some(coverifiedUrl)
+                    case Some(UrlUpdateInput(_, _, _, lastCrawl)) =>
+                      inside(lastCrawl) {
+                        case Some(timeStamp) =>
+                          timeStamp should not be "1970-01-01T00:00:00.000Z"
+                        case malicious =>
+                          fail(
+                            s"Got malicious last crawl time stamp: '$malicious'"
+                          )
+                      }
                     case _ => fail("Got wrong entry.")
                   }
               }
@@ -429,10 +440,11 @@ class ExtractorSpec
           )
 
           evaluate(SttpStubbing.postOkay(updateEffect)) match {
-            case Some(SimpleUrlView(id, url, sourceId)) =>
+            case Some(SimpleUrlView(id, url, sourceId, hasBeenCrawled)) =>
               id shouldBe coVerifiedView.id
               url shouldBe coVerifiedView.name
               sourceId shouldBe sourceId
+              hasBeenCrawled shouldBe false
             case Some(unexpected) =>
               fail(s"Passed with unexpected outcome: '$unexpected'.")
             case None => fail("Updating url entry was meant to succeed.")
@@ -475,7 +487,12 @@ class ExtractorSpec
             summary shouldBe Some("summary")
             content shouldBe Some("content")
             url shouldBe Some(
-              SimpleUrlView("1", Some("https://coverified.info"), Some("1"))
+              SimpleUrlView(
+                "1",
+                Some("https://coverified.info"),
+                Some("1"),
+                hasBeenCrawled = true
+              )
             )
           case Some(unexpected) =>
             fail(s"Passed with unexpected outcome: '$unexpected'.")

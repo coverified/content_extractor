@@ -6,16 +6,6 @@
 package info.coverified.test.scalatest
 
 import caliban.client.CalibanClientError
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Entry.EntryView
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Language.LanguageView
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Url.UrlView
-import info.coverified.graphql.schema.CoVerifiedClientSchema.{
-  Language,
-  Source,
-  Tag,
-  _QueryMeta
-}
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import sttp.client3.{RequestT, Response, StringBody}
@@ -80,7 +70,8 @@ object SttpStubbing {
                       SimpleUrlView(
                         id = "1",
                         name = Some("https://coverified.info"),
-                        sourceId = Some("1")
+                        sourceId = Some("1"),
+                        hasBeenCrawled = true
                       )
                     )
                   else None
@@ -99,12 +90,12 @@ object SttpStubbing {
                     .findFirstMatchIn(queryString)
                     .map(_.group(1))
                     .getOrElse("ID_NOT_FOUND"),
-                  name = "name:\\\\\"([^\"]*)\\\\\"".r
-                    .findFirstMatchIn(queryString)
-                    .map(_.group(1)),
-                  sourceId = "source:\\{connect:\\{id\\\\\"([^\"]*)\\\\\"".r
+                  name = Some("https://www.coverified.info"),
+                  sourceId = Some("1"),
+                  hasBeenCrawled = "lastCrawl:\\\\\"([^\"]*)\\\\\"".r
                     .findFirstMatchIn(queryString)
                     .map(_.group(1))
+                    .contains("1970-01-01T00:00:00.000Z")
                 )
               )
             )
