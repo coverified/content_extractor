@@ -7,7 +7,7 @@ package info.coverified.extractor
 
 import caliban.client.{Argument, CalibanClientError, SelectionBuilder}
 import caliban.client.CalibanClientError.CommunicationError
-import caliban.client.Operations.RootMutation
+import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.SelectionBuilder.Field
 import info.coverified.extractor.Extractor.NeededInformation
 import info.coverified.extractor.analyzer.BrowserHelper
@@ -36,7 +36,8 @@ import zio.{RIO, UIO, ZIO}
 
 import java.io.File
 import java.nio.file.Files
-import java.time.Duration
+import java.time.format.DateTimeFormatter
+import java.time.{Duration, ZoneId, ZonedDateTime}
 import scala.util.{Failure, Success, Try}
 
 class ExtractorSpec
@@ -138,56 +139,75 @@ class ExtractorSpec
       }
     }
 
-    "querying all available urls" should {
-      val getAllUrlViews = PrivateMethod[
-        ZIO[Console with SttpClient, Throwable, List[SimpleUrlView]]
-      ](Symbol("getAllUrlViews"))
+    "querying all available urls" when {
+      "building the query" should {
+        val buildUrlQuery = PrivateMethod[
+          SelectionBuilder[RootQuery, Option[List[Option[SimpleUrlView]]]]
+        ](Symbol("buildUrlQuery"))
 
-      "fails, if query execution has failed" in {
-        val body
-            : Either[CalibanClientError, Some[List[Option[SimpleUrlView]]]] =
-          Left(CommunicationError("What did you say?"))
-        val queryEffect = extractor invokePrivate getAllUrlViews()
-        val responseEffect = SttpStubbing.okayCool(queryEffect, body)
+        "return correct GraphQL query" in {
+          val pattern =
+            "query\\{allUrls\\(where:\\{lastCrawl_lte:\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.\\d{3}Z\"}\\)\\{id name source\\{id name acronym url}}}".r
 
-        intercept[zio.FiberFailure] {
-          evaluate(responseEffect)
+          pattern.matches(
+            (extractor invokePrivate buildUrlQuery()).toGraphQL().query
+          ) shouldBe true
         }
       }
 
-      "returns an empty list, of none has been sent as response" in {
-        val body: Right[Nothing, Option[List[Option[SimpleUrlView]]]] =
-          Right(None)
-        val queryEffect = extractor invokePrivate getAllUrlViews()
-        val responseEffect = SttpStubbing.okayCool(queryEffect, body)
+      "actually receiving url views" should {
+        val getAllUrlViews = PrivateMethod[
+          ZIO[Console with SttpClient, Throwable, List[SimpleUrlView]]
+        ](Symbol("getAllUrlViews"))
 
-        val listOfUrlViews = evaluate(responseEffect)
+        "fails, if query execution has failed" in {
+          val body
+              : Either[CalibanClientError, Some[List[Option[SimpleUrlView]]]] =
+            Left(CommunicationError("What did you say?"))
+          val queryEffect = extractor invokePrivate getAllUrlViews()
+          val responseEffect = SttpStubbing.okayCool(queryEffect, body)
 
-        listOfUrlViews.isEmpty shouldBe true
-      }
+          intercept[zio.FiberFailure] {
+            evaluate(responseEffect)
+          }
+        }
 
-      "return an empty list, if no urls are available" in {
-        val body
-            : Either[CalibanClientError, Option[List[Option[SimpleUrlView]]]] =
-          Right(Some(List.empty[Option[SimpleUrlView]]))
-        val queryEffect = extractor invokePrivate getAllUrlViews()
-        val responseEffect = SttpStubbing.okayCool(queryEffect, body)
+        "returns an empty list, of none has been sent as response" in {
+          val body: Right[Nothing, Option[List[Option[SimpleUrlView]]]] =
+            Right(None)
+          val queryEffect = extractor invokePrivate getAllUrlViews()
+          val responseEffect = SttpStubbing.okayCool(queryEffect, body)
 
-        val listOfUrlViews = evaluate(responseEffect)
+          val listOfUrlViews = evaluate(responseEffect)
 
-        listOfUrlViews.isEmpty shouldBe true
-      }
+          listOfUrlViews.isEmpty shouldBe true
+        }
 
-      "return correct views" in {
-        val body: Either[CalibanClientError, Some[List[Some[SimpleUrlView]]]] =
-          Right(Some(validViews.map(Some(_))))
-        val queryEffect = extractor invokePrivate getAllUrlViews()
-        val responseEffect = SttpStubbing.okayCool(queryEffect, body)
+        "return an empty list, if no urls are available" in {
+          val body: Either[CalibanClientError, Option[
+            List[Option[SimpleUrlView]]
+          ]] =
+            Right(Some(List.empty[Option[SimpleUrlView]]))
+          val queryEffect = extractor invokePrivate getAllUrlViews()
+          val responseEffect = SttpStubbing.okayCool(queryEffect, body)
 
-        val listOfUrlViews = evaluate(responseEffect)
+          val listOfUrlViews = evaluate(responseEffect)
 
-        listOfUrlViews.size shouldBe 2
-        validViews.forall(scheme => listOfUrlViews.contains(scheme)) shouldBe true
+          listOfUrlViews.isEmpty shouldBe true
+        }
+
+        "return correct views" in {
+          val body
+              : Either[CalibanClientError, Some[List[Some[SimpleUrlView]]]] =
+            Right(Some(validViews.map(Some(_))))
+          val queryEffect = extractor invokePrivate getAllUrlViews()
+          val responseEffect = SttpStubbing.okayCool(queryEffect, body)
+
+          val listOfUrlViews = evaluate(responseEffect)
+
+          listOfUrlViews.size shouldBe 2
+          validViews.forall(scheme => listOfUrlViews.contains(scheme)) shouldBe true
+        }
       }
     }
 

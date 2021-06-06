@@ -22,14 +22,14 @@ import info.coverified.extractor.exceptions.{
 }
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.Connector
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Entry.EntryView
 import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Mutation,
   Query,
   SourceRelateToOneInput,
   SourceWhereUniqueInput,
-  UrlUpdateInput
+  UrlUpdateInput,
+  UrlWhereInput
 }
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
@@ -39,6 +39,9 @@ import zio.{RIO, UIO, ZIO}
 import zio.console.Console
 
 import java.io.File
+import java.time.format.DateTimeFormatter
+import java.time.{Duration, ZoneId, ZonedDateTime}
+import java.util.TimeZone
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -47,8 +50,11 @@ import scala.util.{Failure, Success, Try}
   * @version 0.1
   * @since 26.02.21
   */
-final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
-    extends LazyLogging {
+final case class Extractor private (
+    apiUrl: Uri,
+    profileDirectoryPath: String,
+    reAnalysisInterval: Duration
+) extends LazyLogging {
 
   /**
     * Build the extraction effect. It consists of the following steps:
@@ -126,7 +132,22 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
     */
   private def buildUrlQuery
       : SelectionBuilder[RootQuery, Option[List[Option[SimpleUrlView]]]] =
-    Query.allUrls()(
+    Query.allUrls(
+      where = Some(
+        UrlWhereInput(
+          lastCrawl_lte = Some(
+            "\\[UTC]$".r.replaceAllIn(
+              DateTimeFormatter.ISO_DATE_TIME.format(
+                ZonedDateTime
+                  .now(ZoneId.of("UTC"))
+                  .minusHours(reAnalysisInterval.toHours)
+              ),
+              ""
+            )
+          )
+        )
+      )
+    )(
       SimpleUrl.view
     )
 
@@ -238,7 +259,11 @@ final case class Extractor private (apiUrl: Uri, profileDirectoryPath: String)
 
 object Extractor {
   def apply(config: Config): Extractor =
-    new Extractor(config.apiUri, config.profileDirectoryPath)
+    new Extractor(
+      config.apiUri,
+      config.profileDirectoryPath,
+      config.reAnalysisInterval
+    )
 
   /**
     * Data structure to group all data, that can be loaded in parallel prior to actual information extraction
