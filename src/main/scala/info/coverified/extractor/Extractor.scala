@@ -11,10 +11,12 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.Extractor.{
   NeededInformation,
+  buildEntry,
   buildUrlUpdateMutation,
-  getProfile4Url
+  getProfile4Url,
+  updateEntry
 }
-import info.coverified.extractor.analyzer.Analyzer
+import info.coverified.extractor.analyzer.{Analyzer, EntryInformation}
 import info.coverified.extractor.config.Config
 import info.coverified.extractor.exceptions.{
   ConfigException,
@@ -24,10 +26,15 @@ import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.Connector
 import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  EntryCreateInput,
+  EntryUpdateInput,
   Mutation,
   Query,
+  TagRelateToManyInput,
+  UrlRelateToOneInput,
   UrlUpdateInput,
-  UrlWhereInput
+  UrlWhereInput,
+  UrlWhereUniqueInput
 }
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
@@ -110,7 +117,7 @@ final case class Extractor private (
   /**
     * Asking the Connector for all available urls + additional information within the data source
     *
-    * @return An effect, that evaluates to a list of [[UrlView]]s
+    * @return An effect, that evaluates to a list of [[SimpleUrlView]]s
     */
   private def getAllUrlViews
       : ZIO[Console with SttpClient, Throwable, List[SimpleUrlView]] = {
@@ -165,10 +172,16 @@ final case class Extractor private (
   ]] = {
     logger.info("Handling url: {}", urlView.name)
     extractInformation(urlView, hostToProfileConfig) match {
-      case Success(mutation) =>
-        val storeMutationEffect = storeMutation(mutation)
-        val urlUpdateEffect = updateUrlView(urlView)
-        Some(storeMutationEffect.zipPar(urlUpdateEffect))
+      case Success(EntryInformation(title, summary, content)) =>
+        (if (!urlView.hasBeenCrawled) {
+           Some(buildEntry(urlView.id, title, summary, content))
+         } else {
+           urlView.entryId.map(updateEntry(_, title, summary, content))
+         }).map { mutationEffect =>
+          val storeMutationEffect = storeMutation(mutationEffect)
+          val urlUpdateEffect = updateUrlView(urlView)
+          storeMutationEffect.zipPar(urlUpdateEffect)
+        }
       case Failure(exception) =>
         logger
           .warn("Analysis of url '{}' failed.", urlView.name, exception)
@@ -189,13 +202,11 @@ final case class Extractor private (
       urlView: SimpleUrlView,
       urlToProfileConfigs: Map[String, ProfileConfig],
       browser: Browser = JsoupBrowser()
-  ): Try[SelectionBuilder[RootMutation, Option[
-    SimpleEntry.SimpleEntryView[SimpleUrlView]
-  ]]] =
+  ): Try[EntryInformation] =
     urlView match {
-      case SimpleUrlView(_, Some(url), Some(sourceId), hasBeenCrawled) =>
+      case SimpleUrlView(_, Some(url), Some(sourceId), _, _) =>
         getProfile4Url(url, urlToProfileConfigs).flatMap(
-          getMutation(url, sourceId, _, browser)
+          getEntryInformation(url, sourceId, _, browser)
         )
       case _ =>
         Failure(
@@ -212,16 +223,14 @@ final case class Extractor private (
     * @param urlId    The id of the url
     * @param cfg      [[ProfileConfig]] to use
     * @param browser  The browser to be used for content extraction
-    * @return A trial to get a writte mutation back
+    * @return A trial to get information for the page
     */
-  private def getMutation(
+  private def getEntryInformation(
       url: String,
       urlId: String,
       cfg: ProfileConfig,
       browser: Browser = JsoupBrowser()
-  ): Try[SelectionBuilder[RootMutation, Option[
-    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
-  ]]] =
+  ): Try[EntryInformation] =
     Analyzer.run(url, urlId, cfg, browser)
 
   /**
@@ -248,7 +257,7 @@ final case class Extractor private (
   private def updateUrlView(
       view: SimpleUrlView
   ): RIO[Console with SttpClient, Option[SimpleUrlView]] = view match {
-    case SimpleUrlView(id, url, sourceId, hasBeenCrawled) =>
+    case SimpleUrlView(id, url, sourceId, _, _) =>
       val mutation = buildUrlUpdateMutation(id, url, sourceId)
       Connector.sendRequest(mutation.toRequest(apiUrl))
   }
@@ -292,6 +301,68 @@ object Extractor {
       .fold[Try[ProfileConfig]] {
         Failure(ConfigException(s"Unable to get config for url '$url'."))
       } { case (_, config) => Success(config) }
+
+  /**
+    * Build entry for extracted page information based on the different page types available.
+    *
+    * @param urlId    Identifier of url in database
+    * @param title    Title of the page
+    * @param summary  Summary of the page
+    * @param content  Content of the entry
+    * @return A mutation to post to data base
+    */
+  private def buildEntry(
+      urlId: String,
+      title: Option[String],
+      summary: Option[String],
+      content: Option[String]
+  ): SelectionBuilder[RootMutation, Option[
+    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+  ]] =
+    Mutation.createEntry(
+      Some(
+        EntryCreateInput(
+          name = title,
+          content = content,
+          summary = summary,
+          url = Some(
+            UrlRelateToOneInput(connect = Some(UrlWhereUniqueInput(id = urlId)))
+          )
+        )
+      )
+    )(
+      SimpleEntry.view(SimpleUrl.view)
+    )
+
+  /**
+    * Build a mutation, that updates the entry
+    *
+    * @param entryId  Identifier of the entry
+    * @param title    Title
+    * @param summary  Summary
+    * @param content  Content
+    * @return A mutation to post to data base
+    */
+  def updateEntry(
+      entryId: String,
+      title: Option[String],
+      summary: Option[String],
+      content: Option[String]
+  ): SelectionBuilder[RootMutation, Option[
+    SimpleEntry.SimpleEntryView[SimpleUrlView]
+  ]] =
+    Mutation.updateEntry(
+      entryId,
+      Some(
+        EntryUpdateInput(
+          name = title,
+          summary = summary,
+          content = content,
+          hasBeenTagged = Some(false),
+          tags = Some(TagRelateToManyInput(disconnectAll = Some(true)))
+        )
+      )
+    )(SimpleEntry.view(SimpleUrl.view))
 
   /**
     * Build the mutation, that is used for updating the url entry in database

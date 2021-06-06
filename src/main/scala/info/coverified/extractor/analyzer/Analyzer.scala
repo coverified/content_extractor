@@ -5,10 +5,7 @@
 
 package info.coverified.extractor.analyzer
 
-import caliban.client.Operations.RootMutation
-import caliban.client.SelectionBuilder
 import info.coverified.extractor.profile.ProfileConfig
-import info.coverified.graphql.schema.CoVerifiedClientSchema._
 import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
@@ -18,7 +15,6 @@ import net.ruippeixotog.scalascraper.model.Document
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig.PageType
-import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 
 import scala.util.{Failure, Success, Try}
 
@@ -36,9 +32,7 @@ object Analyzer extends LazyLogging {
       urlId: String,
       cfg: ProfileConfig,
       browser: Browser = JsoupBrowser()
-  ): Try[SelectionBuilder[RootMutation, Option[
-    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
-  ]]] =
+  ): Try[EntryInformation] =
     Try(browser.get(url)).flatMap(analyze(url, urlId, _, cfg))
 
   /**
@@ -48,21 +42,17 @@ object Analyzer extends LazyLogging {
     * @param urlId          Identifier of the url entry in data base
     * @param pageDoc        Page document
     * @param profileConfig  Applicable profile config for this page
-    * @return An [[Option]] onto an [[Option]] of a selection builder
+    * @return A trial onto the needed information
     */
   private def analyze(
       url: String,
       urlId: String,
       pageDoc: Document,
       profileConfig: ProfileConfig
-  ): Try[SelectionBuilder[RootMutation, Option[
-    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
-  ]]] = getSelectors(url, pageDoc, profileConfig).map {
-    extractInformation(pageDoc, _) match {
-      case EntryInformation(title, summary, content) =>
-        buildEntry(urlId, title, summary, content)
-    }
-  }
+  ): Try[EntryInformation] =
+    getSelectors(url, pageDoc, profileConfig).map(
+      extractInformation(pageDoc, _)
+    )
 
   /**
     * Determine the page type (in terms of it's "name") as well as the associated selectors for this type of document
@@ -119,38 +109,6 @@ object Analyzer extends LazyLogging {
       url: String,
       pageType: ProfileConfig.PageType
   ): Boolean = pageType.condition.path.forall(url.contains(_))
-
-  /**
-    * Build entry for extracted page information based on the different page types available.
-    *
-    * @param urlId    Identifier of url in database
-    * @param title    Title of the page
-    * @param summary  Summary of the page
-    * @param content  Content of the entry
-    * @return A mutation to post to data base
-    */
-  private def buildEntry(
-      urlId: String,
-      title: Option[String],
-      summary: Option[String],
-      content: Option[String]
-  ): SelectionBuilder[RootMutation, Option[
-    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
-  ]] =
-    Mutation.createEntry(
-      Some(
-        EntryCreateInput(
-          name = title,
-          content = content,
-          summary = summary,
-          url = Some(
-            UrlRelateToOneInput(connect = Some(UrlWhereUniqueInput(id = urlId)))
-          )
-        )
-      )
-    )(
-      SimpleEntry.view(SimpleUrl.view)
-    )
 
   /**
     * Extract the needed information from the page

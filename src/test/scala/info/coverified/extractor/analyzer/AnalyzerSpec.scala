@@ -235,54 +235,10 @@ class AnalyzerSpec
             content shouldBe None
         }
       }
-
-      val buildEntry = PrivateMethod[SelectionBuilder[RootMutation, Option[
-        SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
-      ]]](Symbol("buildEntry"))
-      "creates entry correctly" in {
-        val selectionBuilder = Analyzer invokePrivate buildEntry(
-          "1",
-          Some("Title"),
-          Some("Summary"),
-          Some("content")
-        )
-
-        selectionBuilder match {
-          case SelectionBuilder.Field(name, _, _, arguments, _) =>
-            name shouldBe "createEntry"
-            arguments.size shouldBe 1
-            arguments.headOption match {
-              case Some(Argument(name, value)) =>
-                name shouldBe "data"
-                value match {
-                  case Some(eci: EntryCreateInput) =>
-                    eci.name shouldBe Some("Title")
-                    eci.content shouldBe Some("content")
-                    eci.summary shouldBe Some("Summary")
-                    eci.url shouldBe Some(
-                      UrlRelateToOneInput(
-                        None,
-                        Some(UrlWhereUniqueInput("1")),
-                        None,
-                        None
-                      )
-                    )
-                    eci.tags shouldBe None
-                    eci.language shouldBe None
-                    eci.hasBeenTagged shouldBe None
-                  case None => fail("Data should actually contain data")
-                }
-              case None => fail("Expected to get one argument")
-            }
-          case _ => fail("Got wrong result")
-        }
-      }
     }
 
     "analysing received content" should {
-      val analyze = PrivateMethod[Try[SelectionBuilder[RootMutation, Option[
-        SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
-      ]]]](Symbol("analyze"))
+      val analyze = PrivateMethod[Try[EntryInformation]](Symbol("analyze"))
 
       "skip pages, that are not meant to be analyzed" in {
         val profileConfig = ProfileConfig(

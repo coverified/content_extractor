@@ -13,3 +13,7 @@ _(not comprehensive, but the most important ones)_
 -   When querying urls to visit, we only want to visit those, that have not been visited, yet, or a specified time ago
 	-   As of current implementation, it is not possible to query with filters on null / empty fields directly [Caliban#778](https://github.com/ghostdogpr/caliban/issues/778)
 	-   Therefore, we expect the 'lastCrawl' information to be EPOCH, if not visited, yet
+-   When an url is re-visited after some time we
+	-   update the entry information without further checking, if actually something has changed
+	-   reset the flag, if that entry has been tagged to false and
+	-   remove All tags

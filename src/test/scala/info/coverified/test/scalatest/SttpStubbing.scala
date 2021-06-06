@@ -7,7 +7,7 @@ package info.coverified.test.scalatest
 
 import caliban.client.CalibanClientError
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
-import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
+import info.coverified.graphql.schema.SimpleUrl.{SimpleUrlView, entryId}
 import sttp.client3.{RequestT, Response, StringBody}
 import sttp.client3.asynchttpclient.zio.{AsyncHttpClientZioBackend, SttpClient}
 import sttp.client3.asynchttpclient.zio.stubbing.whenRequestMatchesPartial
@@ -71,6 +71,7 @@ object SttpStubbing {
                         id = "1",
                         name = Some("https://coverified.info"),
                         sourceId = Some("1"),
+                        entryId = None,
                         hasBeenCrawled = true
                       )
                     )
@@ -92,6 +93,7 @@ object SttpStubbing {
                     .getOrElse("ID_NOT_FOUND"),
                   name = Some("https://www.coverified.info"),
                   sourceId = Some("1"),
+                  entryId = None,
                   hasBeenCrawled = "lastCrawl:\\\\\"([^\"]*)\\\\\"".r
                     .findFirstMatchIn(queryString)
                     .map(_.group(1))

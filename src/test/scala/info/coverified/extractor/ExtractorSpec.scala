@@ -10,7 +10,7 @@ import caliban.client.CalibanClientError.CommunicationError
 import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.SelectionBuilder.Field
 import info.coverified.extractor.Extractor.NeededInformation
-import info.coverified.extractor.analyzer.BrowserHelper
+import info.coverified.extractor.analyzer.{BrowserHelper, EntryInformation}
 import info.coverified.extractor.config.ProfileConfigHelper.TempConfig
 import info.coverified.extractor.config.{Config, ProfileConfigHelper}
 import info.coverified.extractor.exceptions.{
@@ -20,14 +20,16 @@ import info.coverified.extractor.exceptions.{
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   EntryCreateInput,
+  EntryUpdateInput,
   Mutation,
+  TagRelateToManyInput,
   UrlRelateToOneInput,
   UrlUpdateInput,
   UrlWhereUniqueInput
 }
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
-import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
+import info.coverified.graphql.schema.SimpleUrl.{SimpleUrlView, entryId}
 import info.coverified.test.scalatest.{MockBrowser, SttpStubbing, ZioSpec}
 import org.scalatest.Inside.inside
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -51,12 +53,14 @@ class ExtractorSpec
       id = "1",
       name = Some("https://www.coverified.info"),
       sourceId = Some("1"),
+      entryId = None,
       hasBeenCrawled = false
     )
     val ardView = SimpleUrlView(
       id = "2",
       name = Some("https://www.ard.de"),
       sourceId = Some("2"),
+      entryId = None,
       hasBeenCrawled = false
     )
     val validViews: List[SimpleUrlView] = List(
@@ -149,11 +153,12 @@ class ExtractorSpec
 
         "return correct GraphQL query" in {
           val pattern =
-            "query\\{allUrls\\(where:\\{lastCrawl_lte:\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.\\d{3}Z\"}\\)\\{id name source\\{id name acronym url} lastCrawl}}".r
+            "query\\{allUrls\\(where:\\{lastCrawl_lte:\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:.\\d{3})?Z\"}\\)\\{id name source\\{id name acronym url} entry\\{id} lastCrawl}}".r
 
-          pattern.matches(
+          val actualQuery =
             (extractor invokePrivate buildUrlQuery()).toGraphQL().query
-          ) shouldBe true
+
+          pattern.matches(actualQuery) shouldBe true
         }
       }
 
@@ -311,31 +316,8 @@ class ExtractorSpec
     }
 
     "extracting information" when {
-      val getMutation =
-        PrivateMethod[Try[RIO[Console with SttpClient, Option[SimpleUrlView]]]](
-          Symbol("getMutation")
-        )
-
-      "getting mutation with correct information, it succeeds" in {
-        val url = coverifiedUrl
-        val urlId = coverifiedUrlId
-        val profileConfig = getConfig(coverifiedUrl)
-        val mockBrowser = MockBrowser(Map(coverifiedUrl -> validUrlPageDoc))
-
-        extractor invokePrivate getMutation(
-          url,
-          urlId,
-          profileConfig,
-          mockBrowser
-        ) match {
-          case Success(_) => succeed
-          case Failure(exception) =>
-            fail("Failed with an exception.", exception)
-        }
-      }
-
       val extractInformation =
-        PrivateMethod[Try[RIO[Console with SttpClient, Option[SimpleUrlView]]]](
+        PrivateMethod[Try[EntryInformation]](
           Symbol("extractInformation")
         )
       val mockBrowser = MockBrowser(Map(coverifiedUrl -> validUrlPageDoc))
@@ -353,6 +335,7 @@ class ExtractorSpec
             id = "malicious view",
             name = url,
             sourceId = sourceId,
+            entryId = None,
             hasBeenCrawled = false
           )
           extractor invokePrivate extractInformation(
@@ -379,6 +362,7 @@ class ExtractorSpec
           id = "malicious view",
           name = Some(url),
           sourceId = Some("source id"),
+          entryId = None,
           hasBeenCrawled = false
         )
         extractor invokePrivate extractInformation(
@@ -389,6 +373,87 @@ class ExtractorSpec
           case Success(_) => succeed
           case Failure(exception) =>
             fail("Extraction of information was not meant to fail.", exception)
+        }
+      }
+
+      "succeeds in building entry to freshly insert" should {
+        val buildEntry = PrivateMethod[SelectionBuilder[RootMutation, Option[
+          SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+        ]]](Symbol("buildEntry"))
+        "create an entry correctly" in {
+          val selectionBuilder = Extractor invokePrivate buildEntry(
+            "1",
+            Some("Title"),
+            Some("Summary"),
+            Some("content")
+          )
+
+          selectionBuilder match {
+            case SelectionBuilder.Field(name, _, _, arguments, _) =>
+              name shouldBe "createEntry"
+              arguments.size shouldBe 1
+              arguments.headOption match {
+                case Some(Argument(name, value)) =>
+                  name shouldBe "data"
+                  value match {
+                    case Some(eci: EntryCreateInput) =>
+                      eci.name shouldBe Some("Title")
+                      eci.content shouldBe Some("content")
+                      eci.summary shouldBe Some("Summary")
+                      eci.url shouldBe Some(
+                        UrlRelateToOneInput(
+                          None,
+                          Some(UrlWhereUniqueInput("1")),
+                          None,
+                          None
+                        )
+                      )
+                      eci.tags shouldBe None
+                      eci.language shouldBe None
+                      eci.hasBeenTagged shouldBe None
+                    case None => fail("Data should actually contain data")
+                  }
+                case None => fail("Expected to get one argument")
+              }
+            case _ => fail("Got wrong result")
+          }
+        }
+      }
+
+      "succeeds in building entry to update" should {
+        val updateEntry = PrivateMethod[SelectionBuilder[RootMutation, Option[
+          SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+        ]]](Symbol("updateEntry"))
+        "create an entry correctly" in {
+          val selectionBuilder = Extractor invokePrivate updateEntry(
+            "1",
+            Some("Title"),
+            Some("Summary"),
+            Some("content")
+          )
+
+          selectionBuilder match {
+            case SelectionBuilder.Field(name, _, _, arguments, _) =>
+              name shouldBe "updateEntry"
+              arguments.size shouldBe 2
+              arguments.foreach {
+                case Argument("id", value) => value shouldBe "1"
+                case Argument("data", Some(eui: EntryUpdateInput)) =>
+                  eui.name shouldBe Some("Title")
+                  eui.content shouldBe Some("content")
+                  eui.summary shouldBe Some("Summary")
+                  eui.tags shouldBe Some(
+                    TagRelateToManyInput(disconnectAll = Some(true))
+                  )
+                  eui.language shouldBe None
+                  eui.hasBeenTagged shouldBe Some(false)
+                case Argument("data", Some(wrongData)) =>
+                  fail(s"Got wrong data: '$wrongData'")
+                case Argument("data", None) =>
+                  fail("Data should actually contain data")
+              }
+            case _ => fail("Got wrong result")
+          }
         }
       }
     }
@@ -440,10 +505,13 @@ class ExtractorSpec
           )
 
           evaluate(SttpStubbing.postOkay(updateEffect)) match {
-            case Some(SimpleUrlView(id, url, sourceId, hasBeenCrawled)) =>
+            case Some(
+                SimpleUrlView(id, url, sourceId, entryId, hasBeenCrawled)
+                ) =>
               id shouldBe coVerifiedView.id
               url shouldBe coVerifiedView.name
               sourceId shouldBe sourceId
+              entryId shouldBe None
               hasBeenCrawled shouldBe false
             case Some(unexpected) =>
               fail(s"Passed with unexpected outcome: '$unexpected'.")
@@ -491,6 +559,7 @@ class ExtractorSpec
                 "1",
                 Some("https://coverified.info"),
                 Some("1"),
+                None,
                 hasBeenCrawled = true
               )
             )
