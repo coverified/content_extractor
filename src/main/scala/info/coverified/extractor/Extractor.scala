@@ -57,7 +57,8 @@ import scala.util.{Failure, Success, Try}
 final case class Extractor private (
     apiUrl: Uri,
     profileDirectoryPath: String,
-    reAnalysisInterval: Duration
+    reAnalysisInterval: Duration,
+    authSecret: String
 ) extends LazyLogging {
 
   /**
@@ -246,7 +247,11 @@ final case class Extractor private (
   ): RIO[Console with SttpClient, Option[
     SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
   ]] =
-    Connector.sendRequest(mutation.toRequest(apiUrl))
+    Connector.sendRequest(
+      mutation
+        .toRequest(apiUrl)
+        .header("x-coverified-internal-auth", authSecret)
+    )
 
   /**
     * Build a mutation and send it to API in order to update the url entry
@@ -259,7 +264,11 @@ final case class Extractor private (
   ): RIO[Console with SttpClient, Option[SimpleUrlView]] = view match {
     case SimpleUrlView(id, url, sourceId, _, _) =>
       val mutation = buildUrlUpdateMutation(id, url, sourceId)
-      Connector.sendRequest(mutation.toRequest(apiUrl))
+      Connector.sendRequest(
+        mutation
+          .toRequest(apiUrl)
+          .header("x-coverified-internal-auth", authSecret)
+      )
   }
 }
 
@@ -268,7 +277,8 @@ object Extractor {
     new Extractor(
       config.apiUri,
       config.profileDirectoryPath,
-      config.reAnalysisInterval
+      config.reAnalysisInterval,
+      config.authSecret
     )
 
   /**

@@ -18,7 +18,8 @@ object ArgsParser {
   final case class Args(
       apiUrl: Option[String] = None,
       pageProfileFolderPath: Option[String] = None,
-      reAnalyzeInterval: Option[Int] = None
+      reAnalyzeInterval: Option[Int] = None,
+      authSecret: Option[String] = None
   )
 
   private def buildParser: scoptOptionParser[Args] = {
@@ -63,6 +64,20 @@ object ArgsParser {
             else success
         )
         .text("frequency of re-analyzing content in hours")
+        .minOccurs(1)
+      opt[String]("authSecret")
+        .action((value, args) => {
+          args.copy(
+            pageProfileFolderPath = Option(value)
+          )
+        })
+        .validate(
+          value =>
+            if (value.trim.isEmpty)
+              failure("auth secret cannot be empty!")
+            else success
+        )
+        .text("secret to authenticate against API")
         .minOccurs(1)
     }
 

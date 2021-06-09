@@ -19,24 +19,33 @@ import scala.util.{Failure, Success, Try}
   * @param apiUri                URI of the API that needs to be queried for the sites to extract content from
   * @param profileDirectoryPath  Directory path, where to find the site profiles
   * @param reAnalysisInterval    Interval, after which the content may be analyzed once again
+  * @param authSecret            Secret to authenticate against API
   */
 final case class Config(
     apiUri: Uri,
     profileDirectoryPath: String,
-    reAnalysisInterval: Duration
+    reAnalysisInterval: Duration,
+    authSecret: String
 )
 
 object Config {
   def apply(
       apiUrl: String,
       profileDirectoryPath: String,
-      reAnalysisInterval: Duration
+      reAnalysisInterval: Duration,
+      authSecret: String
   ): Config =
-    new Config(uri"$apiUrl", profileDirectoryPath, reAnalysisInterval)
+    new Config(
+      uri"$apiUrl",
+      profileDirectoryPath,
+      reAnalysisInterval,
+      authSecret
+    )
 
   private val API_URL_KEY = "EXTRACTOR_API_URL"
   private val PROFILE_DIRECTORY_PATH = "EXTRACTOR_PAGE_PROFILE_PATH"
   private val RE_ANALYSIS_INTERVAL = "RE_ANALYSIS_INTERVAL"
+  private val AUTH_SECRET = "AUTH_SECRET"
 
   /**
     * Build config from parsed CLI input
@@ -48,13 +57,15 @@ object Config {
     case Args(
         Some(apiUrl),
         Some(pageProfileFolderPath),
-        Some(reAnalyzeInterval)
+        Some(reAnalyzeInterval),
+        Some(authSecret)
         ) =>
       Success(
         Config(
           apiUrl,
           pageProfileFolderPath,
-          Duration.ofHours(reAnalyzeInterval.toLong)
+          Duration.ofHours(reAnalyzeInterval.toLong),
+          authSecret
         )
       )
     case _ =>
@@ -75,11 +86,13 @@ object Config {
       apiUrl <- fromEnv(API_URL_KEY)
       profileDirectory <- fromEnv(PROFILE_DIRECTORY_PATH)
       reAnalysisInterval <- fromEnv(RE_ANALYSIS_INTERVAL)
+      authSecret <- fromEnv(AUTH_SECRET)
     } yield {
       Config(
         apiUrl,
         profileDirectory,
-        Duration.ofHours(reAnalysisInterval.toLong)
+        Duration.ofHours(reAnalysisInterval.toLong),
+        authSecret
       )
     }
 

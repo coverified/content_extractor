@@ -17,3 +17,9 @@ _(not comprehensive, but the most important ones)_
 	-   update the entry information without further checking, if actually something has changed
 	-   reset the flag, if that entry has been tagged to false and
 	-   remove All tags
+
+## Environment variables to be set
+-   `API_URL_KEY` - The url, where GraphQL queries can be posted to
+-   `AUTH_SECRET` - Secret token to authenticate against GraphQL-API
+-   `PROFILE_DIRECTORY_PATH` - Path, where to find the page profiles
+-   `RE_ANALYSIS_INTERVAL` - Amount of hours, after which sites may be re-analysed

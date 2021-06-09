@@ -20,9 +20,11 @@ class ConfigSpec extends UnitSpec {
       "fail on missing entries" in {
         val maliciousArgs = Table(
           "args",
-          Args(None, None),
-          Args(Some("foo"), None),
-          Args(None, Some("bar"))
+          Args(None, None, None, None),
+          Args(Some("foo"), None, None, None),
+          Args(None, Some("bar"), None, None),
+          Args(None, None, Some(42), None),
+          Args(None, None, None, Some("baz"))
         )
 
         forAll(maliciousArgs) { args =>
@@ -38,13 +40,22 @@ class ConfigSpec extends UnitSpec {
       }
 
       "deliver proper config on proper input" in {
-        inside(Config.fromArgs(Args(Some("foo"), Some("bar"), Some(48)))) {
+        inside(
+          Config
+            .fromArgs(Args(Some("foo"), Some("bar"), Some(48), Some("secret")))
+        ) {
           case Success(
-              Config(apiUri, profileDirectoryPath, reAnalysisInterval)
+              Config(
+                apiUri,
+                profileDirectoryPath,
+                reAnalysisInterval,
+                authSecret
+              )
               ) =>
             apiUri shouldBe uri"foo"
             profileDirectoryPath shouldBe "bar"
             reAnalysisInterval shouldBe Duration.ofHours(48L)
+            authSecret shouldBe "secret"
           case Failure(exception) =>
             fail(
               s"Parsing was meant to pass, but failed with exception '$exception'."
@@ -57,13 +68,19 @@ class ConfigSpec extends UnitSpec {
       "succeed" in {
         inside(Config.fromEnv()) {
           case Success(
-              Config(apiUri, profileDirectoryPath, reAnalysisInterval)
+              Config(
+                apiUri,
+                profileDirectoryPath,
+                reAnalysisInterval,
+                authSecret
+              )
               ) =>
             /* The values expected here, have to placed within the environment during the build CI-stage.
              * Cf. .gitlab-ci.yml file in root directory */
             apiUri shouldBe uri"https://www.coverified.info"
             profileDirectoryPath shouldBe "in/some/directory"
             reAnalysisInterval shouldBe Duration.ofHours(48L)
+            authSecret shouldBe "thisIsSecret"
           case Failure(exception) =>
             fail(
               "Parsing config from environment variables was meant to succeed, but failed.",
