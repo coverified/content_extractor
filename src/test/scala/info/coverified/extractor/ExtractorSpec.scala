@@ -29,7 +29,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
 }
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
-import info.coverified.graphql.schema.SimpleUrl.{SimpleUrlView, entryId}
+import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import info.coverified.test.scalatest.{MockBrowser, SttpStubbing, ZioSpec}
 import org.scalatest.Inside.inside
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -48,7 +48,7 @@ class ExtractorSpec
     with BrowserHelper
     with TableDrivenPropertyChecks {
   "Given an extractor" when {
-    val extractor = Extractor(Config("", "", Duration.ofHours(48L)))
+    val extractor = Extractor(Config("", "", Duration.ofHours(48L), ""))
     val coVerifiedView: SimpleUrlView = SimpleUrlView(
       id = "1",
       name = Some("https://www.coverified.info"),
@@ -255,7 +255,8 @@ class ExtractorSpec
             Config(
               "",
               tempDirectoryPath.toAbsolutePath.toString,
-              Duration.ofHours(48L)
+              Duration.ofHours(48L),
+              ""
             )
           )
 
@@ -385,7 +386,8 @@ class ExtractorSpec
             "1",
             Some("Title"),
             Some("Summary"),
-            Some("content")
+            Some("content"),
+            Some("2021-06-09T22:00:00.000Z")
           )
 
           selectionBuilder match {
@@ -408,6 +410,7 @@ class ExtractorSpec
                           None
                         )
                       )
+                      eci.date shouldBe Some("2021-06-09T22:00:00.000Z")
                       eci.tags shouldBe None
                       eci.language shouldBe None
                       eci.hasBeenTagged shouldBe None
@@ -429,7 +432,8 @@ class ExtractorSpec
             "1",
             Some("Title"),
             Some("Summary"),
-            Some("content")
+            Some("content"),
+            Some("2021-06-09T22:00:00.000Z")
           )
 
           selectionBuilder match {
@@ -445,6 +449,7 @@ class ExtractorSpec
                   eui.tags shouldBe Some(
                     TagRelateToManyInput(disconnectAll = Some(true))
                   )
+                  eui.date shouldBe Some("2021-06-09T22:00:00.000Z")
                   eui.language shouldBe None
                   eui.hasBeenTagged shouldBe Some(false)
                 case Argument("data", Some(wrongData)) =>

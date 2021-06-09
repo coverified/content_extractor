@@ -173,11 +173,11 @@ final case class Extractor private (
   ]] = {
     logger.info("Handling url: {}", urlView.name)
     extractInformation(urlView, hostToProfileConfig) match {
-      case Success(EntryInformation(title, summary, content)) =>
+      case Success(EntryInformation(title, summary, content, date)) =>
         (if (!urlView.hasBeenCrawled) {
-           Some(buildEntry(urlView.id, title, summary, content))
+           Some(buildEntry(urlView.id, title, summary, content, date))
          } else {
-           urlView.entryId.map(updateEntry(_, title, summary, content))
+           urlView.entryId.map(updateEntry(_, title, summary, content, date))
          }).map { mutationEffect =>
           val storeMutationEffect = storeMutation(mutationEffect)
           val urlUpdateEffect = updateUrlView(urlView)
@@ -319,13 +319,15 @@ object Extractor {
     * @param title    Title of the page
     * @param summary  Summary of the page
     * @param content  Content of the entry
+    * @param date     Date of the article
     * @return A mutation to post to data base
     */
   private def buildEntry(
       urlId: String,
       title: Option[String],
       summary: Option[String],
-      content: Option[String]
+      content: Option[String],
+      date: Option[String]
   ): SelectionBuilder[RootMutation, Option[
     SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
   ]] =
@@ -335,6 +337,7 @@ object Extractor {
           name = title,
           content = content,
           summary = summary,
+          date = date,
           url = Some(
             UrlRelateToOneInput(connect = Some(UrlWhereUniqueInput(id = urlId)))
           )
@@ -351,13 +354,15 @@ object Extractor {
     * @param title    Title
     * @param summary  Summary
     * @param content  Content
+    * @param date     Date of the article
     * @return A mutation to post to data base
     */
   def updateEntry(
       entryId: String,
       title: Option[String],
       summary: Option[String],
-      content: Option[String]
+      content: Option[String],
+      date: Option[String]
   ): SelectionBuilder[RootMutation, Option[
     SimpleEntry.SimpleEntryView[SimpleUrlView]
   ]] =
@@ -369,6 +374,7 @@ object Extractor {
           summary = summary,
           content = content,
           hasBeenTagged = Some(false),
+          date = date,
           tags = Some(TagRelateToManyInput(disconnectAll = Some(true)))
         )
       )

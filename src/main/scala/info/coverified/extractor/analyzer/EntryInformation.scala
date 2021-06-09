@@ -11,9 +11,11 @@ package info.coverified.extractor.analyzer
   * @param title    Title of the page
   * @param summary  Summary of the content
   * @param content  Actual content
+  * @param date     Date of the article
   */
 final case class EntryInformation(
     title: Option[String],
     summary: Option[String],
-    content: Option[String]
+    content: Option[String],
+    date: Option[String]
 )

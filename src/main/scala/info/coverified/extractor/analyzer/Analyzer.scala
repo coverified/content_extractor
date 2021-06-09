@@ -121,6 +121,7 @@ object Analyzer extends LazyLogging {
     EntryInformation(
       pageDoc >?> text(selectors.title),
       selectors.summary.flatMap(pageDoc >?> text(_)),
-      pageDoc >?> text(selectors.content)
+      pageDoc >?> text(selectors.content),
+      selectors.date.flatMap(pageDoc >?> text(_))
     )
 }
