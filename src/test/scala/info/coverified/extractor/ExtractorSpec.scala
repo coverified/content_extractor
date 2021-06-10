@@ -159,7 +159,7 @@ class ExtractorSpec
 
           val actualQuery =
             (extractor invokePrivate buildUrlQuery()).toGraphQL().query
-          logger.debug(s"Actual query: '{}'", actualQuery)
+          println(s"Actual query: '{}'", actualQuery)
 
           pattern.matches(actualQuery) shouldBe true
         }
