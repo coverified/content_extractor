@@ -9,6 +9,7 @@ import caliban.client.{Argument, CalibanClientError, SelectionBuilder}
 import caliban.client.CalibanClientError.CommunicationError
 import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.SelectionBuilder.Field
+import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.Extractor.NeededInformation
 import info.coverified.extractor.analyzer.{BrowserHelper, EntryInformation}
 import info.coverified.extractor.config.ProfileConfigHelper.TempConfig
@@ -46,7 +47,8 @@ class ExtractorSpec
     extends ZioSpec
     with ProfileConfigHelper
     with BrowserHelper
-    with TableDrivenPropertyChecks {
+    with TableDrivenPropertyChecks
+    with LazyLogging {
   "Given an extractor" when {
     val extractor = Extractor(Config("", "", Duration.ofHours(48L), ""))
     val coVerifiedView: SimpleUrlView = SimpleUrlView(
@@ -157,6 +159,7 @@ class ExtractorSpec
 
           val actualQuery =
             (extractor invokePrivate buildUrlQuery()).toGraphQL().query
+          logger.debug(s"Actual query: '{}'", actualQuery)
 
           pattern.matches(actualQuery) shouldBe true
         }
