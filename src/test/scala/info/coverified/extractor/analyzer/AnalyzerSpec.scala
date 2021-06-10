@@ -210,11 +210,13 @@ class AnalyzerSpec
           case EntryInformation(
               title,
               summary,
-              content
+              content,
+              date
               ) =>
             title shouldBe Some("Url page with all information available")
             summary.getOrElse(fail("Expected to get a summary.")) shouldBe "This is a summary"
             content shouldBe Some("And with all the content.")
+            date shouldBe Some("2021-06-03T13:37:00Z")
         }
       }
 
@@ -228,11 +230,13 @@ class AnalyzerSpec
           case EntryInformation(
               title,
               summary,
-              content
+              content,
+              date
               ) =>
             title shouldBe Some("Url page with all information available")
             summary shouldBe None
             content shouldBe None
+            date shouldBe None
         }
       }
     }
