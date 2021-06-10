@@ -155,7 +155,7 @@ class ExtractorSpec
 
         "return correct GraphQL query" in {
           val pattern =
-            "query\\{allUrls\\(where:\\{lastCrawl_lte:\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:.\\d{3})?Z\"}\\)\\{id name source\\{id name acronym url} entry\\{id} lastCrawl}}".r
+            "query\\{allUrls\\(where:\\{lastCrawl_lte:\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:.\\d{3,6})?Z\"}\\)\\{id name source\\{id name acronym url} entry\\{id} lastCrawl}}".r
 
           val actualQuery =
             (extractor invokePrivate buildUrlQuery()).toGraphQL().query
