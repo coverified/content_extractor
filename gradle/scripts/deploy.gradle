@@ -6,6 +6,7 @@ task buildDotEnv {
 				"""|PROJECT_NAME=${project.name}
                    |PROJECT_VERSION=${project.version.toString()}
                    |MAIN_CLASS=${application.mainClass.get()}
+				   |VOLUME_MNT_POINT=/app/profiles
                    |""".stripMargin()
 		def file = new File("dockerBuild.env")
 		file.write(content)
