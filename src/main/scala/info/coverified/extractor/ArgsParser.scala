@@ -68,7 +68,7 @@ object ArgsParser {
       opt[String]("authSecret")
         .action((value, args) => {
           args.copy(
-            pageProfileFolderPath = Option(value)
+            authSecret = Option(value)
           )
         })
         .validate(
