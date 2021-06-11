@@ -17,9 +17,25 @@
                 </Delete>
             </DefaultRolloverStrategy>
         </RollingRandomAccessFile>
+        <RollingRandomAccessFile name="connector_RF" fileName="logs/connector.log"
+                                 filePattern="logs/archive/connector-%d{yyyyMMdd-HHmmss}.log">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+            <Policies>
+                <OnStartupTriggeringPolicy minSize="2 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy>
+                <Delete basePath="logs/archive" maxDepth="1">
+                    <IfAccumulatedFileCount exceeds="10"/>
+                </Delete>
+            </DefaultRolloverStrategy>
+        </RollingRandomAccessFile>
     </Appenders>
     <Loggers>
-        <asyncRoot level="debug">
+        <logger name="info.coverified.graphql.Connector$" level="trace">
+            <AppenderRef ref="Console" level="info"/>
+            <AppenderRef ref="connector_RF" level="trace"/>
+        </logger>
+        <asyncRoot level="trace">
             <AppenderRef ref="Console" level="info"/>
             <AppenderRef ref="RF" level="debug"/>
         </asyncRoot>
