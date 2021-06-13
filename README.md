@@ -25,8 +25,8 @@ _(not comprehensive, but the most important ones)_
 -   `RE_ANALYSIS_INTERVAL` - Amount of hours, after which sites may be re-analysed
 
 ## Dockerfile build arguments
-`PROJECT_NAME`: Name of the project (to assemble name of compiled jar file)
-`PROJECT_VERSION`: Version of the project (to assemble name of compiled jar file)
-`MAIN_CLASS`: Main class to run the process
-`PAGE_PROFILE_SOURCE_DIRECTORY`: Source directory on building host system, where the page profile configurations to consider are located (currently `input/production/pageProfiles`)
-`PAGE_PROFILE_PATH`: Target path within image, where the page profiles might get copied to
+-   `PROJECT_NAME` - Name of the project (to assemble name of compiled jar file)
+-   `PROJECT_VERSION` - Version of the project (to assemble name of compiled jar file)
+-   `MAIN_CLASS` - Main class to run the process
+-   `PAGE_PROFILE_SOURCE_DIRECTORY` - Source directory on building host system, where the page profile configurations to consider are located (currently `input/production/pageProfiles`)
+-   `PAGE_PROFILE_PATH` - Target path within image, where the page profiles might get copied to
