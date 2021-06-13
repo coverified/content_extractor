@@ -5,8 +5,7 @@
 
 package info.coverified.extractor.analyzer
 
-import caliban.client.Operations.RootMutation
-import caliban.client.{Argument, SelectionBuilder}
+import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig
@@ -15,12 +14,6 @@ import info.coverified.extractor.profile.ProfileConfig.PageType.{
   Selectors
 }
 import info.coverified.extractor.profile.ProfileConfig.Profile
-import info.coverified.graphql.schema.CoVerifiedClientSchema.{
-  EntryCreateInput,
-  UrlRelateToOneInput,
-  UrlWhereUniqueInput
-}
-import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 import info.coverified.test.scalatest.MockBrowser.DislikeThatUrlException
 import info.coverified.test.scalatest.{MockBrowser, ZioSpec}
 import org.mockito.scalatest.MockitoSugar
@@ -199,7 +192,7 @@ class AnalyzerSpec
 
     "building the entries with extracted information" should {
       val extractInformation =
-        PrivateMethod[EntryInformation](Symbol("extractInformation"))
+        PrivateMethod[RawEntryInformation](Symbol("extractInformation"))
       "extract information correctly from url page" in {
         inside(
           Analyzer invokePrivate extractInformation(
@@ -207,7 +200,7 @@ class AnalyzerSpec
             validPageType.selectors
           )
         ) {
-          case EntryInformation(
+          case RawEntryInformation(
               title,
               summary,
               content,
@@ -227,7 +220,7 @@ class AnalyzerSpec
             validPageType.selectors
           )
         ) {
-          case EntryInformation(
+          case RawEntryInformation(
               title,
               summary,
               content,
@@ -242,7 +235,7 @@ class AnalyzerSpec
     }
 
     "analysing received content" should {
-      val analyze = PrivateMethod[Try[EntryInformation]](Symbol("analyze"))
+      val analyze = PrivateMethod[Try[RawEntryInformation]](Symbol("analyze"))
 
       "skip pages, that are not meant to be analyzed" in {
         val profileConfig = ProfileConfig(

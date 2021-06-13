@@ -5,10 +5,8 @@
 
 package info.coverified.graphql.schema
 
-import caliban.client.FieldBuilder.Scalar
 import caliban.client.SelectionBuilder
-import caliban.client.SelectionBuilder.Field
-import info.coverified.graphql.schema.CoVerifiedClientSchema.{Entry, Url}
+import info.coverified.graphql.schema.CoVerifiedClientSchema.Url
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleSource.SimpleSourceView
 
@@ -20,25 +18,27 @@ object SimpleUrl {
     * @param id             Identifier
     * @param name           The actual url
     * @param sourceId       Id of the source to belong to
-    * @param entryId        Id of the regarding entry
+    * @param entry          Entry, that belongs to the url
     * @param hasBeenCrawled True, if that url has been crawled before
     */
   final case class SimpleUrlView(
       id: String,
       name: Option[String],
       sourceId: Option[String],
-      entryId: Option[String],
+      entry: Option[SimpleEntryView[String]],
       hasBeenCrawled: Boolean
   )
 
   def view: SelectionBuilder[Url, SimpleUrlView] =
-    (Url.id ~ Url.name ~ Url.source(SimpleSource.view) ~ Url.entry(entryId) ~ Url.lastCrawl)
+    (Url.id ~ Url.name ~ Url.source(SimpleSource.view) ~ Url.entry(
+      SimpleEntry.view(urlId)
+    ) ~ Url.lastCrawl)
       .mapN {
         (
             id,
             name,
             source: Option[SimpleSourceView],
-            entry: Option[String],
+            entry: Option[SimpleEntryView[String]],
             lastCrawl: Option[String]
         ) =>
           SimpleUrlView(
@@ -50,5 +50,5 @@ object SimpleUrl {
           )
       }
 
-  def entryId: SelectionBuilder[Entry, String] = Field("id", Scalar())
+  def urlId: SelectionBuilder[Url, String] = Url.id
 }

@@ -10,8 +10,16 @@ import caliban.client.CalibanClientError.CommunicationError
 import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.SelectionBuilder.Field
 import com.typesafe.scalalogging.LazyLogging
-import info.coverified.extractor.Extractor.NeededInformation
-import info.coverified.extractor.analyzer.{BrowserHelper, EntryInformation}
+import info.coverified.extractor.Extractor.{
+  HandleEntryAndUrlEffect,
+  NeededInformation
+}
+import info.coverified.extractor.analyzer.EntryInformation.{
+  CreateEntryInformation,
+  RawEntryInformation,
+  UpdateEntryInformation
+}
+import info.coverified.extractor.analyzer.BrowserHelper
 import info.coverified.extractor.config.ProfileConfigHelper.TempConfig
 import info.coverified.extractor.config.{Config, ProfileConfigHelper}
 import info.coverified.extractor.exceptions.{
@@ -55,14 +63,14 @@ class ExtractorSpec
       id = "1",
       name = Some("https://www.coverified.info"),
       sourceId = Some("1"),
-      entryId = None,
+      entry = None,
       hasBeenCrawled = false
     )
     val ardView = SimpleUrlView(
       id = "2",
       name = Some("https://www.ard.de"),
       sourceId = Some("2"),
-      entryId = None,
+      entry = None,
       hasBeenCrawled = false
     )
     val validViews: List[SimpleUrlView] = List(
@@ -155,11 +163,10 @@ class ExtractorSpec
 
         "return correct GraphQL query" in {
           val pattern =
-            "query\\{allUrls\\(where:\\{lastCrawl_lte:\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:.\\d{3,6})?Z\"}\\)\\{id name source\\{id name acronym url} entry\\{id} lastCrawl}}".r
+            "query\\{allUrls\\(where:\\{lastCrawl_lte:\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:.\\d{3,6})?Z\"}\\)\\{id name source\\{id name acronym url} entry\\{id name content summary url\\{id} date} lastCrawl}}".r
 
           val actualQuery =
             (extractor invokePrivate buildUrlQuery()).toGraphQL().query
-          println(s"Actual query: '{}'", actualQuery)
 
           pattern.matches(actualQuery) shouldBe true
         }
@@ -321,7 +328,7 @@ class ExtractorSpec
 
     "extracting information" when {
       val extractInformation =
-        PrivateMethod[Try[EntryInformation]](
+        PrivateMethod[Try[RawEntryInformation]](
           Symbol("extractInformation")
         )
       val mockBrowser = MockBrowser(Map(coverifiedUrl -> validUrlPageDoc))
@@ -339,7 +346,7 @@ class ExtractorSpec
             id = "malicious view",
             name = url,
             sourceId = sourceId,
-            entryId = None,
+            entry = None,
             hasBeenCrawled = false
           )
           extractor invokePrivate extractInformation(
@@ -363,10 +370,10 @@ class ExtractorSpec
         val url = coverifiedUrl
 
         val urlView = SimpleUrlView(
-          id = "malicious view",
+          id = "fine view",
           name = Some(url),
           sourceId = Some("source id"),
-          entryId = None,
+          entry = None,
           hasBeenCrawled = false
         )
         extractor invokePrivate extractInformation(
@@ -377,6 +384,92 @@ class ExtractorSpec
           case Success(_) => succeed
           case Failure(exception) =>
             fail("Extraction of information was not meant to fail.", exception)
+        }
+      }
+
+      "checking against existing" when {
+        val checkAgainstExisting = PrivateMethod[Option[
+          Either[UpdateEntryInformation, CreateEntryInformation]
+        ]](Symbol("checkAgainstExisting"))
+        val rawEntryInformation = RawEntryInformation(
+          Some("title"),
+          Some("Summary"),
+          Some("Content"),
+          Some("date")
+        )
+
+        "having no entry apparent at all, mark for creation" in {
+          extractor invokePrivate checkAgainstExisting(
+            rawEntryInformation,
+            None
+          ) match {
+            case Some(
+                Right(CreateEntryInformation(title, summary, content, date))
+                ) =>
+              title shouldBe rawEntryInformation.title
+              summary shouldBe rawEntryInformation.summary
+              content shouldBe rawEntryInformation.content
+              date shouldBe rawEntryInformation.date
+            case Some(value) =>
+              fail(
+                s"Checking against existing entry failed with wrong value '$value'."
+              )
+            case None =>
+              fail("The entry needs to be created but is marked as un-altered.")
+          }
+        }
+
+        "having same entry in database, mark as nothing to do" in {
+          extractor invokePrivate checkAgainstExisting(
+            rawEntryInformation,
+            Some(
+              SimpleEntryView(
+                "existing_id",
+                rawEntryInformation.title,
+                rawEntryInformation.content,
+                rawEntryInformation.summary,
+                Some(coverifiedUrl),
+                rawEntryInformation.date
+              )
+            )
+          ) match {
+            case None => succeed
+            case Some(value) =>
+              fail(
+                s"Checking against existing entry with same information delivered '$value', although nothing needs to be done."
+              )
+          }
+        }
+
+        "having a different entry in data base, mark for update" in {
+          extractor invokePrivate checkAgainstExisting(
+            rawEntryInformation,
+            Some(
+              SimpleEntryView(
+                "existing_id",
+                Some("url"),
+                rawEntryInformation.content,
+                Some("Different summary"),
+                rawEntryInformation.content,
+                rawEntryInformation.date
+              )
+            )
+          ) match {
+            case Some(
+                Left(UpdateEntryInformation(id, title, summary, content, date))
+                ) =>
+              id shouldBe "existing_id"
+              title shouldBe rawEntryInformation.title
+              summary shouldBe rawEntryInformation.summary
+              content shouldBe rawEntryInformation.content
+              date shouldBe rawEntryInformation.date
+            case Some(value) =>
+              fail(
+                s"Checking against existing entry failed with wrong value '$value'."
+              )
+            case None =>
+              fail("The entry needs to be created but is marked as un-altered.")
+          }
         }
       }
 
@@ -548,7 +641,8 @@ class ExtractorSpec
                 UrlRelateToOneInput(
                   connect = Some(UrlWhereUniqueInput(id = coverifiedUrlId))
                 )
-              )
+              ),
+              date = Some("2021-06-13T11:20:00.000000Z")
             )
           )
         )(
@@ -558,7 +652,7 @@ class ExtractorSpec
         evaluate(
           SttpStubbing.postOkay(extractor invokePrivate storeMutation(mutation))
         ) match {
-          case Some(SimpleEntryView(_, name, content, summary, url)) =>
+          case Some(SimpleEntryView(_, name, content, summary, url, date)) =>
             name shouldBe Some("Title")
             summary shouldBe Some("summary")
             content shouldBe Some("content")
@@ -571,6 +665,7 @@ class ExtractorSpec
                 hasBeenCrawled = true
               )
             )
+            date shouldBe Some("2021-06-13T11:20:00.000000Z")
           case Some(unexpected) =>
             fail(s"Passed with unexpected outcome: '$unexpected'.")
           case None => fail("Updating entries should succeed.")
@@ -578,14 +673,80 @@ class ExtractorSpec
       }
     }
 
-    "handling urls" when {
-      val handleUrl = PrivateMethod[Option[RIO[
-        Console with SttpClient,
-        (
-            Option[SimpleEntry.SimpleEntryView[SimpleUrlView]],
-            Option[SimpleUrlView]
+    "handling scraped information" when {
+      val handleExtractedInformation = PrivateMethod[HandleEntryAndUrlEffect](
+        Symbol("handleExtractedInformation")
+      )
+      val scrapedInformation = RawEntryInformation(
+        Some("title"),
+        Some("Summary"),
+        Some("Content"),
+        Some("date")
+      )
+
+      "having unchanged information, only receive an url update mutation" in {
+        val urlView = SimpleUrlView(
+          "1",
+          Some(coverifiedUrl),
+          Some("1"),
+          Some(
+            SimpleEntryView(
+              "1",
+              Some("title"),
+              Some("Content"),
+              Some("Summary"),
+              Some(coverifiedUrl),
+              Some("date")
+            )
+          ),
+          hasBeenCrawled = true
         )
-      ]]](Symbol("handleUrl"))
+
+        extractor invokePrivate handleExtractedInformation(
+          scrapedInformation,
+          urlView
+        ) match {
+          case (None, Some(_)) => succeed
+          case (Some(_), Some(_)) =>
+            fail(
+              "Received effect to alter entry in data base although that is not expected."
+            )
+          case (_, None) =>
+            fail(
+              "Did not received effect to alter url in data base although that is expected."
+            )
+        }
+      }
+
+      "having information, that are not in data base, receive an mutation to alter entry as well" in {
+        val urlView = SimpleUrlView(
+          "1",
+          Some(coverifiedUrl),
+          Some("1"),
+          None,
+          hasBeenCrawled = false
+        )
+
+        extractor invokePrivate handleExtractedInformation(
+          scrapedInformation,
+          urlView
+        ) match {
+          case (Some(_), Some(_)) => succeed
+          case (None, Some(_)) =>
+            fail(
+              "Received no effect to alter entry in data base although that is expected."
+            )
+          case (_, None) =>
+            fail(
+              "Did not received effect to alter url in data base although that is expected."
+            )
+        }
+      }
+    }
+
+    "handling a single url" when {
+      val handleUrl =
+        PrivateMethod[HandleEntryAndUrlEffect](Symbol("handleUrl"))
 
       "handing in invalid information" should {
         "fail" in {
@@ -593,10 +754,10 @@ class ExtractorSpec
             coVerifiedView,
             Map.empty[String, ProfileConfig]
           ) match {
-            case None => succeed
-            case Some(value) =>
+            case (None, None) => succeed
+            case _ =>
               fail(
-                s"Handling an url with invalid accompanying information passed with '$value', although was meant to fail."
+                s"Handling an url with invalid accompanying information passed, although was meant to fail."
               )
           }
         }
@@ -608,19 +769,22 @@ class ExtractorSpec
             coVerifiedView.name.getOrElse("unknwon_url")
           ).map(hostname => hostname -> getConfig(hostname)).toMap
           extractor invokePrivate handleUrl(coVerifiedView, hostNameToConfig) match {
-            case Some(effect) =>
-              evaluate(SttpStubbing.postOkay(effect)) match {
-                case (
-                    Some(_: SimpleEntryView[SimpleUrlView]),
-                    Some(_: SimpleUrlView)
-                    ) =>
+            case (Some(entryEffect), Some(urlEffect)) =>
+              evaluate(SttpStubbing.postOkay(entryEffect)) match {
+                case Some(_: SimpleEntryView[SimpleUrlView]) =>
                   succeed
-                case (maybeEntryView, maybeUrlView) =>
+                case None =>
                   fail(
-                    s"Handling url failed with: '$maybeEntryView', '$maybeUrlView'."
+                    s"Handling url failed in data base (entry manipulation)."
                   )
               }
-            case None =>
+              evaluate(SttpStubbing.postOkay(urlEffect)) match {
+                case Some(_: SimpleUrlView) =>
+                  succeed
+                case None =>
+                  fail(s"Handling url failed in data base (url manipulation).")
+              }
+            case (None, None) =>
               fail(
                 "Handling an url with proper information was meant to succeed."
               )

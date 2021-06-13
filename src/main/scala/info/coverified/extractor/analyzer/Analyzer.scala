@@ -11,8 +11,8 @@ import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.model.Document
-
 import com.typesafe.scalalogging.LazyLogging
+import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig.PageType
 
@@ -32,7 +32,7 @@ object Analyzer extends LazyLogging {
       urlId: String,
       cfg: ProfileConfig,
       browser: Browser = JsoupBrowser()
-  ): Try[EntryInformation] =
+  ): Try[RawEntryInformation] =
     Try(browser.get(url)).flatMap(analyze(url, urlId, _, cfg))
 
   /**
@@ -49,7 +49,7 @@ object Analyzer extends LazyLogging {
       urlId: String,
       pageDoc: Document,
       profileConfig: ProfileConfig
-  ): Try[EntryInformation] =
+  ): Try[RawEntryInformation] =
     getSelectors(url, pageDoc, profileConfig).map(
       extractInformation(pageDoc, _)
     )
@@ -117,8 +117,11 @@ object Analyzer extends LazyLogging {
     * @param selectors  Selectors to use
     * @return Needed information
     */
-  private def extractInformation(pageDoc: Document, selectors: Selectors) =
-    EntryInformation(
+  private def extractInformation(
+      pageDoc: Document,
+      selectors: Selectors
+  ): RawEntryInformation =
+    RawEntryInformation(
       pageDoc >?> text(selectors.title),
       selectors.summary.flatMap(pageDoc >?> text(_)),
       pageDoc >?> text(selectors.content),
