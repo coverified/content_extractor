@@ -24,20 +24,20 @@ object Run extends App with LazyLogging {
     logger.info("Starting extraction")
 
     /* Try to gather config from CLI args or environment variables */
-    val config = ArgsParser
-      .parse(args.toArray)
-      .flatMap(Config.fromArgs(_).toOption) match {
-      case Some(config) => config
-      case None =>
+    val config = Config.fromEnv() match {
+      case Success(cfg) => cfg
+      case Failure(exception) =>
         logger.info(
-          "Trying to get configuration from environment variables ... "
+          "Cannot obtain config from environment variables. Trying to parse from CLI arguments. Cause: {}",
+          exception
         )
-        Config.fromEnv() match {
-          case Success(config) => config
-          case Failure(exception) =>
+        ArgsParser
+          .parse(args.toArray)
+          .flatMap(Config.fromArgs(_).toOption) match {
+          case Some(cfg) => cfg
+          case None =>
             throw new RuntimeException(
-              "Config parameters missing!",
-              exception
+              "Unable to obtain config from CLI arguments."
             )
         }
     }
