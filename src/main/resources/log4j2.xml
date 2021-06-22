@@ -5,6 +5,7 @@
         <Console name="Console" target="SYSTEM_OUT">
             <PatternLayout pattern="%highlight{%d{HH:mm:ss.SSS} %-5level - %msg%n}{FATAL=red blink, ERROR=red, WARN=yellow bright, INFO=black, DEBUG=cyan, TRACE=blue}"/>
         </Console>
+        <Sentry name="Sentry" minimumBreadCrumbLevel="debug" minimumEventLevel="warn"/>
         <RollingRandomAccessFile name="RF" fileName="logs/extractor.log"
                                  filePattern="logs/archive/extractor-%d{yyyyMMdd-HHmmss}.log">
             <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
@@ -36,6 +37,7 @@
             <AppenderRef ref="connector_RF" level="trace"/>
         </logger>
         <asyncRoot level="trace">
+            <AppenderRef ref="Sentry"/>
             <AppenderRef ref="Console" level="info"/>
             <AppenderRef ref="RF" level="debug"/>
         </asyncRoot>

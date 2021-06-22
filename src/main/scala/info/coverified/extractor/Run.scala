@@ -7,8 +7,9 @@ package info.coverified.extractor
 
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.config.Config
+import io.sentry.{Sentry, SentryOptions}
 import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
-import zio.{App, ExitCode, URIO, ZIO}
+import zio.{App, ExitCode, URIO}
 
 import scala.util.{Failure, Success}
 
@@ -19,6 +20,10 @@ import scala.util.{Failure, Success}
   * @since 26.02.21
   */
 object Run extends App with LazyLogging {
+  /* Set up error reporting (the DSN = Data Source Name shall be loaded from environment variables) */
+  Sentry.init(
+    (options: SentryOptions) => options.setEnableExternalConfiguration(true)
+  )
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = {
     logger.info("Starting extraction")
@@ -28,7 +33,7 @@ object Run extends App with LazyLogging {
       case Success(cfg) => cfg
       case Failure(exception) =>
         logger.info(
-          "Cannot obtain config from environment variables. Trying to parse from CLI arguments. Cause: {}",
+          "Cannot obtain config from environment variables. Trying to parse from CLI arguments. Cause:",
           exception
         )
         ArgsParser
