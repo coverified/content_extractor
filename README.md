@@ -8,6 +8,7 @@ _(not comprehensive, but the most important ones)_
 
 -   [Caliban Client](https://ghostdogpr.github.io/caliban/) to talk to GraphQL endpoint
 -   [Scala-Scraper](https://github.com/ruippeixotog/scala-scraper) to extract information from Websites
+-   [Sentry](https://sentry.io/welcome/) (error reporting)
 
 ## Things to consider
 -   When querying urls to visit, we only want to visit those, that have not been visited, yet, or a specified time ago
@@ -23,6 +24,7 @@ _(not comprehensive, but the most important ones)_
 -   `AUTH_SECRET` - Secret token to authenticate against GraphQL-API
 -   `EXTRACTOR_PAGE_PROFILE_PATH` - Path, where to find the page profiles
 -   `RE_ANALYSIS_INTERVAL` - Amount of hours, after which sites may be re-analysed
+-   `SENTRY_DSN` - Data Source Name to use for Sentry integration (empty String disables it, e.g., for local execution)
 
 ## Dockerfile build arguments
 -   `PROJECT_NAME` - Name of the project (to assemble name of compiled jar file)

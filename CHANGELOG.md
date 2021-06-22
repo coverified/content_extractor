@@ -11,3 +11,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Determine, if a matching entry is missing or an existing needs an update
 -   Create or update an entry for the url
 -   Build a docker container and copy page profile configurations to consider right into the container
+-   Sentry integration
