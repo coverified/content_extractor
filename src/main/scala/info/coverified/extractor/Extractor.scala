@@ -47,7 +47,7 @@ import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import sttp.client3.asynchttpclient.zio.SttpClient
 import sttp.model.Uri
-import zio.{IO, RIO, UIO, URIO, ZIO}
+import zio.{RIO, UIO, URIO, ZIO}
 import zio.console.Console
 
 import java.io.File
@@ -177,7 +177,7 @@ final case class Extractor private (
   private def handleUrls(
       urls: List[SimpleUrlView],
       hostnameToProfileConfig: Map[String, ProfileConfig]
-  ): Seq[RIO[Console with SttpClient, Option[Product]]] =
+  ): Seq[URIO[Console with SttpClient, Option[Product]]] =
     urls
       .map(handleUrl(_, hostnameToProfileConfig))
       .flatMap {
@@ -185,6 +185,15 @@ final case class Extractor private (
           Seq(maybeEntryView, maybeUrlView)
       }
       .flatten
+      .map {
+        _.fold(
+          exception => {
+            logger.error("Putting mutation to data base failed.", exception)
+            None
+          },
+          success => success
+        )
+      }
 
   /**
     * Handle the received url. At first, needed information are extracted and then, parallely, entry as well as updated
@@ -201,6 +210,7 @@ final case class Extractor private (
     logger.info("Handling url: {}", urlView.name)
     extractInformation(urlView, hostToProfileConfig) match {
       case Success(scrapedInformation: RawEntryInformation) =>
+        /* Scraping of site succeeded. Handle that information. */
         handleExtractedInformation(scrapedInformation, urlView)
       case Failure(exception) =>
         /* Scraping of site failed -> Don't update anything */
@@ -223,9 +233,8 @@ final case class Extractor private (
       urlView: SimpleUrlView
   ): HandleEntryAndUrlEffect = {
     val apparentUrlUpdateEffect = Some(updateUrlView(urlView))
-    logger.debug("Scraping of rul '{}' succeeded.", urlView.name)
+    logger.debug("Scraping of url '{}' succeeded.", urlView.name)
 
-    /* Scraping of site succeeded */
     checkAgainstExisting(scrapedInformation, urlView.entry)
       .map {
         case Left(
