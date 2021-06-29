@@ -14,6 +14,8 @@ _(not comprehensive, but the most important ones)_
 -   When querying urls to visit, we only want to visit those, that have not been visited, yet, or a specified time ago
 	-   As of current implementation, it is not possible to query with filters on null / empty fields directly [Caliban#778](https://github.com/ghostdogpr/caliban/issues/778)
 	-   Therefore, we expect the 'lastCrawl' information to be EPOCH, if not visited, yet
+	-   Urls are not queried in total, but in chunks
+	-   Between two successive evaluations, there is a pre-defined delay
 -   When an url is re-visited after some time we
 	-   update the entry information without further checking, if actually something has changed
 	-   reset the flag, if that entry has been tagged to false and
@@ -23,8 +25,10 @@ _(not comprehensive, but the most important ones)_
 -   `EXTRACTOR_API_URL` - The url, where GraphQL queries can be posted to
 -   `AUTH_SECRET` - Secret token to authenticate against GraphQL-API
 -   `EXTRACTOR_PAGE_PROFILE_PATH` - Path, where to find the page profiles
--   `RE_ANALYSIS_INTERVAL` - Amount of hours, after which sites may be re-analysed
+-   `RE_ANALYSIS_INTERVAL` - Amount of hours, after which sites may be re-analysed (default value: 48 hrs)
 -   `SENTRY_DSN` - Data Source Name to use for Sentry integration (empty String disables it, e.g., for local execution)
+-   `EXTRACTOR_CHUNK_SIZE` - Amount of urls, that should get queried at once (default value: 1,000)
+-   `EXTRACTOR_REPEAT_DELAY` - Delay in seconds between two successive runs, until all urls are handled (default value: 9,000s)
 
 ## Dockerfile build arguments
 -   `PROJECT_NAME` - Name of the project (to assemble name of compiled jar file)
