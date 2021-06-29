@@ -6,7 +6,7 @@ stages:
 prepareEnv4test:
     stage: build
     image: registry.gitlab.com/coverified/infrastructure/scala-base:latest
-    script: ./gradlew prepareEnvironment -PapiUrl="https://www.coverified.info" -PprofilePath="in/some/directory" -PreAnalysisInterval=48 -PauthSecret=thisIsSecret -PchunkSize=1000
+    script: ./gradlew prepareEnvironment -PapiUrl="https://www.coverified.info" -PprofilePath="in/some/directory" -PreAnalysisInterval=48 -PauthSecret=thisIsSecret -PchunkSize=1000 -PrepeatDelay=900
     artifacts:
         reports:
             dotenv: build.env

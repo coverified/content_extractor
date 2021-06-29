@@ -48,7 +48,8 @@ class ConfigSpec extends UnitSpec {
                 Some("bar"),
                 Some(48),
                 Some("secret"),
-                Some(1000)
+                Some(1000),
+                Some(900)
               )
             )
         ) {
@@ -58,7 +59,8 @@ class ConfigSpec extends UnitSpec {
                 profileDirectoryPath,
                 reAnalysisInterval,
                 authSecret,
-                chunkSize
+                chunkSize,
+                repeatDelay
               )
               ) =>
             apiUri shouldBe uri"foo"
@@ -66,6 +68,7 @@ class ConfigSpec extends UnitSpec {
             reAnalysisInterval shouldBe Duration.ofHours(48L)
             authSecret shouldBe "secret"
             chunkSize shouldBe 1000
+            repeatDelay shouldBe Duration.ofSeconds(900)
           case Failure(exception) =>
             fail(
               s"Parsing was meant to pass, but failed with exception '$exception'."
@@ -83,7 +86,8 @@ class ConfigSpec extends UnitSpec {
                 profileDirectoryPath,
                 reAnalysisInterval,
                 authSecret,
-                chunkSize
+                chunkSize,
+                repeatDelay
               )
               ) =>
             /* The values expected here, have to placed within the environment during the build CI-stage.
@@ -93,6 +97,7 @@ class ConfigSpec extends UnitSpec {
             reAnalysisInterval shouldBe Duration.ofHours(48L)
             authSecret shouldBe "thisIsSecret"
             chunkSize shouldBe 1000
+            repeatDelay shouldBe Duration.ofSeconds(900)
           case Failure(exception) =>
             fail(
               "Parsing config from environment variables was meant to succeed, but failed.",

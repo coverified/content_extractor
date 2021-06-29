@@ -21,19 +21,22 @@ import scala.util.{Failure, Success, Try}
   * @param reAnalysisInterval    Interval, after which the content may be analyzed once again
   * @param authSecret            Secret to authenticate against API
   * @param chunkSize             Amount of urls to query at the same time
+  * @param repeatDelay           Delay between two successive runs, if there are still some urls left
   */
 final case class Config private (
     apiUri: Uri,
     profileDirectoryPath: String,
     reAnalysisInterval: Duration,
     authSecret: String,
-    chunkSize: Int
+    chunkSize: Int,
+    repeatDelay: Duration
 )
 
 object Config {
   object DefaultValues {
     val reAnalysisInterval: Duration = Duration.ofHours(48L)
     val chunkSize = 1000
+    val repeatDelay: Duration = Duration.ofMinutes(15L)
   }
 
   def apply(
@@ -41,14 +44,16 @@ object Config {
       profileDirectoryPath: String,
       reAnalysisInterval: Duration,
       authSecret: String,
-      chunkSize: Int
+      chunkSize: Int,
+      repeatDelay: Duration
   ): Config =
     new Config(
       uri"$apiUrl",
       profileDirectoryPath,
       reAnalysisInterval,
       authSecret,
-      chunkSize
+      chunkSize,
+      repeatDelay
     )
 
   private val API_URL_KEY = "EXTRACTOR_API_URL"
@@ -56,6 +61,7 @@ object Config {
   private val RE_ANALYSIS_INTERVAL = "RE_ANALYSIS_INTERVAL"
   private val AUTH_SECRET = "AUTH_SECRET"
   private val EXTRACTOR_CHUNK_SIZE = "EXTRACTOR_CHUNK_SIZE"
+  private val EXTRACTOR_REPEAT_DELAY = "REPEAT_DELAY"
 
   /**
     * Build config from parsed CLI input
@@ -69,7 +75,8 @@ object Config {
         Some(pageProfileFolderPath),
         maybeReAnalysisInterval,
         Some(authSecret),
-        maybeChunkSize
+        maybeChunkSize,
+        maybeRepeatDelay
         ) =>
       Success(
         Config(
@@ -81,7 +88,10 @@ object Config {
             )
             .getOrElse(DefaultValues.reAnalysisInterval),
           authSecret,
-          maybeChunkSize.getOrElse(DefaultValues.chunkSize)
+          maybeChunkSize.getOrElse(DefaultValues.chunkSize),
+          maybeRepeatDelay
+            .map(repeatDelay => Duration.ofSeconds(repeatDelay.toLong))
+            .getOrElse(DefaultValues.repeatDelay)
         )
       )
     case _ =>
@@ -116,7 +126,11 @@ object Config {
         sys.env
           .get(EXTRACTOR_CHUNK_SIZE)
           .map(chunkSize => chunkSize.toInt)
-          .getOrElse(DefaultValues.chunkSize)
+          .getOrElse(DefaultValues.chunkSize),
+        sys.env
+          .get(EXTRACTOR_REPEAT_DELAY)
+          .map(repeatDelay => Duration.ofSeconds(repeatDelay.toLong))
+          .getOrElse(DefaultValues.repeatDelay)
       )
     }
 

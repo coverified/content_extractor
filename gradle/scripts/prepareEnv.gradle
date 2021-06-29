@@ -7,10 +7,12 @@ task prepareEnvironment {
         |RE_ANALYSIS_INTERVAL=$reAnalysisInterval
         |AUTH_SECRET=$authSecret
 		|EXTRACTOR_CHUNK_SIZE=$chunkSize
+		|EXTRACTOR_REPEAT_DELAY=$repeatDelay
         |""".stripMargin()
 		def file = new File("build.env")
 		file.write(content)
 		println "Wrote apiUrl '$apiUrl', profileDirectory '$profilePath', re anaylsis interval " +
-				"'$reAnalysisInterval'(h), auth secret '$authSecret' and chunk size $chunkSize to build.env"
+				"'$reAnalysisInterval'(h), auth secret '$authSecret', chunk size $chunkSize and repeat delay" +
+				"'$repeatDelay'(s) to build.env"
 	}
 }

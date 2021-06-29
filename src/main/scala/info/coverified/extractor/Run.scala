@@ -9,7 +9,6 @@ import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.config.Config
 import io.sentry.{Sentry, SentryOptions}
 import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
-import zio.console.Console
 import zio.{App, ExitCode, URIO}
 
 import scala.util.{Failure, Success}
@@ -51,6 +50,7 @@ object Run extends App with LazyLogging {
     Extractor(config)
       .buildExtractionEffect()
       .provideCustomLayer(AsyncHttpClientZioBackend.layer())
+      .delay(config.repeatDelay)
       .repeatUntil(
         (noOfReceivedUrls: Int) => noOfReceivedUrls < config.chunkSize
       )

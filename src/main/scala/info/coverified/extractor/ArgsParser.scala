@@ -20,7 +20,8 @@ object ArgsParser {
       pageProfileFolderPath: Option[String] = None,
       reAnalyzeInterval: Option[Int] = None,
       authSecret: Option[String] = None,
-      chunkSize: Option[Int] = None
+      chunkSize: Option[Int] = None,
+      repeatDelay: Option[Int] = None
   )
 
   private def buildParser: scoptOptionParser[Args] = {
@@ -83,7 +84,7 @@ object ArgsParser {
       opt[Int]("chunkSize")
         .action((value, args) => {
           args.copy(
-            reAnalyzeInterval = Option(value)
+            chunkSize = Option(value)
           )
         })
         .validate(
@@ -94,11 +95,26 @@ object ArgsParser {
         )
         .text("Amount of urls to query at the same time")
         .minOccurs(1)
+      opt[Int]("repeatDelay")
+        .action((value, args) => {
+          args.copy(
+            repeatDelay = Option(value)
+          )
+        })
+        .validate(
+          value =>
+            if (value <= 0)
+              failure("Repeat delay may be greater than zero!")
+            else success
+        )
+        .text(
+          "Amount of seconds, that successive runs should be delayed, if not all urls are handled, yet."
+        )
+        .minOccurs(1)
     }
 
   }
 
   def parse(args: Array[String]): Option[Args] =
     buildParser.parse(args, init = Args())
-
 }
