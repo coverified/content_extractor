@@ -47,7 +47,7 @@ import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import sttp.client3.asynchttpclient.zio.SttpClient
 import sttp.model.Uri
-import zio.{RIO, UIO, URIO, ZIO}
+import zio.{IO, RIO, UIO, URIO, ZIO}
 import zio.console.Console
 
 import java.io.File
@@ -65,7 +65,8 @@ final case class Extractor private (
     apiUrl: Uri,
     profileDirectoryPath: String,
     reAnalysisInterval: Duration,
-    authSecret: String
+    authSecret: String,
+    chunkSize: Int
 ) extends LazyLogging {
 
   /**
@@ -78,12 +79,13 @@ final case class Extractor private (
     *
     * @return
     */
-  def buildExtractionEffect(): ZIO[Console with SttpClient, Throwable, Unit] = {
+  def buildExtractionEffect(): ZIO[Console with SttpClient, Throwable, Int] = {
     /* Getting hands on that ZIO stuff - flat mapping by for-comprehension */
     for {
       NeededInformation(hostNameToProfileConfig, urlViews) <- acquireNeededInformation
       _ <- ZIO.collectAllPar(handleUrls(urlViews, hostNameToProfileConfig))
-    } yield ()
+      noOfReceivedUrls <- IO.apply(urlViews.size)
+    } yield (noOfReceivedUrls)
   }
 
   /**
@@ -162,7 +164,8 @@ final case class Extractor private (
             )
           )
         )
-      )
+      ),
+      first = Some(chunkSize)
     )(
       SimpleUrl.view
     )
@@ -404,7 +407,8 @@ object Extractor {
       config.apiUri,
       config.profileDirectoryPath,
       config.reAnalysisInterval,
-      config.authSecret
+      config.authSecret,
+      config.chunkSize
     )
 
   /**

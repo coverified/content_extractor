@@ -58,7 +58,15 @@ class ExtractorSpec
     with TableDrivenPropertyChecks
     with LazyLogging {
   "Given an extractor" when {
-    val extractor = Extractor(Config("", "", Duration.ofHours(48L), ""))
+    val extractor = Extractor(
+      Config(
+        "",
+        "",
+        Config.DefaultValues.reAnalysisInterval,
+        "",
+        Config.DefaultValues.chunkSize
+      )
+    )
     val coVerifiedView: SimpleUrlView = SimpleUrlView(
       id = "1",
       name = Some("https://www.coverified.info"),
@@ -163,7 +171,9 @@ class ExtractorSpec
 
         "return correct GraphQL query" in {
           val pattern =
-            "query\\{allUrls\\(where:\\{lastCrawl_lte:\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:.\\d{3,6})?Z\"}\\)\\{id name source\\{id name acronym url} entry\\{id name content summary url\\{id} date} lastCrawl}}".r
+            ("query\\{allUrls\\(where:\\{lastCrawl_lte:\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:.\\d{3,6})?Z\"}" +
+              ",first:\\d+\\)\\{id name source\\{id name acronym url} entry\\{id name content summary url\\{id} " +
+              "date} lastCrawl}}").r
 
           val actualQuery =
             (extractor invokePrivate buildUrlQuery()).toGraphQL().query
@@ -280,8 +290,9 @@ class ExtractorSpec
             Config(
               "",
               tempDirectoryPath.toAbsolutePath.toString,
-              Duration.ofHours(48L),
-              ""
+              Config.DefaultValues.reAnalysisInterval,
+              "",
+              Config.DefaultValues.chunkSize
             )
           )
 

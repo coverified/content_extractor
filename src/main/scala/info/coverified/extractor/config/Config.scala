@@ -20,32 +20,42 @@ import scala.util.{Failure, Success, Try}
   * @param profileDirectoryPath  Directory path, where to find the site profiles
   * @param reAnalysisInterval    Interval, after which the content may be analyzed once again
   * @param authSecret            Secret to authenticate against API
+  * @param chunkSize             Amount of urls to query at the same time
   */
-final case class Config(
+final case class Config private (
     apiUri: Uri,
     profileDirectoryPath: String,
     reAnalysisInterval: Duration,
-    authSecret: String
+    authSecret: String,
+    chunkSize: Int
 )
 
 object Config {
+  object DefaultValues {
+    val reAnalysisInterval: Duration = Duration.ofHours(48L)
+    val chunkSize = 1000
+  }
+
   def apply(
       apiUrl: String,
       profileDirectoryPath: String,
       reAnalysisInterval: Duration,
-      authSecret: String
+      authSecret: String,
+      chunkSize: Int
   ): Config =
     new Config(
       uri"$apiUrl",
       profileDirectoryPath,
       reAnalysisInterval,
-      authSecret
+      authSecret,
+      chunkSize
     )
 
   private val API_URL_KEY = "EXTRACTOR_API_URL"
   private val PROFILE_DIRECTORY_PATH = "EXTRACTOR_PAGE_PROFILE_PATH"
   private val RE_ANALYSIS_INTERVAL = "RE_ANALYSIS_INTERVAL"
   private val AUTH_SECRET = "AUTH_SECRET"
+  private val EXTRACTOR_CHUNK_SIZE = "EXTRACTOR_CHUNK_SIZE"
 
   /**
     * Build config from parsed CLI input
@@ -57,15 +67,21 @@ object Config {
     case Args(
         Some(apiUrl),
         Some(pageProfileFolderPath),
-        Some(reAnalyzeInterval),
-        Some(authSecret)
+        maybeReAnalysisInterval,
+        Some(authSecret),
+        maybeChunkSize
         ) =>
       Success(
         Config(
           apiUrl,
           pageProfileFolderPath,
-          Duration.ofHours(reAnalyzeInterval.toLong),
-          authSecret
+          maybeReAnalysisInterval
+            .map(
+              reAnalysisInterval => Duration.ofHours(reAnalysisInterval.toLong)
+            )
+            .getOrElse(DefaultValues.reAnalysisInterval),
+          authSecret,
+          maybeChunkSize.getOrElse(DefaultValues.chunkSize)
         )
       )
     case _ =>
@@ -85,14 +101,22 @@ object Config {
     for {
       apiUrl <- fromEnv(API_URL_KEY)
       profileDirectory <- fromEnv(PROFILE_DIRECTORY_PATH)
-      reAnalysisInterval <- fromEnv(RE_ANALYSIS_INTERVAL)
       authSecret <- fromEnv(AUTH_SECRET)
     } yield {
       Config(
         apiUrl,
         profileDirectory,
-        Duration.ofHours(reAnalysisInterval.toLong),
-        authSecret
+        sys.env
+          .get(RE_ANALYSIS_INTERVAL)
+          .map(
+            reAnalysisInterval => Duration.ofHours(reAnalysisInterval.toLong)
+          )
+          .getOrElse(DefaultValues.reAnalysisInterval),
+        authSecret,
+        sys.env
+          .get(EXTRACTOR_CHUNK_SIZE)
+          .map(chunkSize => chunkSize.toInt)
+          .getOrElse(DefaultValues.chunkSize)
       )
     }
 

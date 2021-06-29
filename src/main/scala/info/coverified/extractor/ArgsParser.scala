@@ -19,7 +19,8 @@ object ArgsParser {
       apiUrl: Option[String] = None,
       pageProfileFolderPath: Option[String] = None,
       reAnalyzeInterval: Option[Int] = None,
-      authSecret: Option[String] = None
+      authSecret: Option[String] = None,
+      chunkSize: Option[Int] = None
   )
 
   private def buildParser: scoptOptionParser[Args] = {
@@ -78,6 +79,20 @@ object ArgsParser {
             else success
         )
         .text("secret to authenticate against API")
+        .minOccurs(1)
+      opt[Int]("chunkSize")
+        .action((value, args) => {
+          args.copy(
+            reAnalyzeInterval = Option(value)
+          )
+        })
+        .validate(
+          value =>
+            if (value <= 0)
+              failure("Chunk size may be greater than zero!")
+            else success
+        )
+        .text("Amount of urls to query at the same time")
         .minOccurs(1)
     }
 

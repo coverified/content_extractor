@@ -42,20 +42,30 @@ class ConfigSpec extends UnitSpec {
       "deliver proper config on proper input" in {
         inside(
           Config
-            .fromArgs(Args(Some("foo"), Some("bar"), Some(48), Some("secret")))
+            .fromArgs(
+              Args(
+                Some("foo"),
+                Some("bar"),
+                Some(48),
+                Some("secret"),
+                Some(1000)
+              )
+            )
         ) {
           case Success(
               Config(
                 apiUri,
                 profileDirectoryPath,
                 reAnalysisInterval,
-                authSecret
+                authSecret,
+                chunkSize
               )
               ) =>
             apiUri shouldBe uri"foo"
             profileDirectoryPath shouldBe "bar"
             reAnalysisInterval shouldBe Duration.ofHours(48L)
             authSecret shouldBe "secret"
+            chunkSize shouldBe 1000
           case Failure(exception) =>
             fail(
               s"Parsing was meant to pass, but failed with exception '$exception'."
@@ -72,7 +82,8 @@ class ConfigSpec extends UnitSpec {
                 apiUri,
                 profileDirectoryPath,
                 reAnalysisInterval,
-                authSecret
+                authSecret,
+                chunkSize
               )
               ) =>
             /* The values expected here, have to placed within the environment during the build CI-stage.
@@ -81,6 +92,7 @@ class ConfigSpec extends UnitSpec {
             profileDirectoryPath shouldBe "in/some/directory"
             reAnalysisInterval shouldBe Duration.ofHours(48L)
             authSecret shouldBe "thisIsSecret"
+            chunkSize shouldBe 1000
           case Failure(exception) =>
             fail(
               "Parsing config from environment variables was meant to succeed, but failed.",
