@@ -44,7 +44,7 @@ import org.scalatest.Inside.inside
 import org.scalatest.prop.TableDrivenPropertyChecks
 import sttp.client3.asynchttpclient.zio.SttpClient
 import zio.console.Console
-import zio.{RIO, UIO, ZIO}
+import zio.{RIO, UIO, URIO, ZIO}
 
 import java.io.File
 import java.nio.file.Files
@@ -174,30 +174,38 @@ class ExtractorSpec
 
       "actually receiving url views" should {
         val getAllUrlViews = PrivateMethod[
-          ZIO[Console with SttpClient, Throwable, List[SimpleUrlView]]
+          URIO[Console with SttpClient, Either[Throwable, List[SimpleUrlView]]]
         ](Symbol("getAllUrlViews"))
 
-        "fails, if query execution has failed" in {
+        "returns left exception, if url querying fails" in {
           val body
               : Either[CalibanClientError, Some[List[Option[SimpleUrlView]]]] =
             Left(CommunicationError("What did you say?"))
           val queryEffect = extractor invokePrivate getAllUrlViews()
           val responseEffect = SttpStubbing.okayCool(queryEffect, body)
 
-          intercept[zio.FiberFailure] {
-            evaluate(responseEffect)
+          evaluate(responseEffect) match {
+            case Left(CommunicationError(msg, _)) =>
+              msg shouldBe "What did you say?"
+            case Left(exception) =>
+              fail(s"Querying urls failed with wrong exception.", exception)
+            case Right(_) =>
+              fail("Querying urls was meant to fail, but succeeded.")
           }
         }
 
-        "returns an empty list, of none has been sent as response" in {
+        "returns an empty list, if none has been sent as response" in {
           val body: Right[Nothing, Option[List[Option[SimpleUrlView]]]] =
             Right(None)
           val queryEffect = extractor invokePrivate getAllUrlViews()
           val responseEffect = SttpStubbing.okayCool(queryEffect, body)
 
-          val listOfUrlViews = evaluate(responseEffect)
-
-          listOfUrlViews.isEmpty shouldBe true
+          evaluate(responseEffect) match {
+            case Right(listOfUrlViews) =>
+              listOfUrlViews.isEmpty shouldBe true
+            case Left(exception) =>
+              fail("Querying urls was meant to succeed, but failed.", exception)
+          }
         }
 
         "return an empty list, if no urls are available" in {
@@ -208,9 +216,12 @@ class ExtractorSpec
           val queryEffect = extractor invokePrivate getAllUrlViews()
           val responseEffect = SttpStubbing.okayCool(queryEffect, body)
 
-          val listOfUrlViews = evaluate(responseEffect)
-
-          listOfUrlViews.isEmpty shouldBe true
+          evaluate(responseEffect) match {
+            case Right(listOfUrlViews) =>
+              listOfUrlViews.isEmpty shouldBe true
+            case Left(exception) =>
+              fail("Querying urls was meant to succeed, but failed.", exception)
+          }
         }
 
         "return correct views" in {
@@ -220,10 +231,13 @@ class ExtractorSpec
           val queryEffect = extractor invokePrivate getAllUrlViews()
           val responseEffect = SttpStubbing.okayCool(queryEffect, body)
 
-          val listOfUrlViews = evaluate(responseEffect)
-
-          listOfUrlViews.size shouldBe 2
-          validViews.forall(scheme => listOfUrlViews.contains(scheme)) shouldBe true
+          evaluate(responseEffect) match {
+            case Right(listOfUrlViews) =>
+              listOfUrlViews.size shouldBe 2
+              validViews.forall(scheme => listOfUrlViews.contains(scheme)) shouldBe true
+            case Left(exception) =>
+              fail("Querying urls was meant to succeed, but failed.", exception)
+          }
         }
       }
     }
@@ -233,15 +247,16 @@ class ExtractorSpec
         ZIO[Console with SttpClient, Throwable, NeededInformation]
       ](Symbol("acquireNeededInformation"))
 
-      "fail, if querying available url fails" in {
+      "return empty url list if querying of them fails" in {
         val body
             : Either[CalibanClientError, Some[List[Option[SimpleUrlView]]]] =
           Left(CommunicationError("What did you say?"))
         val queryEffect = extractor invokePrivate acquireNeededInformation()
         val responseEffect = SttpStubbing.okayCool(queryEffect, body)
 
-        intercept[zio.FiberFailure] {
-          evaluate(responseEffect)
+        evaluate(responseEffect) match {
+          case NeededInformation(_, availableUrlViews) =>
+            availableUrlViews.isEmpty shouldBe true
         }
       }
 

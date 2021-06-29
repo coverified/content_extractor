@@ -47,7 +47,7 @@ import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import sttp.client3.asynchttpclient.zio.SttpClient
 import sttp.model.Uri
-import zio.{RIO, UIO, ZIO}
+import zio.{IO, RIO, UIO, URIO, ZIO}
 import zio.console.Console
 
 import java.io.File
@@ -94,8 +94,11 @@ final case class Extractor private (
   private def acquireNeededInformation
       : ZIO[Console with SttpClient, Throwable, NeededInformation] =
     getAllConfigs(profileDirectoryPath).zipWithPar(getAllUrlViews) {
-      case (hostnameToConfig, urlViews) =>
+      case (hostnameToConfig, Right(urlViews)) =>
         NeededInformation(hostnameToConfig, urlViews)
+      case (hostnameToConfig, Left(exception)) =>
+        logger.error("Unable to query urls.", exception)
+        NeededInformation(hostnameToConfig, List.empty[SimpleUrlView])
     }
 
   /**
@@ -125,14 +128,17 @@ final case class Extractor private (
     *
     * @return An effect, that evaluates to a list of [[SimpleUrlView]]s
     */
-  private def getAllUrlViews
-      : ZIO[Console with SttpClient, Throwable, List[SimpleUrlView]] = {
+  private def getAllUrlViews: URIO[Console with SttpClient, Either[
+    Throwable,
+    List[SimpleUrlView]
+  ]] = {
     logger.info("Querying all relevant urls")
     Connector
       .sendRequest {
         buildUrlQuery.toRequest(apiUrl)
       }
       .map(_.map(_.flatten).getOrElse(List.empty))
+      .either
   }
 
   /**
