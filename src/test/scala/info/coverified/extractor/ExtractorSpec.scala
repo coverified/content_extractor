@@ -48,7 +48,6 @@ import zio.{RIO, UIO, URIO, ZIO}
 
 import java.io.File
 import java.nio.file.Files
-import java.time.Duration
 import scala.util.{Failure, Success, Try}
 
 class ExtractorSpec
@@ -64,7 +63,8 @@ class ExtractorSpec
         "",
         Config.DefaultValues.reAnalysisInterval,
         "",
-        Config.DefaultValues.chunkSize
+        Config.DefaultValues.chunkSize,
+        Config.DefaultValues.repeatDelay
       )
     )
     val coVerifiedView: SimpleUrlView = SimpleUrlView(
@@ -292,7 +292,8 @@ class ExtractorSpec
               tempDirectoryPath.toAbsolutePath.toString,
               Config.DefaultValues.reAnalysisInterval,
               "",
-              Config.DefaultValues.chunkSize
+              Config.DefaultValues.chunkSize,
+              Config.DefaultValues.repeatDelay
             )
           )
 
