@@ -30,22 +30,19 @@ object SimpleUrl {
   )
 
   def view: SelectionBuilder[Url, SimpleUrlView] =
-    (Url.id ~ Url.name ~ Url.source(SimpleSource.view) ~ Url.entry(
-      SimpleEntry.view(urlId)
-    ) ~ Url.lastCrawl)
+    (Url.id ~ Url.name ~ Url.source(SimpleSource.view) ~ Url.lastCrawl)
       .mapN {
         (
             id,
             name,
             source: Option[SimpleSourceView],
-            entry: Option[SimpleEntryView[String]],
             lastCrawl: Option[String]
         ) =>
           SimpleUrlView(
             id,
             name,
             source.map(_.id),
-            entry,
+            None,
             lastCrawl.exists(_ != "1970-01-01T00:00:00.000Z")
           )
       }

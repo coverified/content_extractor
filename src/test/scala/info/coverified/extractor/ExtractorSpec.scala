@@ -528,7 +528,7 @@ class ExtractorSpec
                       eci.url shouldBe Some(
                         UrlRelateToOneInput(
                           None,
-                          Some(UrlWhereUniqueInput("1")),
+                          Some(UrlWhereUniqueInput(Some("1"))),
                           None,
                           None
                         )
@@ -605,7 +605,7 @@ class ExtractorSpec
                 case Argument("id", value) => value shouldBe "foo"
                 case Argument("data", value) =>
                   value match {
-                    case Some(UrlUpdateInput(_, _, _, lastCrawl)) =>
+                    case Some(UrlUpdateInput(_, _, lastCrawl)) =>
                       inside(lastCrawl) {
                         case Some(timeStamp) =>
                           timeStamp should not be "1970-01-01T00:00:00.000Z"
@@ -666,7 +666,8 @@ class ExtractorSpec
               content = Some("content"),
               url = Some(
                 UrlRelateToOneInput(
-                  connect = Some(UrlWhereUniqueInput(id = coverifiedUrlId))
+                  connect =
+                    Some(UrlWhereUniqueInput(id = Some(coverifiedUrlId)))
                 )
               ),
               date = Some("2021-06-13T11:20:00.000000Z")
@@ -793,7 +794,7 @@ class ExtractorSpec
       "handing in proper information" should {
         "pass" in {
           val hostNameToConfig = Seq(
-            coVerifiedView.name.getOrElse("unknwon_url")
+            coVerifiedView.name.getOrElse("unknown_url")
           ).map(hostname => hostname -> getConfig(hostname)).toMap
           extractor invokePrivate handleUrl(coVerifiedView, hostNameToConfig) match {
             case (Some(entryEffect), Some(urlEffect)) =>

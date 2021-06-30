@@ -34,6 +34,7 @@ import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   EntryCreateInput,
   EntryUpdateInput,
+  EntryWhereInput,
   Mutation,
   Query,
   TagRelateToManyInput,
@@ -139,7 +140,7 @@ final case class Extractor private (
       .sendRequest {
         buildUrlQuery.toRequest(apiUrl)
       }
-      .map(_.map(_.flatten).getOrElse(List.empty))
+      .map(_.getOrElse(List.empty))
       .either
   }
 
@@ -149,23 +150,22 @@ final case class Extractor private (
     * @return A selection builder with the equivalent query
     */
   private def buildUrlQuery
-      : SelectionBuilder[RootQuery, Option[List[Option[SimpleUrlView]]]] =
+      : SelectionBuilder[RootQuery, Option[List[SimpleUrlView]]] =
     Query.allUrls(
-      where = Some(
-        UrlWhereInput(
-          lastCrawl_lte = Some(
-            "\\[UTC]$".r.replaceAllIn(
-              DateTimeFormatter.ISO_DATE_TIME.format(
-                ZonedDateTime
-                  .now(ZoneId.of("UTC"))
-                  .minusHours(reAnalysisInterval.toHours)
-              ),
-              ""
-            )
+      where = UrlWhereInput(
+        lastCrawl_lte = Some(
+          "\\[UTC]$".r.replaceAllIn(
+            DateTimeFormatter.ISO_DATE_TIME.format(
+              ZonedDateTime
+                .now(ZoneId.of("UTC"))
+                .minusHours(reAnalysisInterval.toHours)
+            ),
+            ""
           )
         )
       ),
-      first = Some(chunkSize)
+      first = Some(chunkSize),
+      skip = 0
     )(
       SimpleUrl.view
     )
@@ -469,7 +469,9 @@ object Extractor {
           summary = summary,
           date = date,
           url = Some(
-            UrlRelateToOneInput(connect = Some(UrlWhereUniqueInput(id = urlId)))
+            UrlRelateToOneInput(
+              connect = Some(UrlWhereUniqueInput(id = Some(urlId)))
+            )
           )
         )
       )
