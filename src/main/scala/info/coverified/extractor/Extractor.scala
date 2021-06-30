@@ -80,7 +80,7 @@ final case class Extractor private (
     *
     * @return
     */
-  def buildExtractionEffect(): ZIO[Console with SttpClient, Throwable, Int] = {
+  def extract(): ZIO[Console with SttpClient, Throwable, Int] = {
     /* Getting hands on that ZIO stuff - flat mapping by for-comprehension */
     for {
       NeededInformation(hostNameToProfileConfig, urlViews) <- acquireNeededInformation

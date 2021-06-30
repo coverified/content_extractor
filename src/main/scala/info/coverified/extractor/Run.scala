@@ -52,7 +52,7 @@ object Run extends App with LazyLogging {
       Extractor.getAllConfigs(config.profileDirectoryPath)
 
     Extractor(config, hostNameToProfileConfig)
-      .buildExtractionEffect()
+      .extract()
       .provideCustomLayer(AsyncHttpClientZioBackend.layer())
       .delay(config.repeatDelay)
       .repeatUntil(
