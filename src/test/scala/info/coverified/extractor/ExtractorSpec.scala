@@ -44,7 +44,7 @@ import org.scalatest.Inside.inside
 import org.scalatest.prop.TableDrivenPropertyChecks
 import sttp.client3.asynchttpclient.zio.SttpClient
 import zio.console.Console
-import zio.{RIO, UIO, URIO, ZIO}
+import zio.{RIO, URIO, ZIO}
 
 import java.io.File
 import java.nio.file.Files
@@ -65,7 +65,8 @@ class ExtractorSpec
         "",
         Config.DefaultValues.chunkSize,
         Config.DefaultValues.repeatDelay
-      )
+      ),
+      Map.empty[String, ProfileConfig]
     )
     val coVerifiedView: SimpleUrlView = SimpleUrlView(
       id = "1",
@@ -87,15 +88,11 @@ class ExtractorSpec
     )
 
     "gathering all profile configs" should {
-      val getAllConfigs =
-        PrivateMethod[UIO[Map[String, ProfileConfig]]](Symbol("getAllConfigs"))
-
       "return empty map, if pointed to non-existent directory" in {
         val directoryPath =
           Seq("somewhere", "over", "the", "rainbow").mkString(File.separator)
 
-        val urlToConfig =
-          evaluate(extractor invokePrivate getAllConfigs(directoryPath))
+        val urlToConfig = Extractor.getAllConfigs(directoryPath)
         urlToConfig.isEmpty shouldBe true
       }
 
@@ -103,9 +100,7 @@ class ExtractorSpec
         val tempFile = File.createTempFile("configDir", "")
         tempFile.deleteOnExit()
 
-        val urlToConfig = evaluate(
-          extractor invokePrivate getAllConfigs(tempFile.getAbsolutePath)
-        )
+        val urlToConfig = Extractor.getAllConfigs(tempFile.getAbsolutePath)
         urlToConfig.isEmpty shouldBe true
       }
 
@@ -118,9 +113,7 @@ class ExtractorSpec
           hostName -> writeTempConfig(tempDirectory, hostName)
         }
 
-        val urlToConfig = evaluate(
-          extractor invokePrivate getAllConfigs(tempDirectory.getAbsolutePath)
-        )
+        val urlToConfig = Extractor.getAllConfigs(tempDirectory.getAbsolutePath)
         urlToConfig.size shouldBe expectedConfigs.size
         expectedConfigs.foreach {
           case (hostname, TempConfig(expected, tempConfigFile)) =>
@@ -144,9 +137,7 @@ class ExtractorSpec
           Files.createTempDirectory(tempDirectoryPath, "additionalDirectory")
         additionalDirectory.toFile.deleteOnExit()
 
-        val urlToConfig = evaluate(
-          extractor invokePrivate getAllConfigs(tempDirectory.getAbsolutePath)
-        )
+        val urlToConfig = Extractor.getAllConfigs(tempDirectory.getAbsolutePath)
         urlToConfig.size shouldBe expectedConfigs.size
         expectedConfigs.foreach {
           case (hostname, TempConfig(expected, tempConfigFile)) =>
@@ -171,9 +162,8 @@ class ExtractorSpec
 
         "return correct GraphQL query" in {
           val pattern =
-            ("query\\{allUrls\\(where:\\{lastCrawl_lte:\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:.\\d{3,6})?Z\"}" +
-              ",first:\\d+\\)\\{id name source\\{id name acronym url} entry\\{id name content summary url\\{id} " +
-              "date} lastCrawl}}").r
+            ("query\\{allUrls\\(where:\\{lastCrawl_lte:\".*\"\\},orderBy:\\[\\],first:\\d+,skip:\\d+\\)\\{id name " +
+              "source\\{id name acronym url\\} lastCrawl\\}\\}").r
 
           val actualQuery =
             (extractor invokePrivate buildUrlQuery()).toGraphQL().query
@@ -235,9 +225,8 @@ class ExtractorSpec
         }
 
         "return correct views" in {
-          val body
-              : Either[CalibanClientError, Some[List[Some[SimpleUrlView]]]] =
-            Right(Some(validViews.map(Some(_))))
+          val body: Either[CalibanClientError, Some[List[SimpleUrlView]]] =
+            Right(Some(validViews))
           val queryEffect = extractor invokePrivate getAllUrlViews()
           val responseEffect = SttpStubbing.okayCool(queryEffect, body)
 
@@ -294,7 +283,8 @@ class ExtractorSpec
               "",
               Config.DefaultValues.chunkSize,
               Config.DefaultValues.repeatDelay
-            )
+            ),
+            Map.empty[String, ProfileConfig]
           )
 
         /* Build complete effect */
@@ -303,9 +293,8 @@ class ExtractorSpec
 
         /* Have a look at the outcome */
         evaluate(responseEffect) match {
-          case NeededInformation(hostNameToProfileConfig, availableUrlViews) =>
+          case NeededInformation(_, availableUrlViews) =>
             /* --- Only checking existence, as content is tested in other tests */
-            hostNameToProfileConfig.size shouldBe expectedConfigs.size
             availableUrlViews.size shouldBe validViews.size
         }
       }

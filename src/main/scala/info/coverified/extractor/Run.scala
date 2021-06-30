@@ -47,7 +47,11 @@ object Run extends App with LazyLogging {
         }
     }
 
-    Extractor(config)
+    /* Get all page profiles and map the corresponding hostname, it applies to, to the actual profile config */
+    val hostNameToProfileConfig =
+      Extractor.getAllConfigs(config.profileDirectoryPath)
+
+    Extractor(config, hostNameToProfileConfig)
       .buildExtractionEffect()
       .provideCustomLayer(AsyncHttpClientZioBackend.layer())
       .delay(config.repeatDelay)

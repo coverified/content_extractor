@@ -64,7 +64,7 @@ import scala.util.{Failure, Success, Try}
   */
 final case class Extractor private (
     apiUrl: Uri,
-    profileDirectoryPath: String,
+    hostNameToProfileConfig: Map[String, ProfileConfig],
     reAnalysisInterval: Duration,
     authSecret: String,
     chunkSize: Int
@@ -90,41 +90,19 @@ final case class Extractor private (
   }
 
   /**
-    * Get all needed information for content extraction in parallel prior to actual processing
+    * Get all needed information for content extraction
     *
     * @return An effect, that evaluates to [[NeededInformation]]
     */
   private def acquireNeededInformation
       : ZIO[Console with SttpClient, Throwable, NeededInformation] =
-    getAllConfigs(profileDirectoryPath).zipWithPar(getAllUrlViews) {
-      case (hostnameToConfig, Right(urlViews)) =>
-        NeededInformation(hostnameToConfig, urlViews)
-      case (hostnameToConfig, Left(exception)) =>
+    getAllUrlViews.map {
+      case Right(urlViews) =>
+        NeededInformation(hostNameToProfileConfig, urlViews)
+      case Left(exception) =>
         logger.error("Unable to query urls.", exception)
-        NeededInformation(hostnameToConfig, List.empty[SimpleUrlView])
+        NeededInformation(hostNameToProfileConfig, List.empty[SimpleUrlView])
     }
-
-  /**
-    * Acquire all page profiles available in the given directory path.
-    *
-    * @param cfgDirectoryPath The path, where the files are located
-    * @return A map from pages' url to their applicable config
-    */
-  private def getAllConfigs(
-      cfgDirectoryPath: String
-  ): UIO[Map[String, ProfileConfig]] = ZIO.effectTotal {
-    logger.info("Reading in all configs")
-    val cfgDirectory = new File(cfgDirectoryPath)
-    if (cfgDirectory.exists() && cfgDirectory.isDirectory) {
-      cfgDirectory.listFiles
-        .filter(_.isFile)
-        .map(file => ProfileConfig(ConfigFactory.parseFile(file)))
-        .map(profileCfg => profileCfg.profile.hostname -> profileCfg)
-        .toMap
-    } else {
-      Map.empty[String, ProfileConfig]
-    }
-  }
 
   /**
     * Asking the Connector for all available urls + additional information within the data source
@@ -394,7 +372,7 @@ final case class Extractor private (
   }
 }
 
-object Extractor {
+object Extractor extends LazyLogging {
   type HandleEntryAndUrlEffect = (
       Option[
         RIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]]
@@ -402,14 +380,39 @@ object Extractor {
       Option[RIO[Console with SttpClient, Option[SimpleUrlView]]]
   )
 
-  def apply(config: Config): Extractor =
+  def apply(
+      config: Config,
+      hostNameToProfileConfig: Map[String, ProfileConfig]
+  ): Extractor =
     new Extractor(
       config.apiUri,
-      config.profileDirectoryPath,
+      hostNameToProfileConfig,
       config.reAnalysisInterval,
       config.authSecret,
       config.chunkSize
     )
+
+  /**
+    * Acquire all page profiles available in the given directory path.
+    *
+    * @param cfgDirectoryPath The path, where the files are located
+    * @return A map from pages' url to their applicable config
+    */
+  def getAllConfigs(
+      cfgDirectoryPath: String
+  ): Map[String, ProfileConfig] = {
+    logger.info("Reading in all configs")
+    val cfgDirectory = new File(cfgDirectoryPath)
+    if (cfgDirectory.exists() && cfgDirectory.isDirectory) {
+      cfgDirectory.listFiles
+        .filter(_.isFile)
+        .map(file => ProfileConfig(ConfigFactory.parseFile(file)))
+        .map(profileCfg => profileCfg.profile.hostname -> profileCfg)
+        .toMap
+    } else {
+      Map.empty[String, ProfileConfig]
+    }
+  }
 
   /**
     * Data structure to group all data, that can be loaded in parallel prior to actual information extraction
