@@ -30,7 +30,7 @@ import info.coverified.extractor.exceptions.{
 }
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.Connector
-import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
+import info.coverified.graphql.schema.{ExtractorQuery, SimpleEntry, SimpleUrl}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   EntryCreateInput,
   EntryUpdateInput,
@@ -80,20 +80,142 @@ final case class Extractor private (
     *
     * @return
     */
+  /* FIXME: Join handling of new and old parts */
   def extract(): ZIO[Console with SttpClient, Throwable, Int] = {
     /* Getting hands on that ZIO stuff - flat mapping by for-comprehension */
     for {
       NeededInformation(hostNameToProfileConfig, urlViews) <- acquireNeededInformation
       _ <- ZIO.collectAllPar(handleUrls(urlViews, hostNameToProfileConfig))
       noOfReceivedUrls <- IO.apply(urlViews.size)
-    } yield (noOfReceivedUrls)
+    } yield noOfReceivedUrls
   }
+
+  /**
+    * Handle all new urls by querying those urls, that haven't been visited, yet and in parallel scrape the content as
+    * well as update the url entry
+    *
+    * @return An effect, that evaluates to the amount of received new urls
+    */
+  def handleNewUrls: ZIO[Console with SttpClient, Throwable, Int] =
+    for {
+      newUrls <- queryNewUrls
+      _ <- ZIO.collectAllPar(
+        newUrls
+          .map(url => updateUrlView(url).zipPar(scrapeAndStoreNewEntry(url)))
+      )
+      amountOfReceivedUrls <- IO.apply(newUrls.size)
+    } yield amountOfReceivedUrls
+
+  /**
+    * Query all not yet handled urls
+    *
+    * FIXME: Test
+    * FIXME: Private
+    *
+    * @return An effect to get a list of [[SimpleUrlView]]s
+    */
+  def queryNewUrls: URIO[Console with SttpClient, List[SimpleUrlView]] = {
+    logger.info("Querying the top {} not yet handled urls.", chunkSize)
+    Connector
+      .sendRequest(ExtractorQuery.newUrls(chunkSize).toRequest(apiUrl))
+      .fold(
+        exception => {
+          logger.error("Requesting not yet handled urls failed.", exception)
+          List.empty[SimpleUrlView]
+        }, {
+          case Some(urlViews) => urlViews
+          case None =>
+            logger.warn(
+              "Did receive empty optional on attempt to query not yet handled urls."
+            )
+            List.empty[SimpleUrlView]
+        }
+      )
+  }
+
+  /**
+    * Build a mutation and send it to API in order to update the url entry
+    *
+    * @param view The original view to update
+    * @return An equivalent effect
+    */
+  private def updateUrlView(
+      view: SimpleUrlView
+  ): RIO[Console with SttpClient, Option[SimpleUrlView]] = view match {
+    case SimpleUrlView(id, url, sourceId, _, _) =>
+      val mutation = buildUrlUpdateMutation(id, url, sourceId)
+      Connector.sendRequest(
+        mutation
+          .toRequest(apiUrl)
+          .header("x-coverified-internal-auth", authSecret)
+      )
+  }
+
+  /**
+    * Scrapes the given url and puts the freshly generated entry to database
+    *
+    * FIXME: Test
+    * FIXME: Private
+    *
+    * @param url  Url to scrape
+    * @return Effect to put new entry to database
+    */
+  def scrapeAndStoreNewEntry(
+      url: SimpleUrlView
+  ): URIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]] =
+    IO.apply(scrape(url, hostNameToProfileConfig))
+      .map(CreateEntryInformation.apply)
+      .map {
+        case CreateEntryInformation(title, summary, content, date) =>
+          buildEntry(url.id, title, summary, content, date)
+      }
+      .flatMap { selectionBuild =>
+        Connector.sendRequest(selectionBuild.toRequest(apiUrl))
+      }
+      .fold(
+        exception => {
+          logger.error(
+            "Putting freshly generated entry to database failed.",
+            exception
+          )
+          None
+        },
+        success => success
+      )
+
+  /**
+    * Based on the received url view, try to find matching profile and acquire and view onto the entry, that it forms
+    * together
+    *
+    * @param urlView              View onto the url
+    * @param urlToProfileConfigs  Mapping from url to profile config to use
+    * @param browser              The browser to be used for content extraction
+    * @return A trial to get a written mutation
+    */
+  private def scrape(
+      urlView: SimpleUrlView,
+      urlToProfileConfigs: Map[String, ProfileConfig],
+      browser: Browser = JsoupBrowser()
+  ): RawEntryInformation =
+    urlView match {
+      case SimpleUrlView(_, Some(url), Some(sourceId), _, _) =>
+        getProfile4Url(url, urlToProfileConfigs)
+          .flatMap(
+            getEntryInformation(url, sourceId, _, browser)
+          )
+          .get
+      case _ =>
+        throw ExtractionException(
+          s"Unable to extract information, as at least url or source are not known for url view '$urlView'."
+        )
+    }
 
   /**
     * Get all needed information for content extraction
     *
     * @return An effect, that evaluates to [[NeededInformation]]
     */
+  @deprecated("As of changed concurrency")
   private def acquireNeededInformation
       : ZIO[Console with SttpClient, Throwable, NeededInformation] =
     getAllUrlViews.map {
@@ -109,6 +231,7 @@ final case class Extractor private (
     *
     * @return An effect, that evaluates to a list of [[SimpleUrlView]]s
     */
+  @deprecated("Query urls differently")
   private def getAllUrlViews: URIO[Console with SttpClient, Either[
     Throwable,
     List[SimpleUrlView]
@@ -127,6 +250,7 @@ final case class Extractor private (
     *
     * @return A selection builder with the equivalent query
     */
+  @deprecated("Query urls differently")
   private def buildUrlQuery
       : SelectionBuilder[RootQuery, Option[List[SimpleUrlView]]] =
     Query.allUrls(
@@ -184,12 +308,13 @@ final case class Extractor private (
     * @param hostToProfileConfig  Mapping from host name to it's profile config
     * @return Tuple of [[Option]]s onto an effects, that might be put to API
     */
+  @deprecated
   private def handleUrl(
       urlView: SimpleUrlView,
       hostToProfileConfig: Map[String, ProfileConfig]
   ): HandleEntryAndUrlEffect = {
     logger.info("Handling url: {}", urlView.name)
-    extractInformation(urlView, hostToProfileConfig) match {
+    scrape(urlView, hostToProfileConfig) match {
       case Success(scrapedInformation: RawEntryInformation) =>
         /* Scraping of site succeeded. Handle that information. */
         handleExtractedInformation(scrapedInformation, urlView)
@@ -242,33 +367,6 @@ final case class Extractor private (
         (None, apparentUrlUpdateEffect)
     }
   }
-
-  /**
-    * Based on the received url view, try to find matching profile and acquire and view onto the entry, that it forms
-    * together
-    *
-    * @param urlView              View onto the url
-    * @param urlToProfileConfigs  Mapping from url to profile config to use
-    * @param browser              The browser to be used for content extraction
-    * @return A trial to get a written mutation
-    */
-  private def extractInformation(
-      urlView: SimpleUrlView,
-      urlToProfileConfigs: Map[String, ProfileConfig],
-      browser: Browser = JsoupBrowser()
-  ): Try[RawEntryInformation] =
-    urlView match {
-      case SimpleUrlView(_, Some(url), Some(sourceId), _, _) =>
-        getProfile4Url(url, urlToProfileConfigs).flatMap(
-          getEntryInformation(url, sourceId, _, browser)
-        )
-      case _ =>
-        Failure(
-          ExtractionException(
-            s"Unable to extract information, as at least url or source are not known for url view '$urlView'."
-          )
-        )
-    }
 
   /**
     * Issue the analyser and try to mutate the given url together with the config into an entry
@@ -352,24 +450,6 @@ final case class Extractor private (
         .toRequest(apiUrl)
         .header("x-coverified-internal-auth", authSecret)
     )
-
-  /**
-    * Build a mutation and send it to API in order to update the url entry
-    *
-    * @param view The original view to update
-    * @return An equivalent effect
-    */
-  private def updateUrlView(
-      view: SimpleUrlView
-  ): RIO[Console with SttpClient, Option[SimpleUrlView]] = view match {
-    case SimpleUrlView(id, url, sourceId, _, _) =>
-      val mutation = buildUrlUpdateMutation(id, url, sourceId)
-      Connector.sendRequest(
-        mutation
-          .toRequest(apiUrl)
-          .header("x-coverified-internal-auth", authSecret)
-      )
-  }
 }
 
 object Extractor extends LazyLogging {
@@ -420,6 +500,7 @@ object Extractor extends LazyLogging {
     * @param hostNameToProfileConfig  Mapping a hostname string to applicable [[ProfileConfig]]
     * @param availableUrlViews        List of all available [[SimpleUrlView]]s
     */
+  @deprecated("As of changed concurrency")
   final case class NeededInformation(
       hostNameToProfileConfig: Map[String, ProfileConfig],
       availableUrlViews: List[SimpleUrlView]
