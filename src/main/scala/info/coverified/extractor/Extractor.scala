@@ -79,6 +79,11 @@ final case class Extractor private (
     /* Getting hands on that ZIO stuff - flat mapping by for-comprehension */
     val newUrlChunkSize = math.max(chunkSize / 2, 1)
     val existingUrlChunkSize = chunkSize - newUrlChunkSize
+    logger.info(
+      "Attempting to visit {} new and {} yet existing urls.",
+      newUrlChunkSize,
+      existingUrlChunkSize
+    )
     for {
       (noOfNewUrls, noOfExistingUrls) <- handleNewUrls(
         newUrlChunkSize
@@ -87,8 +92,8 @@ final case class Extractor private (
       )
       lastBatch <- IO.apply {
         val lastChunk = noOfNewUrls < newUrlChunkSize && noOfExistingUrls < existingUrlChunkSize
-        logger.debug(
-          "Attempted to handle {} new and {} yet existing urls.{} ",
+        logger.info(
+          "Handled {} new and {} yet existing urls.{} ",
           noOfNewUrls,
           noOfExistingUrls,
           if (lastChunk) "This was the last chunk."
@@ -107,7 +112,8 @@ final case class Extractor private (
     */
   def handleNewUrls(
       first: Int
-  ): ZIO[Console with SttpClient, Throwable, Int] =
+  ): ZIO[Console with SttpClient, Throwable, Int] = {
+    logger.info("Attempting to handle new urls.")
     for {
       newUrls <- queryUrls(ExtractorQuery.newUrls(first), exception => {
         logger.error("Requesting not yet handled urls failed.", exception)
@@ -132,6 +138,7 @@ final case class Extractor private (
       )
       noOfReceivedUrls <- IO.apply(newUrls.size)
     } yield noOfReceivedUrls
+  }
 
   /**
     * Query all urls with specified selection builder
@@ -267,7 +274,8 @@ final case class Extractor private (
     */
   def handleExistingUrls(
       first: Int
-  ): ZIO[Console with SttpClient, Throwable, Int] =
+  ): ZIO[Console with SttpClient, Throwable, Int] = {
+    logger.info("Attempt to handle yet existing urls.")
     for {
       existingUrls <- queryUrls(
         ExtractorQuery.existingUrls(first, reAnalysisInterval),
@@ -283,6 +291,7 @@ final case class Extractor private (
       )
       noOfReceivedUrls <- IO.apply(existingUrls.size)
     } yield noOfReceivedUrls
+  }
 
   /**
     * FIXME: Test
@@ -295,14 +304,19 @@ final case class Extractor private (
   def handleExistingUrl(
       url: SimpleUrlView,
       hostNameToProfileConfig: Map[String, ProfileConfig]
-  ): ZIO[Console with SttpClient, Throwable, Unit] =
+  ): ZIO[Console with SttpClient, Throwable, Unit] = {
+    logger.debug("Handling url '{}' ({}).", url.id, url.name)
     for {
       (rawEntryInformation, maybeEntries) <- IO
-        .apply(scrape(url, hostNameToProfileConfig))
-        .zipPar(
+        .apply {
+          logger.debug("Scraping url '{}'.", url.id)
+          scrape(url, hostNameToProfileConfig)
+        }
+        .zipPar {
+          logger.debug("Querying entries for url '{}'.", urlId)
           Connector
             .sendRequest(ExtractorQuery.existingEntry(url.id).toRequest(apiUrl))
-        )
+        }
       _ <- (handleExistingEntry(
         url.id,
         rawEntryInformation,
@@ -314,6 +328,7 @@ final case class Extractor private (
           IO.apply((): Unit)
       }).zipPar(updateUrlView(url))
     } yield ()
+  }
 
   /**
     * FIXME: Test
@@ -330,28 +345,40 @@ final case class Extractor private (
       maybeApparentEntry: Option[SimpleEntryView[String]]
   ): Option[
     URIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]]
-  ] =
+  ] = {
+    logger.debug("Handle possibly existing entry for url '{}'.", urlId)
     (checkAgainstExisting(scrapedInformation, maybeApparentEntry) match {
       case Left(maybeUpdateInformation) =>
         maybeUpdateInformation.map {
           case UpdateEntryInformation(id, title, summary, content, date) =>
+            logger.debug(
+              "There is an entry existent for url '{}' and an update is needed."
+            )
             updateEntry(id, title, summary, content, date)
         }
       case Right(CreateEntryInformation(title, summary, content, date)) =>
+        logger.debug(
+          "There is no entry apparent for yet visited url '{}'. Attempt to create a new one."
+        )
         Some(buildEntry(urlId, title, summary, content, date))
     }).map {
       storeMutation(_).fold(
         exception => {
           logger.error(
-            "Updating or creating entry for url '' failed.",
+            "Updating or creating entry for url '{}' failed.",
             urlId,
             exception
           )
           None
         },
-        success => success
+        success => {
+          logger
+            .debug("Successfully updated or created entry for url '{}'.", urlId)
+          success
+        }
       )
     }
+  }
 
   /**
     * Determine, if an existing entry needs to be updated or a new one created. If there is one apparent and the content
