@@ -3,7 +3,7 @@
  * Diehl, Fetzer, Hiry, Kilian, Mayer, Schlittenbauer, Schweikert, Vollnhals, Weise GbR
  **/
 
-package info.coverified.graphql.schema
+package info.coverified.graphql
 
 import caliban.client.Operations.RootQuery
 import caliban.client.SelectionBuilder
@@ -13,16 +13,19 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Url,
   UrlWhereInput
 }
+import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 
 import java.time.format.DateTimeFormatter
 import java.time.{Duration, ZoneId, ZonedDateTime}
 
 object ExtractorQuery {
 
+  val DUMMY_LAST_CRAWL_DATE_TIME: String = "1970-01-01T00:00:00.000Z"
+
   /**
     * Query a specified amount of urls, that haven't been handled yet
     *
-    * @param first  Amount of urls to query
+    * @param first Amount of urls to query
     * @return An equivalent [[SelectionBuilder]]
     */
   def newUrls(
@@ -30,7 +33,7 @@ object ExtractorQuery {
   ): SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
     Query.allUrls(
       where = UrlWhereInput(
-        lastCrawl = Some("1970-01-01T00:00:00.000Z")
+        lastCrawl = Some(DUMMY_LAST_CRAWL_DATE_TIME)
       ),
       skip = 0,
       first = Some(first)
@@ -71,7 +74,7 @@ object ExtractorQuery {
   /**
     * Query entry, that do exist for the given url ids
     *
-    * @param urlId  Id of applicable url
+    * @param urlId Id of applicable url
     * @return An equivalent [[SelectionBuilder]]
     */
   def existingEntry(urlId: String): SelectionBuilder[RootQuery, Option[

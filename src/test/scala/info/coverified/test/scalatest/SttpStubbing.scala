@@ -70,9 +70,7 @@ object SttpStubbing {
                       SimpleUrlView(
                         id = "1",
                         name = Some("https://coverified.info"),
-                        sourceId = Some("1"),
-                        entry = None,
-                        hasBeenCrawled = true
+                        sourceId = Some("1")
                       )
                     )
                   else None
@@ -95,12 +93,7 @@ object SttpStubbing {
                     .map(_.group(1))
                     .getOrElse("ID_NOT_FOUND"),
                   name = Some("https://www.coverified.info"),
-                  sourceId = Some("1"),
-                  entry = None,
-                  hasBeenCrawled = "lastCrawl:\\\\\"([^\"]*)\\\\\"".r
-                    .findFirstMatchIn(queryString)
-                    .map(_.group(1))
-                    .contains("1970-01-01T00:00:00.000Z")
+                  sourceId = Some("1")
                 )
               )
             )

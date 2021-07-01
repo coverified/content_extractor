@@ -27,8 +27,8 @@ import info.coverified.extractor.exceptions.{
   ExtractionException
 }
 import info.coverified.extractor.profile.ProfileConfig
-import info.coverified.graphql.Connector
-import info.coverified.graphql.schema.{ExtractorQuery, SimpleEntry, SimpleUrl}
+import info.coverified.graphql.{Connector, ExtractorQuery}
+import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   EntryCreateInput,
   EntryUpdateInput,
@@ -157,7 +157,7 @@ final case class Extractor private (
   private def updateUrlView(
       view: SimpleUrlView
   ): RIO[Console with SttpClient, Option[SimpleUrlView]] = view match {
-    case SimpleUrlView(id, url, sourceId, _, _) =>
+    case SimpleUrlView(id, url, sourceId) =>
       val mutation = buildUrlUpdateMutation(id, url, sourceId)
       Connector.sendRequest(
         mutation
@@ -213,7 +213,7 @@ final case class Extractor private (
       browser: Browser = JsoupBrowser()
   ): RawEntryInformation =
     urlView match {
-      case SimpleUrlView(_, Some(url), Some(sourceId), _, _) =>
+      case SimpleUrlView(_, Some(url), Some(sourceId)) =>
         getProfile4Url(url, urlToProfileConfigs)
           .flatMap(
             getEntryInformation(url, sourceId, _, browser)
@@ -294,7 +294,7 @@ final case class Extractor private (
         case Some(effect) => effect
         case None =>
           logger.debug("No update necessary for url {}.")
-          IO.apply()
+          IO.apply((): Unit)
       }).zipPar(updateUrlView(url))
     } yield ()
 
@@ -335,165 +335,6 @@ final case class Extractor private (
         success => success
       )
     }
-
-//  /**
-//    * Get all needed information for content extraction
-//    *
-//    * @return An effect, that evaluates to [[NeededInformation]]
-//    */
-//  @deprecated("As of changed concurrency")
-//  private def acquireNeededInformation
-//      : ZIO[Console with SttpClient, Throwable, NeededInformation] =
-//    getAllUrlViews.map {
-//      case Right(urlViews) =>
-//        NeededInformation(hostNameToProfileConfig, urlViews)
-//      case Left(exception) =>
-//        logger.error("Unable to query urls.", exception)
-//        NeededInformation(hostNameToProfileConfig, List.empty[SimpleUrlView])
-//    }
-
-//  /**
-//    * Asking the Connector for all available urls + additional information within the data source
-//    *
-//    * @return An effect, that evaluates to a list of [[SimpleUrlView]]s
-//    */
-//  @deprecated("Query urls differently")
-//  private def getAllUrlViews: URIO[Console with SttpClient, Either[
-//    Throwable,
-//    List[SimpleUrlView]
-//  ]] = {
-//    logger.info("Querying all relevant urls")
-//    Connector
-//      .sendRequest {
-//        buildUrlQuery.toRequest(apiUrl)
-//      }
-//      .map(_.getOrElse(List.empty))
-//      .either
-//  }
-//
-//  /**
-//    * Build up a query to get all urls
-//    *
-//    * @return A selection builder with the equivalent query
-//    */
-//  @deprecated("Query urls differently")
-//  private def buildUrlQuery
-//      : SelectionBuilder[RootQuery, Option[List[SimpleUrlView]]] =
-//    Query.allUrls(
-//      where = UrlWhereInput(
-//        lastCrawl_lte = Some(
-//          "\\[UTC]$".r.replaceAllIn(
-//            DateTimeFormatter.ISO_DATE_TIME.format(
-//              ZonedDateTime
-//                .now(ZoneId.of("UTC"))
-//                .minusHours(reAnalysisInterval.toHours)
-//            ),
-//            ""
-//          )
-//        )
-//      ),
-//      first = Some(chunkSize),
-//      skip = 0
-//    )(
-//      SimpleUrl.view
-//    )
-//
-//  /**
-//    * Handle all given urls and return a sequence of joined effects to apply
-//    *
-//    * @param urls                     Collection of urls to handle
-//    * @param hostnameToProfileConfig  Mapping from host name to page profile configuration
-//    * @return A sequence of effects to apply
-//    */
-//  private def handleUrls(
-//      urls: List[SimpleUrlView],
-//      hostnameToProfileConfig: Map[String, ProfileConfig]
-//  ): Seq[URIO[Console with SttpClient, Option[Product]]] =
-//    urls
-//      .map(handleUrl(_, hostnameToProfileConfig))
-//      .flatMap {
-//        case (maybeEntryView, maybeUrlView) =>
-//          Seq(maybeEntryView, maybeUrlView)
-//      }
-//      .flatten
-//      .map {
-//        _.fold(
-//          exception => {
-//            logger.error("Putting mutation to data base failed.", exception)
-//            None
-//          },
-//          success => success
-//        )
-//      }
-//
-//  /**
-//    * Handle the received url. At first, needed information are extracted and then, parallely, entry as well as updated
-//    * mutation are sent to API.
-//    *
-//    * @param urlView              View onto the url
-//    * @param hostToProfileConfig  Mapping from host name to it's profile config
-//    * @return Tuple of [[Option]]s onto an effects, that might be put to API
-//    */
-//  @deprecated
-//  private def handleUrl(
-//      urlView: SimpleUrlView,
-//      hostToProfileConfig: Map[String, ProfileConfig]
-//  ): HandleEntryAndUrlEffect = {
-//    logger.info("Handling url: {}", urlView.name)
-//    scrape(urlView, hostToProfileConfig) match {
-//      case Success(scrapedInformation: RawEntryInformation) =>
-//        /* Scraping of site succeeded. Handle that information. */
-//        handleExtractedInformation(scrapedInformation, urlView)
-//      case Failure(exception) =>
-//        /* Scraping of site failed -> Don't update anything */
-//        logger
-//          .error("Analysis of url '{}' failed.", urlView.name, exception)
-//        (None, None)
-//    }
-//  }
-//
-//  /**
-//    * Handle scraped information by checking, if a new entry has to be created, an old one updated or nothing at all has
-//    * to be done.
-//    *
-//    * @param scrapedInformation Information, that are obtained by visiting the site
-//    * @param urlView            View onto the url, that is concerned
-//    * @return A tuple of options onto effects, that handle the entry and the url in database
-//    */
-//    @deprecated
-//  private def handleExtractedInformation(
-//      scrapedInformation: RawEntryInformation,
-//      urlView: SimpleUrlView
-//  ): HandleEntryAndUrlEffect = {
-//    val apparentUrlUpdateEffect = Some(updateUrlView(urlView))
-//    logger.debug("Scraping of url '{}' succeeded.", urlView.name)
-//
-//    checkAgainstExisting(scrapedInformation, urlView.entry)
-//      .map {
-//        case Left(
-//            UpdateEntryInformation(id, title, summary, content, date)
-//            ) =>
-//          logger.debug(
-//            "There already is an entry apparent for url '{}'. Update it.",
-//            urlView.name
-//          )
-//          updateEntry(id, title, summary, content, date)
-//        case Right(CreateEntryInformation(title, summary, content, date)) =>
-//          logger.debug(
-//            "There is no entry apparent for url '{}'. Create one.",
-//            urlView.name
-//          )
-//          buildEntry(urlView.id, title, summary, content, date)
-//      }
-//      .map(storeMutation) match {
-//      case apparentEntryEffect @ Some(_) =>
-//        /* We either need to update or insert a new entry */
-//        (apparentEntryEffect, apparentUrlUpdateEffect)
-//      case None =>
-//        /* Nothing to be stored or updated */
-//        (None, apparentUrlUpdateEffect)
-//    }
-//  }
 
   /**
     * Determine, if an existing entry needs to be updated or a new one created. If there is one apparent and the content
