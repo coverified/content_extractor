@@ -5,50 +5,11 @@
 
 package info.coverified.extractor
 
-import caliban.client.{Argument, CalibanClientError, SelectionBuilder}
-import caliban.client.CalibanClientError.CommunicationError
-import caliban.client.Operations.{RootMutation, RootQuery}
-import caliban.client.SelectionBuilder.Field
 import com.typesafe.scalalogging.LazyLogging
-import info.coverified.extractor.Extractor.{
-  HandleEntryAndUrlEffect,
-  NeededInformation
-}
-import info.coverified.extractor.analyzer.EntryInformation.{
-  CreateEntryInformation,
-  RawEntryInformation,
-  UpdateEntryInformation
-}
 import info.coverified.extractor.analyzer.BrowserHelper
-import info.coverified.extractor.config.ProfileConfigHelper.TempConfig
-import info.coverified.extractor.config.{Config, ProfileConfigHelper}
-import info.coverified.extractor.exceptions.{
-  ConfigException,
-  ExtractionException
-}
-import info.coverified.extractor.profile.ProfileConfig
-import info.coverified.graphql.schema.CoVerifiedClientSchema.{
-  EntryCreateInput,
-  EntryUpdateInput,
-  Mutation,
-  TagRelateToManyInput,
-  UrlRelateToOneInput,
-  UrlUpdateInput,
-  UrlWhereUniqueInput
-}
-import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
-import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
-import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
-import info.coverified.test.scalatest.{MockBrowser, SttpStubbing, ZioSpec}
-import org.scalatest.Inside.inside
+import info.coverified.extractor.config.ProfileConfigHelper
+import info.coverified.test.scalatest.ZioSpec
 import org.scalatest.prop.TableDrivenPropertyChecks
-import sttp.client3.asynchttpclient.zio.SttpClient
-import zio.console.Console
-import zio.{RIO, URIO, ZIO}
-
-import java.io.File
-import java.nio.file.Files
-import scala.util.{Failure, Success, Try}
 
 class ExtractorSpec
     extends ZioSpec

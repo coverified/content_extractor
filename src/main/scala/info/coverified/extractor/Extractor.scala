@@ -119,23 +119,7 @@ final case class Extractor private (
         logger.error("Requesting not yet handled urls failed.", exception)
         List.empty[SimpleUrlView]
       })
-      _ <- ZIO.collectAllPar(
-        newUrls
-          .map(
-            url =>
-              updateUrlView(url).zipPar {
-                IO.apply(
-                    CreateEntryInformation(scrape(url, hostNameToProfileConfig))
-                  )
-                  .flatMap(
-                    storeNewEntry(
-                      url.id,
-                      _
-                    )
-                  )
-              }
-          )
-      )
+      _ <- ZIO.collectAllPar(newUrls.map(handleNewUrl))
       noOfReceivedUrls <- IO.apply(newUrls.size)
     } yield noOfReceivedUrls
   }
@@ -171,6 +155,33 @@ final case class Extractor private (
   }
 
   /**
+    * FIXME: Test
+    * FIXME: Private
+    *
+    * @param url
+    * @return
+    */
+  def handleNewUrl(url: SimpleUrlView): ZIO[
+    Console with SttpClient,
+    Throwable,
+    (Option[SimpleUrlView], Option[SimpleEntryView[SimpleUrlView]])
+  ] = {
+    logger.debug("Handling not yet visited url '{}' ().", url.id, url.name)
+    updateUrlView(url).zipPar {
+      IO.apply {
+          logger.debug("Scraping url '{}' ().", url.id, url.name)
+          CreateEntryInformation(scrape(url, hostNameToProfileConfig))
+        }
+        .flatMap(
+          storeNewEntry(
+            url.id,
+            _
+          )
+        )
+    }
+  }
+
+  /**
     * Build a mutation and send it to API in order to update the url entry
     *
     * @param view The original view to update
@@ -180,6 +191,7 @@ final case class Extractor private (
       view: SimpleUrlView
   ): RIO[Console with SttpClient, Option[SimpleUrlView]] = view match {
     case SimpleUrlView(id, url, sourceId) =>
+      logger.debug("Updating the entry for url ' {}'.", view.id)
       val mutation = buildUrlUpdateMutation(id, url, sourceId)
       Connector.sendRequest(
         mutation
@@ -488,18 +500,6 @@ object Extractor extends LazyLogging {
       Map.empty[String, ProfileConfig]
     }
   }
-
-  /**
-    * Data structure to group all data, that can be loaded in parallel prior to actual information extraction
-    *
-    * @param hostNameToProfileConfig  Mapping a hostname string to applicable [[ProfileConfig]]
-    * @param availableUrlViews        List of all available [[SimpleUrlView]]s
-    */
-  @deprecated("As of changed concurrency")
-  final case class NeededInformation(
-      hostNameToProfileConfig: Map[String, ProfileConfig],
-      availableUrlViews: List[SimpleUrlView]
-  )
 
   /**
     * Given a map of hostnames to configs, find that entry, whose hostname is included within the queried url.
