@@ -75,15 +75,28 @@ final case class Extractor private (
     *
     * @return
     */
-  /* FIXME: Join handling of new and old parts */
-  def extract(): ZIO[Console with SttpClient, Throwable, Int] = {
+  def extract(): ZIO[Console with SttpClient, Throwable, Boolean] = {
     /* Getting hands on that ZIO stuff - flat mapping by for-comprehension */
+    val newUrlChunkSize = math.max(chunkSize / 2, 1)
+    val existingUrlChunkSize = chunkSize - newUrlChunkSize
     for {
-      (amountOfNewUrls, amountOfExistingUrls) <- handleNewUrls.zipPar(
-        handleExistingUrls
+      (noOfNewUrls, noOfExistingUrls) <- handleNewUrls(
+        newUrlChunkSize
+      ).zipPar(
+        handleExistingUrls(existingUrlChunkSize)
       )
-      noOfReceivedUrls <- IO.apply(amountOfNewUrls + amountOfExistingUrls)
-    } yield noOfReceivedUrls
+      lastBatch <- IO.apply {
+        val lastChunk = noOfNewUrls < newUrlChunkSize && noOfExistingUrls < existingUrlChunkSize
+        logger.debug(
+          "Attempted to handle {} new and {} yet existing urls.{} ",
+          noOfNewUrls,
+          noOfExistingUrls,
+          if (lastChunk) "This was the last chunk."
+          else "Repeat until all necessary urls have been visited."
+        )
+        lastChunk
+      }
+    } yield lastBatch
   }
 
   /**
@@ -92,9 +105,11 @@ final case class Extractor private (
     *
     * @return An effect, that evaluates to the amount of received new urls
     */
-  def handleNewUrls: ZIO[Console with SttpClient, Throwable, Int] =
+  def handleNewUrls(
+      first: Int
+  ): ZIO[Console with SttpClient, Throwable, Int] =
     for {
-      newUrls <- queryUrls(ExtractorQuery.newUrls(chunkSize), exception => {
+      newUrls <- queryUrls(ExtractorQuery.newUrls(first), exception => {
         logger.error("Requesting not yet handled urls failed.", exception)
         List.empty[SimpleUrlView]
       })
@@ -115,8 +130,8 @@ final case class Extractor private (
               }
           )
       )
-      amountOfReceivedUrls <- IO.apply(newUrls.size)
-    } yield amountOfReceivedUrls
+      noOfReceivedUrls <- IO.apply(newUrls.size)
+    } yield noOfReceivedUrls
 
   /**
     * Query all urls with specified selection builder
@@ -250,10 +265,12 @@ final case class Extractor private (
     *
     * @return
     */
-  def handleExistingUrls: ZIO[Console with SttpClient, Throwable, Int] =
+  def handleExistingUrls(
+      first: Int
+  ): ZIO[Console with SttpClient, Throwable, Int] =
     for {
       existingUrls <- queryUrls(
-        ExtractorQuery.existingUrls(chunkSize, reAnalysisInterval),
+        ExtractorQuery.existingUrls(first, reAnalysisInterval),
         exception => {
           logger.error("Requesting existent urls failed.", exception)
           List.empty[SimpleUrlView]
@@ -264,8 +281,8 @@ final case class Extractor private (
           existingUrl => handleExistingUrl(existingUrl, hostNameToProfileConfig)
         )
       )
-      amountOfReceivedUrls <- IO.apply(existingUrls.size)
-    } yield (amountOfReceivedUrls)
+      noOfReceivedUrls <- IO.apply(existingUrls.size)
+    } yield noOfReceivedUrls
 
   /**
     * FIXME: Test

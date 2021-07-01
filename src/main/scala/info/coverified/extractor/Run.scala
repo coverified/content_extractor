@@ -55,9 +55,7 @@ object Run extends App with LazyLogging {
       .extract()
       .provideCustomLayer(AsyncHttpClientZioBackend.layer())
       .delay(config.repeatDelay)
-      .repeatUntil(
-        (noOfReceivedUrls: Int) => noOfReceivedUrls < config.chunkSize
-      )
+      .repeatWhile(!_)
       .exitCode
   }
 }
