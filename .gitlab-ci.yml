@@ -2,6 +2,7 @@ stages:
     - build
     - test
     - containerize
+    - trigger
 
 prepareEnv4test:
     stage: build
@@ -49,3 +50,9 @@ buildDockerImage:
         - build4dockerImage
     only:
         - main
+
+trigger-build-with-config:
+    stage: trigger
+    trigger: coverified/infrastructure
+    variables:
+        IMAGE_TO_BUILD: content_extractor
