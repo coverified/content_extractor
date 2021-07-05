@@ -4,6 +4,13 @@ stages:
     - containerize
     - trigger
 
+variables:
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.cache/.gradle"
+
+cache:
+  paths:
+    - .cache/.gradle
+
 prepareEnv4test:
     stage: build
     image: registry.gitlab.com/coverified/infrastructure/scala-base:latest
@@ -50,6 +57,8 @@ buildDockerImage:
         - build4dockerImage
     only:
         - main
+    cache: {}
+
 
 trigger-build-with-config:
     stage: trigger
