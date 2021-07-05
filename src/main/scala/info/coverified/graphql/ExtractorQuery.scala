@@ -27,6 +27,7 @@ object ExtractorQuery {
     ".pdf",
     ".doc",
     ".docx",
+    ".ods",
     ".zip",
     /* Images */
     ".png",
