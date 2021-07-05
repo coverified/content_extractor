@@ -161,24 +161,12 @@ final case class Extractor private (
     * @param url
     * @return
     */
-  def handleNewUrl(url: SimpleUrlView): ZIO[
+  def handleNewUrl(url: SimpleUrlView): URIO[
     Console with SttpClient,
-    Throwable,
     (Option[SimpleUrlView], Option[SimpleEntryView[SimpleUrlView]])
   ] = {
     logger.debug("Handling not yet visited url '{}' ({}).", url.id, url.name)
-    updateUrlView(url).zipPar {
-      IO.apply {
-          logger.debug("Scraping url '{}' ({}).", url.id, url.name)
-          CreateEntryInformation(scrape(url, hostNameToProfileConfig))
-        }
-        .flatMap(
-          storeNewEntry(
-            url.id,
-            _
-          )
-        )
-    }
+    updateUrlView(url).zipPar(scrapeAndCreateNewEntry(url))
   }
 
   /**
@@ -189,16 +177,59 @@ final case class Extractor private (
     */
   private def updateUrlView(
       view: SimpleUrlView
-  ): RIO[Console with SttpClient, Option[SimpleUrlView]] = view match {
-    case SimpleUrlView(id, url, sourceId) =>
-      logger.debug("Updating the entry for url ' {}'.", view.id)
-      val mutation = buildUrlUpdateMutation(id, url, sourceId)
-      Connector.sendRequest(
-        mutation
-          .toRequest(apiUrl)
-          .header("x-coverified-internal-auth", authSecret)
+  ): URIO[Console with SttpClient, Option[SimpleUrlView]] =
+    (view match {
+      case SimpleUrlView(id, url, sourceId) =>
+        logger.debug("Updating the entry for url ' {}'.", view.id)
+        val mutation = buildUrlUpdateMutation(id, url, sourceId)
+        Connector.sendRequest(
+          mutation
+            .toRequest(apiUrl)
+            .header("x-coverified-internal-auth", authSecret)
+        )
+    }).fold(exception => {
+      logger.error(
+        "Updating url entry for url '{}' ({}) failed.",
+        view.id,
+        view.name,
+        exception
       )
-  }
+      None
+    }, identity)
+
+  /**
+    * Scrapes the url and creates a new entry
+    *
+    * FIXME: Private
+    * FIXME: Test
+    *
+    * @param url The url to scrape
+    * @return An effect to store the entry
+    */
+  def scrapeAndCreateNewEntry(
+      url: SimpleUrlView
+  ): URIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]] =
+    ZIO
+      .fromTry {
+        logger.debug("Scraping url '{}' ({}).", url.id, url.name)
+        scrape(url, hostNameToProfileConfig)
+      }
+      .map(CreateEntryInformation(_))
+      .flatMap(
+        storeNewEntry(
+          url.id,
+          _
+        )
+      )
+      .fold(exception => {
+        logger.error(
+          "Acquisition and storing of new entry for url '{}' ({}) failed.",
+          url.id,
+          url.name,
+          exception
+        )
+        None
+      }, identity)
 
   /**
     * Puts the freshly generated entry to database
@@ -245,19 +276,18 @@ final case class Extractor private (
       urlView: SimpleUrlView,
       urlToProfileConfigs: Map[String, ProfileConfig],
       browser: Browser = JsoupBrowser()
-  ): RawEntryInformation =
+  ): Try[RawEntryInformation] =
     urlView match {
       case SimpleUrlView(_, Some(url), Some(sourceId)) =>
         getProfile4Url(url, urlToProfileConfigs)
           .flatMap(
             getEntryInformation(url, sourceId, _, browser)
-          ) match {
-          case Success(information) => information
-          case Failure(exception)   => throw exception
-        }
+          )
       case _ =>
-        throw ExtractionException(
-          s"Unable to extract information, as at least url or source are not known for url view '$urlView'."
+        Failure(
+          ExtractionException(
+            s"Unable to extract information, as at least url or source are not known for url view '$urlView'."
+          )
         )
     }
 
@@ -319,30 +349,48 @@ final case class Extractor private (
   ): ZIO[Console with SttpClient, Throwable, Unit] = {
     logger.debug("Handling url '{}' ({}).", url.id, url.name)
     for {
-      (rawEntryInformation, maybeEntries) <- IO
-        .apply {
-          logger.debug("Scraping url '{}'.", url.id)
+      (maybeRawEntryInformation, maybeEntries) <- ZIO
+        .fromTry {
+          logger.debug(
+            "Scraping already visited url '{}' ({}).",
+            url.id,
+            url.name
+          )
           scrape(url, hostNameToProfileConfig)
         }
+        .fold(exception => {
+          logger.error(
+            "Scraping website for yet visited url '{}' ({}) failed.",
+            url.id,
+            url.name,
+            exception
+          )
+          None
+        }, success => Some(success))
         .zipPar {
           logger.debug("Querying entries for url '{}' ({}).", url.id, url.name)
           Connector
             .sendRequest(ExtractorQuery.existingEntry(url.id).toRequest(apiUrl))
         }
-      _ <- (handleExistingEntry(
-        url.id,
-        rawEntryInformation,
-        maybeEntries.flatMap(_.headOption)
-      ) match {
-        case Some(effect) => effect
-        case None =>
-          logger.debug(
-            "No update necessary for url '{}' ({}).",
+      _ <- maybeRawEntryInformation match {
+        case Some(information) =>
+          (handleExistingEntry(
             url.id,
-            url.name
-          )
+            information,
+            maybeEntries.flatMap(_.headOption)
+          ) match {
+            case Some(effect) => effect
+            case None =>
+              logger.debug(
+                "No update necessary for url '{}' ({}).",
+                url.id,
+                url.name
+              )
+              IO.apply((): Unit)
+          }).zipPar(updateUrlView(url))
+        case None =>
           IO.apply((): Unit)
-      }).zipPar(updateUrlView(url))
+      }
     } yield ()
   }
 
