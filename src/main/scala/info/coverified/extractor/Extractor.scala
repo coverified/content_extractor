@@ -78,7 +78,7 @@ final case class Extractor private (
   def extract(): ZIO[Console with SttpClient, Throwable, Boolean] = {
     /* Getting hands on that ZIO stuff - flat mapping by for-comprehension */
     val newUrlChunkSize = math.max(chunkSize / 2, 1)
-    val existingUrlChunkSize = chunkSize - newUrlChunkSize
+    val existingUrlChunkSize = math.max(chunkSize - newUrlChunkSize, 1)
     logger.info(
       "Attempting to visit {} new and {} yet existing urls.",
       newUrlChunkSize,
@@ -93,7 +93,7 @@ final case class Extractor private (
       lastBatch <- IO.apply {
         val lastChunk = noOfNewUrls < newUrlChunkSize && noOfExistingUrls < existingUrlChunkSize
         logger.info(
-          "Handled {} new and {} yet existing urls.{} ",
+          "Handled {} new and {} yet existing urls. {}",
           noOfNewUrls,
           noOfExistingUrls,
           if (lastChunk) "This was the last chunk."
@@ -166,10 +166,10 @@ final case class Extractor private (
     Throwable,
     (Option[SimpleUrlView], Option[SimpleEntryView[SimpleUrlView]])
   ] = {
-    logger.debug("Handling not yet visited url '{}' ().", url.id, url.name)
+    logger.debug("Handling not yet visited url '{}' ({}).", url.id, url.name)
     updateUrlView(url).zipPar {
       IO.apply {
-          logger.debug("Scraping url '{}' ().", url.id, url.name)
+          logger.debug("Scraping url '{}' ({}).", url.id, url.name)
           CreateEntryInformation(scrape(url, hostNameToProfileConfig))
         }
         .flatMap(
@@ -325,7 +325,7 @@ final case class Extractor private (
           scrape(url, hostNameToProfileConfig)
         }
         .zipPar {
-          logger.debug("Querying entries for url '{}'.", urlId)
+          logger.debug("Querying entries for url '{}' ({}).", url.id, url.name)
           Connector
             .sendRequest(ExtractorQuery.existingEntry(url.id).toRequest(apiUrl))
         }
@@ -336,7 +336,11 @@ final case class Extractor private (
       ) match {
         case Some(effect) => effect
         case None =>
-          logger.debug("No update necessary for url {}.")
+          logger.debug(
+            "No update necessary for url '{}' ({}).",
+            url.id,
+            url.name
+          )
           IO.apply((): Unit)
       }).zipPar(updateUrlView(url))
     } yield ()

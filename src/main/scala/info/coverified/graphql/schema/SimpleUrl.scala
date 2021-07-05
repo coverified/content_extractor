@@ -6,7 +6,6 @@
 package info.coverified.graphql.schema
 
 import caliban.client.SelectionBuilder
-import info.coverified.graphql.ExtractorQuery
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Url
 import info.coverified.graphql.schema.SimpleSource.SimpleSourceView
 

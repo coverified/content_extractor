@@ -63,7 +63,8 @@ object ExtractorQuery {
             ),
             ""
           )
-        )
+        ),
+        lastCrawl_gt = Some(DUMMY_LAST_CRAWL_DATE_TIME)
       ),
       skip = 0,
       first = Some(first)
