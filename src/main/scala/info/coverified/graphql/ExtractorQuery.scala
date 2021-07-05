@@ -22,6 +22,29 @@ object ExtractorQuery {
 
   val DUMMY_LAST_CRAWL_DATE_TIME: String = "1970-01-01T00:00:00.000Z"
 
+  private val commonFileEndings = List(
+    /* Documents */
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".zip",
+    /* Images */
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".svg",
+    ".gif",
+    /* Audio / Video */
+    ".wav",
+    ".mp4",
+    ".mp3"
+  )
+
+  private def excludeCommonFiles: List[UrlWhereInput] =
+    commonFileEndings.map(
+      ending => UrlWhereInput(name_not_contains_i = Some(ending))
+    )
+
   /**
     * Query a specified amount of urls, that haven't been handled yet
     *
@@ -33,7 +56,8 @@ object ExtractorQuery {
   ): SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
     Query.allUrls(
       where = UrlWhereInput(
-        lastCrawl = Some(DUMMY_LAST_CRAWL_DATE_TIME)
+        lastCrawl = Some(DUMMY_LAST_CRAWL_DATE_TIME),
+        AND = Some(excludeCommonFiles)
       ),
       skip = 0,
       first = Some(first)
