@@ -260,15 +260,15 @@ final case class Extractor private (
       createEntryInformation: CreateEntryInformation
   ): URIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]] =
     createEntryInformation match {
-      case CreateEntryInformation(title, summary, content, date) =>
+      case cei @ CreateEntryInformation(title, summary, content, date) =>
         IO.apply(buildEntry(urlId, title, summary, content, date))
-          .flatMap { selectionBuild =>
-            storeMutation(selectionBuild)
+          .flatMap { selectionBuilder =>
+            storeMutation(selectionBuilder)
           }
           .fold(
             exception => {
               logger.error(
-                "Putting freshly generated entry to database failed.",
+                s"Putting freshly generated entry to database failed. Entry information: $cei",
                 exception
               )
               None
