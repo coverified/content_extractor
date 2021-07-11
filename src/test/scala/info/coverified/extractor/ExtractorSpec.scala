@@ -13,7 +13,11 @@ import com.github.tomakehurst.wiremock.matching.{EqualToPattern, RegexPattern}
 import info.coverified.extractor.analyzer.BrowserHelper
 import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.profile.ProfileConfig
+import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import info.coverified.test.scalatest.{GraphQlHelper, MockServerSpec}
+import sttp.client3.asynchttpclient.zio.SttpClient
+import zio.URIO
+import zio.console.Console
 
 import java.time.Duration
 import scala.jdk.CollectionConverters._
@@ -37,8 +41,15 @@ class ExtractorSpec
 
     "handling new urls" should {
       "send correct url query to GraphQL API" in {
+        val queryNewUrls =
+          PrivateMethod[URIO[Console with SttpClient, List[SimpleUrlView]]](
+            Symbol("queryNewUrls")
+          )
+
         val firstEntries = 250
-        evaluateWithHttpClientLayer(extractor.queryNewUrls(firstEntries))
+        evaluateWithHttpClientLayer(
+          extractor invokePrivate queryNewUrls(firstEntries)
+        )
 
         noException shouldBe thrownBy {
           mockServer.verify(
@@ -83,58 +94,21 @@ class ExtractorSpec
 
     "handling existing urls" should {
       "send correct url query to GraphQL API" in {
+        val queryExistingUrls =
+          PrivateMethod[URIO[Console with SttpClient, List[SimpleUrlView]]](
+            Symbol("queryExistingUrls")
+          )
+
         val firstEntries = 250
         val reAnalysisInterVal = Duration.ofHours(48L)
         evaluateWithHttpClientLayer(
-          extractor.queryExistingUrls(firstEntries, reAnalysisInterVal)
+          extractor invokePrivate queryExistingUrls(
+            firstEntries,
+            reAnalysisInterVal
+          )
         )
 
         noException shouldBe thrownBy {
-//          mockServer.findAll(postRequestedFor(urlEqualTo("/api/graphql"))
-//            .withHeader(
-//              "x-coverified-internal-auth",
-//              new EqualToPattern(internalSecret, false)
-//            )).asScala.headOption match {
-//            case Some(request) =>
-//              println(request.getBodyAsString)
-//              println(
-//                flatPrettifiedQuery(
-//                  s"""
-//                   |\\{
-//                   | "query":"query\\{
-//                   |     allUrls\\(
-//                   |       where:\\{
-//                   |         AND:\\[
-//                   |           \\{name_not_contains_i:\\".pdf\\"\\},
-//                   |           \\{name_not_contains_i:\\".doc\\"\\},
-//                   |           \\{name_not_contains_i:\\".docx\\"\\},
-//                   |           \\{name_not_contains_i:\\".ods\\"\\},
-//                   |           \\{name_not_contains_i:\\".zip\\"\\},
-//                   |           \\{name_not_contains_i:\\".png\\"\\},
-//                   |           \\{name_not_contains_i:\\".jpg\\"\\},
-//                   |           \\{name_not_contains_i:\\".jpeg\\"\\},
-//                   |           \\{name_not_contains_i:\\".svg\\"\\},
-//                   |           \\{name_not_contains_i:\\".gif\\"\\},
-//                   |           \\{name_not_contains_i:\\".wav\\"\\},
-//                   |           \\{name_not_contains_i:\\".mp4\\"\\},
-//                   |           \\{name_not_contains_i:\\".mp3\\"\\}
-//                   |           ],
-//                   |         lastCrawl_lte:\\"[\\w\\d.-:]+\\",
-//                   |         lastCrawl_gt:\\"1970-01-01T00:00:00\\.000Z\\"
-//                   |       \\},
-//                   |       orderBy:\\[\\],
-//                   |       first:$firstEntries,
-//                   |       skip:0\\)\\{id name source\\{id name acronym url\\}\\}
-//                   |   \\}",
-//                   | "variables":\\{\\}
-//                   |\\}
-//                   |""".stripMargin
-//                )
-//              )
-//            case None =>
-//              fail("Unable to get last post request from server")
-//          }
-
           mockServer.verify(
             postRequestedFor(urlEqualTo("/api/graphql"))
               .withHeader(

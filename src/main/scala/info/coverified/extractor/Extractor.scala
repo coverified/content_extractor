@@ -126,7 +126,7 @@ final case class Extractor private (
     * @param first  The amount of urls to query
     * @return An effect to get those urls
     */
-  def queryNewUrls(
+  private def queryNewUrls(
       first: Int
   ): URIO[Console with SttpClient, List[SimpleUrlView]] =
     queryUrls(ExtractorQuery.newUrls(first), exception => {
@@ -324,7 +324,7 @@ final case class Extractor private (
     * @param reAnalysisInterval The duration, a url should not be revisited
     * @return An effect to get those urls
     */
-  def queryExistingUrls(
+  private def queryExistingUrls(
       first: Int,
       reAnalysisInterval: Duration
   ): URIO[Console with SttpClient, List[SimpleUrlView]] = queryUrls(
