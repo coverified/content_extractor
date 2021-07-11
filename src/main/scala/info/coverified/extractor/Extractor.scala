@@ -13,6 +13,7 @@ import info.coverified.extractor.Extractor.{
   buildEntry,
   buildUrlUpdateMutation,
   getProfile4Url,
+  scrape,
   updateEntry
 }
 import info.coverified.extractor.analyzer.EntryInformation.{
@@ -264,49 +265,23 @@ final case class Extractor private (
     }
 
   /**
-    * Based on the received url view, try to find matching profile and acquire and view onto the entry, that it forms
-    * together
+    * Announce the derived view to API
     *
-    * @param urlView              View onto the url
-    * @param urlToProfileConfigs  Mapping from url to profile config to use
-    * @param browser              The browser to be used for content extraction
-    * @return A trial to get a written mutation
+    * @param mutation Mutation to denote the content
+    * @return The equivalent effect
     */
-  private def scrape(
-      urlView: SimpleUrlView,
-      urlToProfileConfigs: Map[String, ProfileConfig],
-      browser: Browser = JsoupBrowser()
-  ): Try[RawEntryInformation] =
-    urlView match {
-      case SimpleUrlView(_, Some(url), Some(sourceId)) =>
-        getProfile4Url(url, urlToProfileConfigs)
-          .flatMap(
-            getEntryInformation(url, sourceId, _, browser)
-          )
-      case _ =>
-        Failure(
-          ExtractionException(
-            s"Unable to extract information, as at least url or source are not known for url view '$urlView'."
-          )
-        )
-    }
-
-  /**
-    * Issue the analyser and try to mutate the given url together with the config into an entry
-    *
-    * @param url      Queried url
-    * @param urlId    The id of the url
-    * @param cfg      [[ProfileConfig]] to use
-    * @param browser  The browser to be used for content extraction
-    * @return A trial to get information for the page
-    */
-  private def getEntryInformation(
-      url: String,
-      urlId: String,
-      cfg: ProfileConfig,
-      browser: Browser = JsoupBrowser()
-  ): Try[RawEntryInformation] =
-    Analyzer.run(url, urlId, cfg, browser)
+  private def storeMutation(
+      mutation: SelectionBuilder[RootMutation, Option[
+        SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+      ]]
+  ): RIO[Console with SttpClient, Option[
+    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+  ]] =
+    Connector.sendRequest(
+      mutation
+        .toRequest(apiUrl)
+        .header("x-coverified-internal-auth", authSecret)
+    )
 
   /**
     * FIXME: Test
@@ -349,8 +324,8 @@ final case class Extractor private (
   ): ZIO[Console with SttpClient, Throwable, Unit] = {
     logger.debug("Handling url '{}' ({}).", url.id, url.name)
     for {
-      (maybeRawEntryInformation, maybeEntries) <- ZIO
-        .fromTry {
+      (tryRawEntryInformation, maybeEntries) <- IO
+        .apply {
           logger.debug(
             "Scraping already visited url '{}' ({}).",
             url.id,
@@ -360,20 +335,21 @@ final case class Extractor private (
         }
         .fold(exception => {
           logger.error(
-            "Scraping website for yet visited url '{}' ({}) failed.",
+            "Unhandled exception while trying to scrape url '{}' ({}).",
             url.id,
             url.name,
             exception
           )
-          None
-        }, success => Some(success))
+          Failure(exception)
+        }, identity)
         .zipPar {
           logger.debug("Querying entries for url '{}' ({}).", url.id, url.name)
           Connector
             .sendRequest(ExtractorQuery.existingEntry(url.id).toRequest(apiUrl))
         }
-      _ <- maybeRawEntryInformation match {
-        case Some(information) =>
+      _ <- tryRawEntryInformation match {
+        case Success(information) =>
+          /* Scraping webpage was successful. Check if an entry needs to be generated or updated */
           (handleExistingEntry(
             url.id,
             information,
@@ -388,11 +364,46 @@ final case class Extractor private (
               )
               IO.apply((): Unit)
           }).zipPar(updateUrlView(url))
-        case None =>
-          IO.apply((): Unit)
+        case Failure(exception) =>
+          logger.warn(
+            s"Getting content of url ${url.id} (${url.name}) failed due to the following reason. Delete entry, if there is any, yet.",
+            exception
+          )
+          (maybeEntries
+            .flatMap(_.headOption)
+            .map(entry => deleteEntry(entry.id)) match {
+            case Some(effect) => effect
+            case None =>
+              logger.debug(
+                "No update necessary for url '{}' ({}).",
+                url.id,
+                url.name
+              )
+              IO.apply((): Unit)
+          }).zipPar(updateUrlView(url))
       }
     } yield ()
   }
+
+  /**
+    * Sends a delete request for the entry with given id
+    *
+    * FIXME:
+    *  - Test
+    *  - Private
+    *
+    * @param id Identifier of the entry to delete
+    * @return The equivalent effect
+    */
+  def deleteEntry(
+      id: String
+  ): RIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]] =
+    Connector.sendRequest(
+      Mutation
+        .deleteEntry(id)(SimpleEntry.view(SimpleUrl.view))
+        .toRequest(apiUrl)
+        .header("x-coverified-internal-auth", authSecret)
+    )
 
   /**
     * FIXME: Test
@@ -490,25 +501,6 @@ final case class Extractor private (
         }
       case None => Right(CreateEntryInformation(rawInformation))
     }
-
-  /**
-    * Announce the derived view to API
-    *
-    * @param mutation Mutation to denote the content
-    * @return The equivalent effect
-    */
-  private def storeMutation(
-      mutation: SelectionBuilder[RootMutation, Option[
-        SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
-      ]]
-  ): RIO[Console with SttpClient, Option[
-    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
-  ]] =
-    Connector.sendRequest(
-      mutation
-        .toRequest(apiUrl)
-        .header("x-coverified-internal-auth", authSecret)
-    )
 }
 
 object Extractor extends LazyLogging {
@@ -572,6 +564,51 @@ object Extractor extends LazyLogging {
       .fold[Try[ProfileConfig]] {
         Failure(ConfigException(s"Unable to get config for url '$url'."))
       } { case (_, config) => Success(config) }
+
+  /**
+    * Based on the received url view, try to find matching profile and acquire and view onto the entry, that it forms
+    * together
+    *
+    * @param urlView              View onto the url
+    * @param urlToProfileConfigs  Mapping from url to profile config to use
+    * @param browser              The browser to be used for content extraction
+    * @return A trial to get a written mutation
+    */
+  def scrape(
+      urlView: SimpleUrlView,
+      urlToProfileConfigs: Map[String, ProfileConfig],
+      browser: Browser = JsoupBrowser()
+  ): Try[RawEntryInformation] =
+    urlView match {
+      case SimpleUrlView(_, Some(url), Some(sourceId)) =>
+        getProfile4Url(url, urlToProfileConfigs)
+          .flatMap(
+            getEntryInformation(url, sourceId, _, browser)
+          )
+      case _ =>
+        Failure(
+          ExtractionException(
+            s"Unable to extract information, as at least url or source are not known for url view '$urlView'."
+          )
+        )
+    }
+
+  /**
+    * Issue the analyser and try to mutate the given url together with the config into an entry
+    *
+    * @param url      Queried url
+    * @param urlId    The id of the url
+    * @param cfg      [[ProfileConfig]] to use
+    * @param browser  The browser to be used for content extraction
+    * @return A trial to get information for the page
+    */
+  private def getEntryInformation(
+      url: String,
+      urlId: String,
+      cfg: ProfileConfig,
+      browser: Browser = JsoupBrowser()
+  ): Try[RawEntryInformation] =
+    Analyzer.run(url, urlId, cfg, browser)
 
   /**
     * Build entry for extracted page information based on the different page types available.
