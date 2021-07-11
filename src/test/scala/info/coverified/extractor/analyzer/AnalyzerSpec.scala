@@ -5,6 +5,7 @@
 
 package info.coverified.extractor.analyzer
 
+import info.coverified.extractor.analyzer.BrowserHelper.RichDocument
 import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.exceptions.AnalysisException
@@ -16,6 +17,7 @@ import info.coverified.extractor.profile.ProfileConfig.PageType.{
 import info.coverified.extractor.profile.ProfileConfig.Profile
 import info.coverified.test.scalatest.MockBrowser.DislikeThatUrlException
 import info.coverified.test.scalatest.{MockBrowser, ZioSpec}
+import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.Inside.inside
 
@@ -56,7 +58,7 @@ class AnalyzerSpec
             .copy(selector = Some("this won't work"))
         )
         Analyzer invokePrivate selectorMatches(
-          validUrlPageDoc,
+          validUrlPageDoc.toScraperDoc,
           pageTypeWithoutSelectors
         ) shouldBe false
       }
@@ -67,7 +69,7 @@ class AnalyzerSpec
             .copy(selector = Some("title"))
         )
         Analyzer invokePrivate selectorMatches(
-          validUrlPageDoc,
+          validUrlPageDoc.toScraperDoc,
           pageTypeWithoutSelectors
         ) shouldBe true
       }
@@ -78,7 +80,7 @@ class AnalyzerSpec
             .copy(selector = None)
         )
         Analyzer invokePrivate selectorMatches(
-          validUrlPageDoc,
+          validUrlPageDoc.toScraperDoc,
           pageTypeWithoutSelectors
         ) shouldBe true
       }
@@ -142,7 +144,7 @@ class AnalyzerSpec
 
           Analyzer invokePrivate getSelectors(
             coverifiedUrl + "/impressum/subpage",
-            validUrlPageDoc,
+            validUrlPageDoc.toScraperDoc,
             profileConfig
           ) match {
             case Failure(exception: AnalysisException) =>
@@ -175,7 +177,7 @@ class AnalyzerSpec
 
           Analyzer invokePrivate getSelectors(
             coverifiedUrl + "/impressum/subpage",
-            validUrlPageDoc,
+            validUrlPageDoc.toScraperDoc,
             profileConfig
           ) match {
             case Success(selectors) =>
@@ -196,7 +198,7 @@ class AnalyzerSpec
       "extract information correctly from url page" in {
         inside(
           Analyzer invokePrivate extractInformation(
-            validUrlPageDoc,
+            validUrlPageDoc.toScraperDoc,
             validPageType.selectors
           )
         ) {
@@ -216,7 +218,7 @@ class AnalyzerSpec
       "extract information correctly from url page, if optional entries are not apparent" in {
         inside(
           Analyzer invokePrivate extractInformation(
-            validUrlPageDocWithoutOptionalInformation,
+            validUrlPageDocWithoutOptionalInformation.toScraperDoc,
             validPageType.selectors
           )
         ) {
@@ -255,7 +257,7 @@ class AnalyzerSpec
         Analyzer invokePrivate analyze(
           coverifiedUrl + "/impressum/subpage",
           coverifiedUrlId,
-          validUrlPageDoc,
+          validUrlPageDoc.toScraperDoc,
           profileConfig
         ) match {
           case Failure(exception: AnalysisException) =>
@@ -284,7 +286,7 @@ class AnalyzerSpec
         Analyzer invokePrivate analyze(
           url,
           urlId,
-          validUrlPageDoc,
+          validUrlPageDoc.toScraperDoc,
           profileConfig
         ) match {
           case Success(_) => succeed
@@ -297,6 +299,8 @@ class AnalyzerSpec
     "running the analysis" should {
       val validUrl = coverifiedUrl
       val mockBrowser = new MockBrowser(Map(validUrl -> validUrlPageDoc))
+      val queryUrl: String => Try[JsoupDocument] =
+        (url: String) => Try(mockBrowser.get(url)).map(JsoupDocument)
 
       "return Failure, when browser fails" in {
         val profileConfig = getConfig(MockBrowser.dislikedUrl)
@@ -304,7 +308,7 @@ class AnalyzerSpec
           MockBrowser.dislikedUrl,
           coverifiedUrlId,
           profileConfig,
-          mockBrowser
+          queryUrl
         ) match {
           case Failure(exception: DislikeThatUrlException) =>
             exception.msg shouldBe "I don't like that url."
@@ -315,7 +319,7 @@ class AnalyzerSpec
       }
 
       "return something, if browser does not fail and analysis does not fail" in {
-        Analyzer.run(validUrl, "coverified", getConfig(validUrl), mockBrowser) match {
+        Analyzer.run(validUrl, "coverified", getConfig(validUrl), queryUrl) match {
           case Success(_) => succeed
           case Failure(exception) =>
             fail("Browser did not fail, but analysis failed.", exception)

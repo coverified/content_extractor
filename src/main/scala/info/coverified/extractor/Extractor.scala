@@ -571,19 +571,17 @@ object Extractor extends LazyLogging {
     *
     * @param urlView              View onto the url
     * @param urlToProfileConfigs  Mapping from url to profile config to use
-    * @param browser              The browser to be used for content extraction
     * @return A trial to get a written mutation
     */
   def scrape(
       urlView: SimpleUrlView,
-      urlToProfileConfigs: Map[String, ProfileConfig],
-      browser: Browser = JsoupBrowser()
+      urlToProfileConfigs: Map[String, ProfileConfig]
   ): Try[RawEntryInformation] =
     urlView match {
       case SimpleUrlView(_, Some(url), Some(sourceId)) =>
         getProfile4Url(url, urlToProfileConfigs)
           .flatMap(
-            getEntryInformation(url, sourceId, _, browser)
+            getEntryInformation(url, sourceId, _)
           )
       case _ =>
         Failure(
@@ -599,16 +597,14 @@ object Extractor extends LazyLogging {
     * @param url      Queried url
     * @param urlId    The id of the url
     * @param cfg      [[ProfileConfig]] to use
-    * @param browser  The browser to be used for content extraction
     * @return A trial to get information for the page
     */
   private def getEntryInformation(
       url: String,
       urlId: String,
-      cfg: ProfileConfig,
-      browser: Browser = JsoupBrowser()
+      cfg: ProfileConfig
   ): Try[RawEntryInformation] =
-    Analyzer.run(url, urlId, cfg, browser)
+    Analyzer.run(url, urlId, cfg)
 
   /**
     * Build entry for extracted page information based on the different page types available.

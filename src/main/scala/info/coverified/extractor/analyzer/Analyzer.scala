@@ -15,7 +15,10 @@ import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig.PageType
+import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
+import org.jsoup.{Connection, Jsoup}
 
+import java.time.Duration
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -27,13 +30,35 @@ import scala.util.{Failure, Success, Try}
   */
 object Analyzer extends LazyLogging {
 
+  private val USER_AGENT: String = "CoVerifiedBot-Extractor"
+  private val BROWSE_TIME_OUT: Duration = Duration.ofMillis(5000L)
+
   def run(
       url: String,
       urlId: String,
       cfg: ProfileConfig,
-      browser: Browser = JsoupBrowser()
+      queryUrl: String => Try[JsoupDocument] = u => Analyzer.queryUrl(u)
   ): Try[RawEntryInformation] =
-    Try(browser.get(url)).flatMap(analyze(url, urlId, _, cfg))
+    queryUrl(url).flatMap(analyze(url, urlId, _, cfg))
+
+  /**
+    * Get the content of the web page to be reached with the current url
+    *
+    * @param url  Url location of the web page
+    * @return The content, that can be scraped later
+    */
+  def queryUrl(url: String): Try[JsoupDocument] = Try {
+    JsoupDocument(
+      Jsoup
+        .connect(url)
+        .ignoreContentType(false)
+        .userAgent(USER_AGENT)
+        .timeout(BROWSE_TIME_OUT.toMillis.toInt)
+        .followRedirects(false)
+        .execute()
+        .parse()
+    )
+  }
 
   /**
     * Analyze the given page document and extract information

@@ -5,17 +5,16 @@
 
 package info.coverified.extractor.analyzer
 
-import net.ruippeixotog.scalascraper.browser.JsoupBrowser
-import net.ruippeixotog.scalascraper.model.Document
+import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 
 trait BrowserHelper {
   val coverifiedUrl = "https://www.coverified.info"
   val coverifiedUrlId = "1"
 
-  val validUrlPageDoc: Document = JsoupBrowser
-    .apply()
-    .parseString(
-      """
+  val validUrlPageDoc: Document = Jsoup.parse(
+    """
       |<!DOCTYPE html>
       |
       |<head>
@@ -36,12 +35,10 @@ trait BrowserHelper {
       |    </p>
       |</body>
       |""".stripMargin
-    )
+  )
 
-  val validUrlPageDocWithoutOptionalInformation: Document = JsoupBrowser
-    .apply()
-    .parseString(
-      """
+  val validUrlPageDocWithoutOptionalInformation: Document = Jsoup.parse(
+    """
       |<!DOCTYPE html>
       |
       |<head>
@@ -52,12 +49,10 @@ trait BrowserHelper {
       |    <h1>This is an url page with all information available</h1>
       |</body>
       |""".stripMargin
-    )
+  )
 
-  val validVideoPageDoc: Document = JsoupBrowser
-    .apply()
-    .parseString(
-      """
+  val validVideoPageDoc: Document = Jsoup.parse(
+    """
         |<!DOCTYPE html>
         |
         |<head>
@@ -80,12 +75,10 @@ trait BrowserHelper {
         |    </p>
         |</body>
         |""".stripMargin
-    )
+  )
 
-  val validVideoPageDocWithoutOptionalInformation: Document = JsoupBrowser
-    .apply()
-    .parseString(
-      """
+  val validVideoPageDocWithoutOptionalInformation: Document = Jsoup.parse(
+    """
       |<!DOCTYPE html>
       |
       |<head>
@@ -96,5 +89,11 @@ trait BrowserHelper {
       |    <h1>This is an url page with all information available</h1>
       |</body>
       |""".stripMargin
-    )
+  )
+}
+
+object BrowserHelper {
+  implicit class RichDocument(doc: Document) {
+    def toScraperDoc: JsoupDocument = JsoupDocument(doc)
+  }
 }
