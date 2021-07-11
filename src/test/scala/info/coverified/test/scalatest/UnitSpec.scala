@@ -5,6 +5,7 @@
 
 package info.coverified.test.scalatest
 
+import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.PrivateMethodTester
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -18,3 +19,4 @@ trait UnitSpec
     with AnyWordSpecLike
     with PrivateMethodTester
     with TableDrivenPropertyChecks
+    with LazyLogging

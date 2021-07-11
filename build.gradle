@@ -83,4 +83,7 @@ dependencies {
 	testImplementation 'com.vladsch.flexmark:flexmark-all:0.35.10'
 	implementation 'org.mockito:mockito-core:3.10.0'
 	implementation "org.mockito:mockito-scala-scalatest_$scalaVersion:1.16.37"
+
+	/* Testing web based APIs */
+	testImplementation "com.github.tomakehurst:wiremock-jre8:2.29.0"
 }

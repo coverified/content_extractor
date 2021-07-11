@@ -5,18 +5,184 @@
 
 package info.coverified.extractor
 
-import com.typesafe.scalalogging.LazyLogging
+import com.github.tomakehurst.wiremock.client.WireMock.{
+  postRequestedFor,
+  urlEqualTo
+}
+import com.github.tomakehurst.wiremock.matching.{EqualToPattern, RegexPattern}
 import info.coverified.extractor.analyzer.BrowserHelper
 import info.coverified.extractor.config.ProfileConfigHelper
-import info.coverified.test.scalatest.ZioSpec
-import org.scalatest.prop.TableDrivenPropertyChecks
+import info.coverified.extractor.profile.ProfileConfig
+import info.coverified.test.scalatest.{GraphQlHelper, MockServerSpec}
+
+import java.time.Duration
+import scala.jdk.CollectionConverters._
 
 class ExtractorSpec
-    extends ZioSpec
+    extends MockServerSpec
     with ProfileConfigHelper
-    with BrowserHelper
-    with TableDrivenPropertyChecks
-    with LazyLogging {
+    with GraphQlHelper
+    with BrowserHelper {
+  "Given an extractor" when {
+    /* Before all hook doesn't trigger here, but I'd like to reuse the instance of extractor */
+    mockServer.start()
+    val internalSecret = "dummy_secret"
+    val extractor = Extractor(
+      apiUri,
+      Map.empty[String, ProfileConfig],
+      Duration.ofHours(48L),
+      internalSecret,
+      500
+    )
+
+    "handling new urls" should {
+      "send correct url query to GraphQL API" in {
+        val firstEntries = 250
+        evaluateWithHttpClientLayer(extractor.queryNewUrls(firstEntries))
+
+        noException shouldBe thrownBy {
+          mockServer.verify(
+            postRequestedFor(urlEqualTo("/api/graphql"))
+              .withHeader(
+                "x-coverified-internal-auth",
+                new EqualToPattern(internalSecret, false)
+              )
+              .withRequestBody(new EqualToPattern(flatPrettifiedQuery(s"""
+                |{
+                | "query":"query{
+                |     allUrls(
+                |       where:{
+                |         AND:[
+                |           {name_not_contains_i:\\".pdf\\"},
+                |           {name_not_contains_i:\\".doc\\"},
+                |           {name_not_contains_i:\\".docx\\"},
+                |           {name_not_contains_i:\\".ods\\"},
+                |           {name_not_contains_i:\\".zip\\"},
+                |           {name_not_contains_i:\\".png\\"},
+                |           {name_not_contains_i:\\".jpg\\"},
+                |           {name_not_contains_i:\\".jpeg\\"},
+                |           {name_not_contains_i:\\".svg\\"},
+                |           {name_not_contains_i:\\".gif\\"},
+                |           {name_not_contains_i:\\".wav\\"},
+                |           {name_not_contains_i:\\".mp4\\"},
+                |           {name_not_contains_i:\\".mp3\\"}
+                |           ],
+                |         lastCrawl:\\"1970-01-01T00:00:00.000Z\\"
+                |       },
+                |       orderBy:[],
+                |       first:$firstEntries,
+                |       skip:0){id name source{id name acronym url}}
+                |   }",
+                | "variables":{}
+                |}
+                |""".stripMargin)))
+          )
+        }
+      }
+    }
+
+    "handling existing urls" should {
+      "send correct url query to GraphQL API" in {
+        val firstEntries = 250
+        val reAnalysisInterVal = Duration.ofHours(48L)
+        evaluateWithHttpClientLayer(
+          extractor.queryExistingUrls(firstEntries, reAnalysisInterVal)
+        )
+
+        noException shouldBe thrownBy {
+//          mockServer.findAll(postRequestedFor(urlEqualTo("/api/graphql"))
+//            .withHeader(
+//              "x-coverified-internal-auth",
+//              new EqualToPattern(internalSecret, false)
+//            )).asScala.headOption match {
+//            case Some(request) =>
+//              println(request.getBodyAsString)
+//              println(
+//                flatPrettifiedQuery(
+//                  s"""
+//                   |\\{
+//                   | "query":"query\\{
+//                   |     allUrls\\(
+//                   |       where:\\{
+//                   |         AND:\\[
+//                   |           \\{name_not_contains_i:\\".pdf\\"\\},
+//                   |           \\{name_not_contains_i:\\".doc\\"\\},
+//                   |           \\{name_not_contains_i:\\".docx\\"\\},
+//                   |           \\{name_not_contains_i:\\".ods\\"\\},
+//                   |           \\{name_not_contains_i:\\".zip\\"\\},
+//                   |           \\{name_not_contains_i:\\".png\\"\\},
+//                   |           \\{name_not_contains_i:\\".jpg\\"\\},
+//                   |           \\{name_not_contains_i:\\".jpeg\\"\\},
+//                   |           \\{name_not_contains_i:\\".svg\\"\\},
+//                   |           \\{name_not_contains_i:\\".gif\\"\\},
+//                   |           \\{name_not_contains_i:\\".wav\\"\\},
+//                   |           \\{name_not_contains_i:\\".mp4\\"\\},
+//                   |           \\{name_not_contains_i:\\".mp3\\"\\}
+//                   |           ],
+//                   |         lastCrawl_lte:\\"[\\w\\d.-:]+\\",
+//                   |         lastCrawl_gt:\\"1970-01-01T00:00:00\\.000Z\\"
+//                   |       \\},
+//                   |       orderBy:\\[\\],
+//                   |       first:$firstEntries,
+//                   |       skip:0\\)\\{id name source\\{id name acronym url\\}\\}
+//                   |   \\}",
+//                   | "variables":\\{\\}
+//                   |\\}
+//                   |""".stripMargin
+//                )
+//              )
+//            case None =>
+//              fail("Unable to get last post request from server")
+//          }
+
+          mockServer.verify(
+            postRequestedFor(urlEqualTo("/api/graphql"))
+              .withHeader(
+                "x-coverified-internal-auth",
+                new EqualToPattern(internalSecret, false)
+              )
+              .withRequestBody(
+                new RegexPattern(
+                  flatPrettifiedQuery(
+                    s"""
+                     |\\{
+                     | "query":"query\\{
+                     |     allUrls\\(
+                     |       where:\\{
+                     |         AND:\\[
+                     |           \\{name_not_contains_i:\\\\"\\.pdf\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.doc\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.docx\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.ods\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.zip\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.png\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.jpg\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.jpeg\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.svg\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.gif\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.wav\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.mp4\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.mp3\\\\"\\}
+                     |           ],
+                     |         lastCrawl_lte:\\\\"[\\w\\d.\\-:]+\\\\",
+                     |         lastCrawl_gt:\\\\"1970-01-01T00:00:00\\.000Z\\\\"
+                     |       \\},
+                     |       orderBy:\\[\\],
+                     |       first:$firstEntries,
+                     |       skip:0\\)\\{id name source\\{id name acronym url\\}\\}
+                     |   \\}",
+                     | "variables":\\{\\}
+                     |\\}
+                     |""".stripMargin
+                  )
+                )
+              )
+          )
+        }
+      }
+    }
+  }
+
 //  "Given an extractor" when {
 //    val extractor = Extractor(
 //      Config(

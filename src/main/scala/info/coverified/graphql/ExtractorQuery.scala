@@ -89,7 +89,8 @@ object ExtractorQuery {
             ""
           )
         ),
-        lastCrawl_gt = Some(DUMMY_LAST_CRAWL_DATE_TIME)
+        lastCrawl_gt = Some(DUMMY_LAST_CRAWL_DATE_TIME),
+        AND = Some(excludeCommonFiles)
       ),
       skip = 0,
       first = Some(first)

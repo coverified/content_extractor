@@ -12,7 +12,6 @@ import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.Extractor.{
   buildEntry,
   buildUrlUpdateMutation,
-  getProfile4Url,
   scrape,
   updateEntry
 }
@@ -41,7 +40,6 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
 }
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.{SimpleUrlView, urlId}
-import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import sttp.client3.asynchttpclient.zio.SttpClient
 import sttp.model.Uri
 import zio.{IO, RIO, URIO, ZIO}
@@ -116,14 +114,25 @@ final case class Extractor private (
   ): ZIO[Console with SttpClient, Throwable, Int] = {
     logger.info("Attempting to handle new urls.")
     for {
-      newUrls <- queryUrls(ExtractorQuery.newUrls(first), exception => {
-        logger.error("Requesting not yet handled urls failed.", exception)
-        List.empty[SimpleUrlView]
-      })
+      newUrls <- queryNewUrls(first)
       _ <- ZIO.collectAllPar(newUrls.map(handleNewUrl))
       noOfReceivedUrls <- IO.apply(newUrls.size)
     } yield noOfReceivedUrls
   }
+
+  /**
+    * Query all urls, that have not been visited yet at all.
+    *
+    * @param first  The amount of urls to query
+    * @return An effect to get those urls
+    */
+  def queryNewUrls(
+      first: Int
+  ): URIO[Console with SttpClient, List[SimpleUrlView]] =
+    queryUrls(ExtractorQuery.newUrls(first), exception => {
+      logger.error("Requesting not yet handled urls failed.", exception)
+      List.empty[SimpleUrlView]
+    })
 
   /**
     * Query all urls with specified selection builder
@@ -142,7 +151,11 @@ final case class Extractor private (
       errorHandling: Throwable => List[SimpleUrlView]
   ): URIO[Console with SttpClient, List[SimpleUrlView]] = {
     Connector
-      .sendRequest(selectionBuilder.toRequest(apiUrl))
+      .sendRequest(
+        selectionBuilder
+          .toRequest(apiUrl)
+          .header("x-coverified-internal-auth", authSecret)
+      )
       .fold(
         errorHandling, {
           case Some(urlViews) => urlViews
@@ -294,13 +307,7 @@ final case class Extractor private (
   ): ZIO[Console with SttpClient, Throwable, Int] = {
     logger.info("Attempt to handle yet existing urls.")
     for {
-      existingUrls <- queryUrls(
-        ExtractorQuery.existingUrls(first, reAnalysisInterval),
-        exception => {
-          logger.error("Requesting existent urls failed.", exception)
-          List.empty[SimpleUrlView]
-        }
-      )
+      existingUrls <- queryExistingUrls(first, reAnalysisInterval)
       _ <- ZIO.collectAllPar(
         existingUrls.map(
           existingUrl => handleExistingUrl(existingUrl, hostNameToProfileConfig)
@@ -309,6 +316,24 @@ final case class Extractor private (
       noOfReceivedUrls <- IO.apply(existingUrls.size)
     } yield noOfReceivedUrls
   }
+
+  /**
+    * Query all existing urls, that haven't been visited for a while
+    *
+    * @param first              The amount of urls to get
+    * @param reAnalysisInterval The duration, a url should not be revisited
+    * @return An effect to get those urls
+    */
+  def queryExistingUrls(
+      first: Int,
+      reAnalysisInterval: Duration
+  ): URIO[Console with SttpClient, List[SimpleUrlView]] = queryUrls(
+    ExtractorQuery.existingUrls(first, reAnalysisInterval),
+    exception => {
+      logger.error("Requesting existent urls failed.", exception)
+      List.empty[SimpleUrlView]
+    }
+  )
 
   /**
     * FIXME: Test
