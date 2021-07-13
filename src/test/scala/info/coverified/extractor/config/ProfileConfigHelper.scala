@@ -53,7 +53,7 @@ trait ProfileConfigHelper {
          |    }
          |    selectors {
          |        content = "e"
-         |        title = "f"
+         |        title = "h1"
          |        subtitle = "g"
          |        summary = "h"
          |        date = "i"

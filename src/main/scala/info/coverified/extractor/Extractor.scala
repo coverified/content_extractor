@@ -429,7 +429,7 @@ final case class Extractor private (
           }).zipPar(updateUrlView(url))
         case Failure(exception) =>
           exception match {
-            case _: HttpStatusException | SocketTimeoutException =>
+            case _: HttpStatusException | _: SocketTimeoutException =>
               logger.debug(
                 "Received failure case for a failure, that has already been logged. Attempt to delete possible existing entry."
               )
@@ -556,7 +556,7 @@ final case class Extractor private (
       case Some(
           SimpleEntryView(
             id,
-            existingTitle,
+            maybeExistingTitle,
             existingContent,
             existingSummary,
             _,
@@ -570,9 +570,11 @@ final case class Extractor private (
               scrapedContent,
               scrapedDate
               ) =>
+            /* Check, if at least one of the different parts of the entry has changed */
             Left(
               Option.when(
-                existingTitle != scrapedTitle || existingSummary != scrapedSummary || existingContent != scrapedContent || existingDate != scrapedDate
+                !maybeExistingTitle
+                  .contains(scrapedTitle) || existingSummary != scrapedSummary || existingContent != scrapedContent || existingDate != scrapedDate
               )(
                 UpdateEntryInformation(
                   id,
@@ -703,7 +705,7 @@ object Extractor extends LazyLogging {
     */
   private def buildEntry(
       urlId: String,
-      title: Option[String],
+      title: String,
       summary: Option[String],
       content: Option[String],
       date: Option[String]
@@ -713,7 +715,7 @@ object Extractor extends LazyLogging {
     Mutation.createEntry(
       Some(
         EntryCreateInput(
-          name = title,
+          name = Some(title),
           content = content,
           summary = summary,
           date = date,
@@ -740,7 +742,7 @@ object Extractor extends LazyLogging {
     */
   def updateEntry(
       entryId: String,
-      title: Option[String],
+      title: String,
       summary: Option[String],
       content: Option[String],
       date: Option[String]
@@ -751,7 +753,7 @@ object Extractor extends LazyLogging {
       entryId,
       Some(
         EntryUpdateInput(
-          name = title,
+          name = Some(title),
           summary = summary,
           content = content,
           hasBeenTagged = Some(false),

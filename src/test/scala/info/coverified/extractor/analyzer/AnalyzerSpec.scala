@@ -194,7 +194,31 @@ class AnalyzerSpec
 
     "building the entries with extracted information" should {
       val extractInformation =
-        PrivateMethod[RawEntryInformation](Symbol("extractInformation"))
+        PrivateMethod[Try[RawEntryInformation]](Symbol("extractInformation"))
+
+      "throw an AnalysisException, if the mandatory title cannot be extracted" in {
+        inside(
+          Analyzer invokePrivate extractInformation(
+            validUrlPageDoc.toScraperDoc,
+            validPageType.selectors
+          )
+        ) {
+          case Failure(analysisException: AnalysisException) =>
+            analysisException.msg shouldBe "Unable to extract mandatory title from web page!"
+            analysisException.cause
+              .isInstanceOf[NoSuchElementException] shouldBe true
+          case Failure(exception) =>
+            fail(
+              "Scraping web page without title failed with wrong exception!",
+              exception
+            )
+          case Success(rei) =>
+            fail(
+              s"Extracting content from a web page without title was meant to fail, but succeeded with following information: '$rei'"
+            )
+        }
+      }
+
       "extract information correctly from url page" in {
         inside(
           Analyzer invokePrivate extractInformation(
@@ -202,13 +226,15 @@ class AnalyzerSpec
             validPageType.selectors
           )
         ) {
-          case RawEntryInformation(
-              title,
-              summary,
-              content,
-              date
+          case Success(
+              RawEntryInformation(
+                title,
+                summary,
+                content,
+                date
+              )
               ) =>
-            title shouldBe Some("Url page with all information available")
+            title shouldBe "Url page with all information available"
             summary.getOrElse(fail("Expected to get a summary.")) shouldBe "This is a summary"
             content shouldBe Some("And with all the content.")
             date shouldBe Some("2021-06-03T13:37:00Z")
@@ -222,13 +248,15 @@ class AnalyzerSpec
             validPageType.selectors
           )
         ) {
-          case RawEntryInformation(
-              title,
-              summary,
-              content,
-              date
+          case Success(
+              RawEntryInformation(
+                title,
+                summary,
+                content,
+                date
+              )
               ) =>
-            title shouldBe Some("Url page with all information available")
+            title shouldBe "Url page with all information available"
             summary shouldBe None
             content shouldBe None
             date shouldBe None

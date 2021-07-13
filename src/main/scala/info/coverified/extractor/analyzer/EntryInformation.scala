@@ -9,7 +9,7 @@ package info.coverified.extractor.analyzer
   * All information that are needed in order to build an [[info.coverified.graphql.schema.CoVerifiedClientSchema.Entry]]
   */
 sealed trait EntryInformation {
-  protected val title: Option[String]
+  protected val title: String
   protected val summary: Option[String]
   protected val content: Option[String]
   protected val date: Option[String]
@@ -26,7 +26,7 @@ object EntryInformation {
     * @param date     Date of the article
     */
   final case class RawEntryInformation(
-      override val title: Option[String],
+      override val title: String,
       override val summary: Option[String],
       override val content: Option[String],
       override val date: Option[String]
@@ -43,7 +43,7 @@ object EntryInformation {
     */
   final case class UpdateEntryInformation(
       id: String,
-      override val title: Option[String],
+      override val title: String,
       override val summary: Option[String],
       override val content: Option[String],
       override val date: Option[String]
@@ -69,7 +69,7 @@ object EntryInformation {
     * @param date     Date of the article
     */
   final case class CreateEntryInformation(
-      override protected val title: Option[String],
+      override protected val title: String,
       override protected val summary: Option[String],
       override protected val content: Option[String],
       override protected val date: Option[String]

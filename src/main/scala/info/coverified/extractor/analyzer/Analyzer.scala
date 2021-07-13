@@ -43,7 +43,7 @@ object Analyzer extends LazyLogging {
   /**
     * Get the content of the web page to be reached with the current url
     *
-    * @param url  Url location of the web page
+    * @param url Url location of the web page
     * @return The content, that can be scraped later
     */
   def queryUrl(url: String): Try[JsoupDocument] = Try {
@@ -62,10 +62,10 @@ object Analyzer extends LazyLogging {
   /**
     * Analyze the given page document and extract information
     *
-    * @param url            Url of page
-    * @param urlId          Identifier of the url entry in data base
-    * @param pageDoc        Page document
-    * @param profileConfig  Applicable profile config for this page
+    * @param url           Url of page
+    * @param urlId         Identifier of the url entry in data base
+    * @param pageDoc       Page document
+    * @param profileConfig Applicable profile config for this page
     * @return A trial onto the needed information
     */
   private def analyze(
@@ -74,16 +74,16 @@ object Analyzer extends LazyLogging {
       pageDoc: Document,
       profileConfig: ProfileConfig
   ): Try[RawEntryInformation] =
-    getSelectors(url, pageDoc, profileConfig).map(
+    getSelectors(url, pageDoc, profileConfig).flatMap(
       extractInformation(pageDoc, _)
     )
 
   /**
     * Determine the page type (in terms of it's "name") as well as the associated selectors for this type of document
     *
-    * @param url            Url of page
-    * @param pageDoc        Page document
-    * @param profileConfig  Applicable profile configuration
+    * @param url           Url of page
+    * @param pageDoc       Page document
+    * @param profileConfig Applicable profile configuration
     * @return Option onto a tuple of page type and associated selectors
     */
   private def getSelectors(
@@ -137,18 +137,30 @@ object Analyzer extends LazyLogging {
   /**
     * Extract the needed information from the page
     *
-    * @param pageDoc    Page document
-    * @param selectors  Selectors to use
+    * @param pageDoc   Page document
+    * @param selectors Selectors to use
     * @return Needed information
     */
   private def extractInformation(
       pageDoc: Document,
       selectors: Selectors
-  ): RawEntryInformation =
-    RawEntryInformation(
-      pageDoc >?> text(selectors.title),
-      selectors.summary.flatMap(pageDoc >?> text(_)),
-      pageDoc >?> text(selectors.content),
-      selectors.date.flatMap(pageDoc >?> text(_))
-    )
+  ): Try[RawEntryInformation] =
+    Try {
+      RawEntryInformation(
+        pageDoc >> text(selectors.title),
+        selectors.summary.flatMap(pageDoc >?> text(_)),
+        pageDoc >?> text(selectors.content),
+        selectors.date.flatMap(pageDoc >?> text(_))
+      )
+    } match {
+      case success @ Success(_) => success
+      case Failure(nse: NoSuchElementException) =>
+        Failure(
+          AnalysisException(
+            "Unable to extract mandatory title from web page!",
+            nse
+          )
+        )
+      case failure @ Failure(_) => failure
+    }
 }
