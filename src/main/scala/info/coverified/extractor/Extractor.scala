@@ -381,15 +381,29 @@ final case class Extractor private (
           )
           scrape(url, hostNameToProfileConfig)
         }
-        .fold(exception => {
-          logger.error(
-            "Unhandled exception while trying to scrape url '{}' ({}).",
-            url.id,
-            url.name,
-            exception
-          )
-          Failure(exception)
-        }, identity)
+        .fold(
+          exception => {
+            exception match {
+              case timeOut: SocketTimeoutException =>
+                logger.error(
+                  "Time out during browsing already known url '{}' ('{}'). Propagate failure.",
+                  url.id,
+                  url.name,
+                  timeOut
+                )
+              case httpStatusException: HttpStatusException =>
+                logger.error(
+                  "Http error {} during browsing of already known url '{}' ('{}'). Propagate failure.",
+                  httpStatusException.getStatusCode,
+                  url.id,
+                  url.name,
+                  httpStatusException
+                )
+            }
+            Failure(exception)
+          },
+          identity
+        )
         .zipPar {
           logger.debug("Querying entries for url '{}' ({}).", url.id, url.name)
           Connector
@@ -413,14 +427,27 @@ final case class Extractor private (
               IO.apply((): Unit)
           }).zipPar(updateUrlView(url))
         case Failure(exception) =>
-          logger.warn(
-            s"Getting content of url ${url.id} (${url.name}) failed due to the following reason. Delete entry, if there is any, yet.",
-            exception
-          )
+          exception match {
+            case _: HttpStatusException | SocketTimeoutException =>
+              logger.debug(
+                "Received failure case for a failure, that has already been logged. Attempt to delete possible existing entry."
+              )
+            case _ =>
+              logger.error(
+                s"Getting content of url ${url.id} (${url.name}) failed due to the following reason. Attempt to delete possible existing entry.",
+                exception
+              )
+          }
           (maybeEntries
             .flatMap(_.headOption)
             .map(entry => deleteEntry(entry.id)) match {
-            case Some(effect) => effect
+            case Some(effect) =>
+              logger.debug(
+                "There is an entry existent for url '{}' ({}). Attempt to delete it.",
+                url.id,
+                url.name
+              )
+              effect
             case None =>
               logger.debug(
                 "No update necessary for url '{}' ({}).",
