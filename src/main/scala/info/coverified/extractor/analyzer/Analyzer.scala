@@ -30,7 +30,7 @@ import scala.util.{Failure, Success, Try}
 object Analyzer extends LazyLogging {
 
   private val USER_AGENT: String = "CoVerifiedBot-Extractor"
-  private val BROWSE_TIME_OUT: Duration = Duration.ofMillis(5000L)
+  private val BROWSE_TIME_OUT: Duration = Duration.ofMillis(30000L)
 
   def run(
       url: String,

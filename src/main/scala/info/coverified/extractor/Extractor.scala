@@ -40,12 +40,14 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
 }
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.{SimpleUrlView, urlId}
+import org.jsoup.HttpStatusException
 import sttp.client3.asynchttpclient.zio.SttpClient
 import sttp.model.Uri
 import zio.{IO, RIO, URIO, ZIO}
 import zio.console.Console
 
 import java.io.File
+import java.net.SocketTimeoutException
 import java.time.format.DateTimeFormatter
 import java.time.{Duration, ZoneId, ZonedDateTime}
 import scala.util.{Either, Failure, Success, Try}
@@ -235,15 +237,36 @@ final case class Extractor private (
           _
         )
       )
-      .fold(exception => {
-        logger.error(
-          "Acquisition and storing of new entry for url '{}' ({}) failed.",
-          url.id,
-          url.name,
-          exception
-        )
-        None
-      }, identity)
+      .fold(
+        exception => {
+          exception match {
+            case timeOut: SocketTimeoutException =>
+              logger.error(
+                "Time out during browsing new url '{}' ('{}'). Cannot create an entry for that url.",
+                url.id,
+                url.name,
+                timeOut
+              )
+            case httpStatusException: HttpStatusException =>
+              logger.error(
+                "Http error {} during browsing of new url '{}' ('{}'). Cannot create an entry for that url.",
+                httpStatusException.getStatusCode,
+                url.id,
+                url.name,
+                httpStatusException
+              )
+            case unknown =>
+              logger.error(
+                "Unknown error during browsing of new url '{}' ('{}'). Cannot create an entry for that url.",
+                url.id,
+                url.name,
+                unknown
+              )
+          }
+          None
+        },
+        identity
+      )
 
   /**
     * Puts the freshly generated entry to database
