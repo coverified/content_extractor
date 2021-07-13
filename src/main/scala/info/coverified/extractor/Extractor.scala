@@ -39,7 +39,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   UrlWhereUniqueInput
 }
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
-import info.coverified.graphql.schema.SimpleUrl.{SimpleUrlView, urlId}
+import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import org.jsoup.HttpStatusException
 import sttp.client3.SttpClientException.ReadException
 import sttp.client3.asynchttpclient.zio.SttpClient
@@ -86,24 +86,24 @@ final case class Extractor private (
       newUrlChunkSize,
       existingUrlChunkSize
     )
-    for {
-      (noOfNewUrls, noOfExistingUrls) <- handleNewUrls(
-        newUrlChunkSize
-      ).zipPar(
+
+    handleNewUrls(
+      newUrlChunkSize
+    ).zipPar(
         handleExistingUrls(existingUrlChunkSize)
       )
-      lastBatch <- IO.apply {
-        val lastChunk = noOfNewUrls < newUrlChunkSize && noOfExistingUrls < existingUrlChunkSize
-        logger.info(
-          "Handled {} new and {} yet existing urls. {}",
-          noOfNewUrls,
-          noOfExistingUrls,
-          if (lastChunk) "This was the last chunk."
-          else "Repeat until all necessary urls have been visited."
-        )
-        lastChunk
+      .map {
+        case (noOfNewUrls, noOfExistingUrls) =>
+          val lastChunk = noOfNewUrls < newUrlChunkSize && noOfExistingUrls < existingUrlChunkSize
+          logger.info(
+            "Handled {} new and {} yet existing urls. {}",
+            noOfNewUrls,
+            noOfExistingUrls,
+            if (lastChunk) "This was the last chunk."
+            else "Repeat until all necessary urls have been visited."
+          )
+          lastChunk
       }
-    } yield lastBatch
   }
 
   /**
