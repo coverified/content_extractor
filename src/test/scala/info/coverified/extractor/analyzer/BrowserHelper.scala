@@ -55,11 +55,8 @@ trait BrowserHelper {
     """
       |<!DOCTYPE html>
       |
-      |<head>
-      |    <title id="title">Url page with all information available</title>
-      |</head>
-      |
       |<body>
+      |    <h1>This is an url page with all information available</h1>
       |    <h2 id="subtitle">... with a subtitle</h2>
       |    <span id="breadcrumb">Some bread crumbs</span>
       |    <span id="publishedAt">2021-06-03T13:37:00Z</span>

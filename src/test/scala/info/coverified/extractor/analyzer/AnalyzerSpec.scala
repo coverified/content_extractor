@@ -199,7 +199,7 @@ class AnalyzerSpec
       "throw an AnalysisException, if the mandatory title cannot be extracted" in {
         inside(
           Analyzer invokePrivate extractInformation(
-            validUrlPageDoc.toScraperDoc,
+            urlPageDocWithoutTitle.toScraperDoc,
             validPageType.selectors
           )
         ) {
