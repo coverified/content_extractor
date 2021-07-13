@@ -54,7 +54,6 @@ object Run extends App with LazyLogging {
     Extractor(config, hostNameToProfileConfig)
       .extract()
       .provideCustomLayer(AsyncHttpClientZioBackend.layer())
-      .delay(config.repeatDelay)
       .repeatWhile(!_)
       .exitCode
   }
