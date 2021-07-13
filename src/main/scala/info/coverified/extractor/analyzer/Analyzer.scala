@@ -15,7 +15,7 @@ import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig.PageType
 import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
-import org.jsoup.{Connection, Jsoup}
+import org.jsoup.Jsoup
 
 import java.time.Duration
 import scala.util.{Failure, Success, Try}
@@ -53,7 +53,7 @@ object Analyzer extends LazyLogging {
         .ignoreContentType(false)
         .userAgent(USER_AGENT)
         .timeout(BROWSE_TIME_OUT.toMillis.toInt)
-        .followRedirects(false)
+        .followRedirects(true)
         .execute()
         .parse()
     )
