@@ -64,6 +64,7 @@ class ExtractorSpec
                 |     allUrls(
                 |       where:{
                 |         AND:[
+                |           {name_not_contains_i:\\".epub\\"},
                 |           {name_not_contains_i:\\".pdf\\"},
                 |           {name_not_contains_i:\\".doc\\"},
                 |           {name_not_contains_i:\\".docx\\"},
@@ -125,6 +126,7 @@ class ExtractorSpec
                      |     allUrls\\(
                      |       where:\\{
                      |         AND:\\[
+                     |           \\{name_not_contains_i:\\\\"\\.epub\\\\"\\},
                      |           \\{name_not_contains_i:\\\\"\\.pdf\\\\"\\},
                      |           \\{name_not_contains_i:\\\\"\\.doc\\\\"\\},
                      |           \\{name_not_contains_i:\\\\"\\.docx\\\\"\\},

@@ -24,6 +24,7 @@ object ExtractorQuery {
 
   private val commonFileEndings = List(
     /* Documents */
+    ".epub",
     ".pdf",
     ".doc",
     ".docx",
