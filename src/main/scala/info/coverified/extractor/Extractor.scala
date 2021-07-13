@@ -41,6 +41,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.{SimpleUrlView, urlId}
 import org.jsoup.HttpStatusException
+import sttp.client3.SttpClientException.ReadException
 import sttp.client3.asynchttpclient.zio.SttpClient
 import sttp.model.Uri
 import zio.{IO, RIO, URIO, ZIO}
@@ -514,11 +515,20 @@ final case class Extractor private (
     }).map {
       storeMutation(_).fold(
         exception => {
-          logger.error(
-            "Updating or creating entry for url '{}' failed.",
-            urlId,
-            exception
-          )
+          exception match {
+            case readException: ReadException =>
+              logger.error(
+                "Reading from GraphQL-API failed during update or creation entry for url '{}' failed.",
+                urlId,
+                readException
+              )
+            case unknown =>
+              logger.error(
+                "Unknown error during update or creation entry for url '{}' failed.",
+                urlId,
+                unknown
+              )
+          }
           None
         },
         success => {
