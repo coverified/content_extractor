@@ -52,7 +52,9 @@ trait ProfileConfigHelper {
          |        selector = "title"
          |    }
          |    selectors {
-         |        content = "e"
+         |        content = {
+         |          selector = "e"
+         |        }
          |        title = "h1"
          |        subtitle = "g"
          |        summary = "h"
@@ -61,6 +63,7 @@ trait ProfileConfigHelper {
          |        video = "k"
          |        audio = "l"
          |        breadcrumb = "m"
+         |        tags = "q"
          |    }
          |    examples = ["n", "o", "p"]
          |    }]

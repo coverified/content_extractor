@@ -39,13 +39,15 @@ class AnalyzerSpec
       selectors = Selectors(
         audio = None,
         breadcrumb = Some("#breadcrumb"),
-        content = "#content",
+        content =
+          Selectors.Content(selector = "#content", exclude_selector = None),
         date = Some("#publishedAt"),
         image = Some("#pic"),
         subtitle = Some("#subtitle"),
         summary = Some("#summary"),
         title = "#title",
-        video = Some("#vid")
+        video = Some("#vid"),
+        tags = None
       )
     )
 
