@@ -149,7 +149,7 @@ object Analyzer extends LazyLogging {
       RawEntryInformation(
         pageDoc >> text(selectors.title),
         selectors.summary.flatMap(pageDoc >?> text(_)),
-        pageDoc >?> text(selectors.content),
+        pageDoc >?> text(selectors.content.selector),
         selectors.date.flatMap(pageDoc >?> text(_))
       )
     } match {

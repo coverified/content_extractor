@@ -39,15 +39,58 @@ object ProfileConfig {
     final case class Selectors(
         audio: scala.Option[java.lang.String],
         breadcrumb: scala.Option[java.lang.String],
-        content: java.lang.String,
+        content: ProfileConfig.PageType.Selectors.Content,
         date: scala.Option[java.lang.String],
         image: scala.Option[java.lang.String],
         subtitle: scala.Option[java.lang.String],
         summary: scala.Option[java.lang.String],
+        tags: scala.Option[java.lang.String],
         title: java.lang.String,
         video: scala.Option[java.lang.String]
     )
     object Selectors {
+      final case class Content(
+          exclude_selector: scala.Option[scala.List[java.lang.String]],
+          selector: java.lang.String
+      )
+      object Content {
+        def apply(
+            c: com.typesafe.config.Config,
+            parentPath: java.lang.String,
+            $tsCfgValidator: $TsCfgValidator
+        ): ProfileConfig.PageType.Selectors.Content = {
+          ProfileConfig.PageType.Selectors.Content(
+            exclude_selector =
+              if (c.hasPathOrNull("exclude_selector"))
+                scala.Some(
+                  $_L$_str(
+                    c.getList("exclude_selector"),
+                    parentPath,
+                    $tsCfgValidator
+                  )
+                )
+              else None,
+            selector = $_reqStr(parentPath, c, "selector", $tsCfgValidator)
+          )
+        }
+        private def $_reqStr(
+            parentPath: java.lang.String,
+            c: com.typesafe.config.Config,
+            path: java.lang.String,
+            $tsCfgValidator: $TsCfgValidator
+        ): java.lang.String = {
+          if (c == null) null
+          else
+            try c.getString(path)
+            catch {
+              case e: com.typesafe.config.ConfigException =>
+                $tsCfgValidator.addBadPath(parentPath + path, e)
+                null
+            }
+        }
+
+      }
+
       def apply(
           c: com.typesafe.config.Config,
           parentPath: java.lang.String,
@@ -59,7 +102,12 @@ object ProfileConfig {
           breadcrumb =
             if (c.hasPathOrNull("breadcrumb")) Some(c.getString("breadcrumb"))
             else None,
-          content = $_reqStr(parentPath, c, "content", $tsCfgValidator),
+          content = ProfileConfig.PageType.Selectors.Content(
+            if (c.hasPathOrNull("content")) c.getConfig("content")
+            else com.typesafe.config.ConfigFactory.parseString("content{}"),
+            parentPath + "content.",
+            $tsCfgValidator
+          ),
           date =
             if (c.hasPathOrNull("date")) Some(c.getString("date")) else None,
           image =
@@ -70,6 +118,8 @@ object ProfileConfig {
           summary =
             if (c.hasPathOrNull("summary")) Some(c.getString("summary"))
             else None,
+          tags =
+            if (c.hasPathOrNull("tags")) Some(c.getString("tags")) else None,
           title = $_reqStr(parentPath, c, "title", $tsCfgValidator),
           video =
             if (c.hasPathOrNull("video")) Some(c.getString("video")) else None
@@ -135,7 +185,7 @@ object ProfileConfig {
 
   final case class Profile(
       hostname: java.lang.String,
-      pageTypes: scala.List[PageType]
+      pageTypes: scala.List[ProfileConfig.PageType]
   )
   object Profile {
     def apply(
@@ -145,20 +195,23 @@ object ProfileConfig {
     ): ProfileConfig.Profile = {
       ProfileConfig.Profile(
         hostname = $_reqStr(parentPath, c, "hostname", $tsCfgValidator),
-        pageTypes =
-          $_LPageType(c.getList("pageTypes"), parentPath, $tsCfgValidator)
+        pageTypes = $_LProfileConfig_PageType(
+          c.getList("pageTypes"),
+          parentPath,
+          $tsCfgValidator
+        )
       )
     }
-    private def $_LPageType(
+    private def $_LProfileConfig_PageType(
         cl: com.typesafe.config.ConfigList,
         parentPath: java.lang.String,
         $tsCfgValidator: $TsCfgValidator
-    ): scala.List[PageType] = {
+    ): scala.List[ProfileConfig.PageType] = {
       import scala.jdk.CollectionConverters._
       cl.asScala
         .map(
           cv =>
-            PageType(
+            ProfileConfig.PageType(
               cv.asInstanceOf[com.typesafe.config.ConfigObject].toConfig,
               parentPath,
               $tsCfgValidator
@@ -232,6 +285,14 @@ object ProfileConfig {
         e: com.typesafe.config.ConfigException
     ): Unit = {
       badPaths += s"'$path': ${e.getClass.getName}(${e.getMessage})"
+    }
+
+    def addInvalidEnumValue(
+        path: java.lang.String,
+        value: java.lang.String,
+        enumName: java.lang.String
+    ): Unit = {
+      badPaths += s"'$path': invalid value $value for enumeration $enumName"
     }
 
     def validate(): Unit = {

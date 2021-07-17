@@ -19,11 +19,11 @@ task genConfigClass {
 				"--scala",
 				"--durations",
 				"--pn",
-				"info.coverified.profile",
+				"info.coverified.extractor.profile",
 				"--cn",
 				"ProfileConfig",
 				"--dd",
-				"src/main/scala/info/coverified/profile/"
+				"src/main/scala/info/coverified/extractor/profile/"
 			]
 		}
 	}
