@@ -110,9 +110,7 @@ object ExtractorQuery {
     List[SimpleEntry.SimpleEntryView[String]]
   ]] =
     Query.allEntries(
-      where = EntryWhereInput(
-        url = Some(UrlWhereInput(id = Some(urlId)))
-      ),
+      where = EntryWhereInput.Url(url = Some(UrlWhereInput(id = Some(urlId)))),
       skip = 0
     )(SimpleEntry.view(Url.id))
 }

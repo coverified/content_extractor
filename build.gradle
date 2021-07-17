@@ -49,7 +49,8 @@ repositories {
 
 dependencies {
 	// coverified dependencies
-	implementation 'com.github.coverified:graphQLConnector:c0cade09f4'
+	//	implementation 'com.github.coverified:graphQLConnector:c0cade09f4'
+	implementation files('libs/graphQLConnector-0.1-SNAPSHOT-all.jar')
 
 	// cmd args parser //
 	implementation "com.github.scopt:scopt_$scalaVersion:4.0.0"
@@ -86,4 +87,9 @@ dependencies {
 
 	/* Testing web based APIs */
 	testImplementation "com.github.tomakehurst:wiremock-jre8:2.29.0"
+}
+
+configurations {
+	implementation.exclude group: 'org.slf4j'
+	implementation.exclude group: 'org.apache.logging.log4j'
 }
