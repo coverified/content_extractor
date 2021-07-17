@@ -28,7 +28,7 @@ _(not comprehensive, but the most important ones)_
 -   `RE_ANALYSIS_INTERVAL` - Amount of hours, after which sites may be re-analysed (default value: 48 hrs)
 -   `SENTRY_DSN` - Data Source Name to use for Sentry integration (empty String disables it, e.g., for local execution)
 -   `EXTRACTOR_CHUNK_SIZE` - Amount of urls, that should get queried at once (default value: 1,000)
--   `EXTRACTOR_REPEAT_DELAY` - Delay between processing two chunks (default value: 900s) **Currently not used!**
+-   `EXTRACTOR_REPEAT_DELAY` - Delay between processing two chunks (default value: 900s)
 
 ## Dockerfile build arguments
 -   `PROJECT_NAME` - Name of the project (to assemble name of compiled jar file)

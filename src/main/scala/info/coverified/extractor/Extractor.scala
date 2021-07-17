@@ -68,42 +68,43 @@ final case class Extractor private (
 ) extends LazyLogging {
 
   /**
-    * Build the extraction effect. It consists of the following steps:
-    * <ol>
-    *   <li>Acquire all needed information in parallel</li>
-    *   <li>Find applicable config</li>
-    *   <li>Issue content extraction</li>
-    * </ol>
+    * Visit a batch of urls from database, that have not been visited, yet. The batch size is determined by the
+    * attribute "chunkSize".
     *
-    * @return
+    * @return An effect, that visits all new urls and extracts the content from web page
     */
-  def extract(): ZIO[Console with SttpClient, Throwable, Boolean] = {
-    /* Getting hands on that ZIO stuff - flat mapping by for-comprehension */
-    val newUrlChunkSize = math.max(chunkSize / 2, 1)
-    val existingUrlChunkSize = math.max(chunkSize - newUrlChunkSize, 1)
-    logger.info(
-      "Attempting to visit {} new and {} yet existing urls.",
-      newUrlChunkSize,
-      existingUrlChunkSize
-    )
-
-    handleNewUrls(
-      newUrlChunkSize
-    ).zipPar(
-        handleExistingUrls(existingUrlChunkSize)
+  def extractNewOnes: ZIO[Console with SttpClient, Throwable, Boolean] = {
+    logger.info("Attempting to visit {} new, not yet visited urls.", chunkSize)
+    handleNewUrls(chunkSize).map { visitedUrls =>
+      val isLastChunk = visitedUrls < chunkSize
+      logger.info(
+        "Handled {} new, not yet visited urls. {}",
+        visitedUrls,
+        if (isLastChunk) "This was the last chunk."
+        else "Repeat until all necessary urls have been visited."
       )
-      .map {
-        case (noOfNewUrls, noOfExistingUrls) =>
-          val lastChunk = noOfNewUrls < newUrlChunkSize && noOfExistingUrls < existingUrlChunkSize
-          logger.info(
-            "Handled {} new and {} yet existing urls. {}",
-            noOfNewUrls,
-            noOfExistingUrls,
-            if (lastChunk) "This was the last chunk."
-            else "Repeat until all necessary urls have been visited."
-          )
-          lastChunk
-      }
+      isLastChunk
+    }
+  }
+
+  /**
+    * Visit a batch of urls from database, that have been visited, yet, but need a refresh. The batch size is determined
+    * by the attribute "chunkSize".
+    *
+    * @return An effect, that re-visits all existing urls and extracts the content from web page
+    */
+  def extractExistingOnes: ZIO[Console with SttpClient, Throwable, Boolean] = {
+    logger.info("Attempting to re-visit {} yet visited urls.", chunkSize)
+    handleExistingUrls(chunkSize).map { visitedUrls =>
+      val isLastChunk = visitedUrls < chunkSize
+      logger.info(
+        "Handled {} yet visited urls. {}",
+        visitedUrls,
+        if (isLastChunk) "This was the last chunk."
+        else "Repeat until all necessary urls have been visited."
+      )
+      isLastChunk
+    }
   }
 
   /**
