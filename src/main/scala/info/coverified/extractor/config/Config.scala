@@ -61,7 +61,7 @@ object Config {
   private val RE_ANALYSIS_INTERVAL = "RE_ANALYSIS_INTERVAL"
   private val AUTH_SECRET = "AUTH_SECRET"
   private val EXTRACTOR_CHUNK_SIZE = "EXTRACTOR_CHUNK_SIZE"
-  private val EXTRACTOR_REPEAT_DELAY = "REPEAT_DELAY"
+  private val EXTRACTOR_REPEAT_DELAY = "EXTRACTOR_REPEAT_DELAY"
 
   /**
     * Build config from parsed CLI input
