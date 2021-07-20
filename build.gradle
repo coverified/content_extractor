@@ -49,8 +49,7 @@ repositories {
 
 dependencies {
 	// coverified dependencies
-	//	implementation 'com.github.coverified:graphQLConnector:c0cade09f4'
-	implementation files('libs/graphQLConnector-0.1-SNAPSHOT-all.jar')
+	implementation 'com.github.coverified:graphQLConnector:b46036c940'
 
 	// cmd args parser //
 	implementation "com.github.scopt:scopt_$scalaVersion:4.0.0"
@@ -62,10 +61,8 @@ dependencies {
 	// type safe config handling //
 	implementation "com.github.carueda:tscfg_$scalaVersion:$tscfgVersion"
 
-	// https://mvnrepository.com/artifact/io.circe/circe-generic
-	implementation group: 'io.circe', name: 'circe-generic_2.13', version: '0.14.1'
-	// https://mvnrepository.com/artifact/io.circe/circe-parser
-	implementation group: 'io.circe', name: 'circe-parser_2.13', version: '0.14.1'
+	implementation 'io.circe:circe-generic_2.13:0.13.0'
+	implementation 'io.circe:circe-parser_2.13:0.13.0'
 
 	// logging
 	implementation "org.slf4j:slf4j-api:$slf4jVersion"  // slf4j wrapper
@@ -94,9 +91,4 @@ dependencies {
 	testImplementation "com.github.tomakehurst:wiremock-jre8:2.29.0"
 
 	implementation 'org.typelevel:jawn-parser_2.13:1.2.0'
-}
-
-configurations {
-	implementation.exclude group: 'org.slf4j'
-	implementation.exclude group: 'org.apache.logging.log4j'
 }
