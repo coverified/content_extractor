@@ -40,7 +40,7 @@ object ProfileConfig {
         audio: scala.Option[java.lang.String],
         breadcrumb: scala.Option[java.lang.String],
         content: ProfileConfig.PageType.Selectors.Content,
-        date: scala.Option[java.lang.String],
+        date: scala.Option[ProfileConfig.PageType.Selectors.Date],
         image: scala.Option[java.lang.String],
         subtitle: scala.Option[java.lang.String],
         summary: scala.Option[java.lang.String],
@@ -91,6 +91,54 @@ object ProfileConfig {
 
       }
 
+      final case class Date(
+          attributeVal: scala.Option[java.lang.String],
+          format: java.lang.String,
+          pattern: scala.Option[java.lang.String],
+          selector: java.lang.String,
+          tryJsonLdFirst: scala.Boolean
+      )
+      object Date {
+        def apply(
+            c: com.typesafe.config.Config,
+            parentPath: java.lang.String,
+            $tsCfgValidator: $TsCfgValidator
+        ): ProfileConfig.PageType.Selectors.Date = {
+          ProfileConfig.PageType.Selectors.Date(
+            attributeVal =
+              if (c.hasPathOrNull("attributeVal"))
+                Some(c.getString("attributeVal"))
+              else None,
+            format =
+              if (c.hasPathOrNull("format")) c.getString("format")
+              else "yyyy-MM-dd'T'HH:mm:ssZ",
+            pattern =
+              if (c.hasPathOrNull("pattern")) Some(c.getString("pattern"))
+              else None,
+            selector = $_reqStr(parentPath, c, "selector", $tsCfgValidator),
+            tryJsonLdFirst = c.hasPathOrNull("tryJsonLdFirst") && c.getBoolean(
+              "tryJsonLdFirst"
+            )
+          )
+        }
+        private def $_reqStr(
+            parentPath: java.lang.String,
+            c: com.typesafe.config.Config,
+            path: java.lang.String,
+            $tsCfgValidator: $TsCfgValidator
+        ): java.lang.String = {
+          if (c == null) null
+          else
+            try c.getString(path)
+            catch {
+              case e: com.typesafe.config.ConfigException =>
+                $tsCfgValidator.addBadPath(parentPath + path, e)
+                null
+            }
+        }
+
+      }
+
       def apply(
           c: com.typesafe.config.Config,
           parentPath: java.lang.String,
@@ -109,7 +157,16 @@ object ProfileConfig {
             $tsCfgValidator
           ),
           date =
-            if (c.hasPathOrNull("date")) Some(c.getString("date")) else None,
+            if (c.hasPathOrNull("date"))
+              scala.Some(
+                ProfileConfig.PageType.Selectors
+                  .Date(
+                    c.getConfig("date"),
+                    parentPath + "date.",
+                    $tsCfgValidator
+                  )
+              )
+            else None,
           image =
             if (c.hasPathOrNull("image")) Some(c.getString("image")) else None,
           subtitle =

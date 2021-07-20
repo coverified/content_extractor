@@ -58,7 +58,13 @@ trait ProfileConfigHelper {
          |        title = "h1"
          |        subtitle = "g"
          |        summary = "h"
-         |        date = "i"
+         |        date = {
+         |          tryJsonLdFirst = false
+         |          selector = "i"
+         |          format = "yyyy-MM-dd'T'HH:mm:ssZ"
+         |          attributeVal = None
+         |          pattern = None
+         |        }
          |        image = "j"
          |        video = "k"
          |        audio = "l"

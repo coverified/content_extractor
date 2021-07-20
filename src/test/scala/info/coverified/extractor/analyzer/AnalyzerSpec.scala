@@ -10,6 +10,7 @@ import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig
+import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors.Date
 import info.coverified.extractor.profile.ProfileConfig.PageType.{
   Condition,
   Selectors
@@ -41,7 +42,15 @@ class AnalyzerSpec
         breadcrumb = Some("#breadcrumb"),
         content =
           Selectors.Content(selector = "#content", exclude_selector = None),
-        date = Some("#publishedAt"),
+        date = Some(
+          Date(
+            tryJsonLdFirst = false,
+            selector = "#publishedAt",
+            format = "yyyy-MM-dd'T'HH:mm:ssZ",
+            attributeVal = None,
+            pattern = None
+          )
+        ),
         image = Some("#pic"),
         subtitle = Some("#subtitle"),
         summary = Some("#summary"),

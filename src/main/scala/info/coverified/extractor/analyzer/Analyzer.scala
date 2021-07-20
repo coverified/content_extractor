@@ -151,7 +151,7 @@ object Analyzer extends LazyLogging {
         pageDoc >> text(selectors.title),
         selectors.summary.flatMap(pageDoc >?> text(_)),
         pageDoc >?> text(selectors.content.selector),
-        selectors.date.flatMap(pageDoc >?> text(_))
+        selectors.date.flatMap(extractDate(pageDoc, _))
       )
     } match {
       case success @ Success(_) => success
@@ -164,6 +164,11 @@ object Analyzer extends LazyLogging {
         )
       case failure @ Failure(_) => failure
     }
+
+  def extractDate(
+      document: Document,
+      dateConfig: ProfileConfig.PageType.Selectors.Date
+  ): Option[String] = None
 
   /**
     * Extract content from web page under consideration of exclude selectors, that are meant to odd out child elements,
