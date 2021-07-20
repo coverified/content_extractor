@@ -7,10 +7,8 @@ package info.coverified.graphql
 
 import com.github.tomakehurst.wiremock.client.WireMock.{
   aResponse,
-  anyUrl,
   post,
   postRequestedFor,
-  stubFor,
   urlEqualTo
 }
 import com.github.tomakehurst.wiremock.matching.EqualToPattern

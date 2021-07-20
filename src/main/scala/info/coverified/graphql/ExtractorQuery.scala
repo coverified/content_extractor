@@ -28,9 +28,15 @@ object ExtractorQuery {
     ".pdf",
     ".doc",
     ".docx",
+    ".xls",
+    ".xlsm",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
     ".odt",
     ".ods",
     ".zip",
+    ".ics",
     /* Images */
     ".png",
     ".jpg",
@@ -40,7 +46,8 @@ object ExtractorQuery {
     /* Audio / Video */
     ".wav",
     ".mp4",
-    ".mp3"
+    ".mp3",
+    ".srt"
   )
 
   private def excludeCommonFiles: List[UrlWhereInput] =
