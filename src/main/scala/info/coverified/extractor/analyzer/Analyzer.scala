@@ -5,11 +5,24 @@
 
 package info.coverified.extractor.analyzer
 
+import com.google.gson.{
+  JsonArray,
+  JsonNull,
+  JsonObject,
+  JsonParser,
+  JsonPrimitive
+}
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
-import net.ruippeixotog.scalascraper.model.{Document, ElementNode, TextNode}
+import net.ruippeixotog.scalascraper.model.{
+  Document,
+  Element,
+  ElementNode,
+  ElementQuery,
+  TextNode
+}
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.exceptions.AnalysisException
@@ -18,7 +31,8 @@ import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
 import net.ruippeixotog.scalascraper.scraper.HtmlValidator
 import org.jsoup.Jsoup
 
-import java.time.Duration
+import java.time.format.DateTimeFormatter
+import java.time.{Duration, LocalDateTime, ZoneId, ZonedDateTime}
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -29,9 +43,10 @@ import scala.util.{Failure, Success, Try}
   * @since 26.02.21
   */
 object Analyzer extends LazyLogging {
-
   private val USER_AGENT: String = "CoVerifiedBot-Extractor"
   private val BROWSE_TIME_OUT: Duration = Duration.ofMillis(30000L)
+
+  private val ISO_DATE_TIME_PATTERN = "yyyy-MM-dd'T'HH:mm:ssX"
 
   def run(
       url: String,
@@ -72,7 +87,7 @@ object Analyzer extends LazyLogging {
   private def analyze(
       url: String,
       urlId: String,
-      pageDoc: Document,
+      pageDoc: JsoupDocument,
       profileConfig: ProfileConfig
   ): Try[RawEntryInformation] =
     getSelectors(url, pageDoc, profileConfig).flatMap(
@@ -143,7 +158,7 @@ object Analyzer extends LazyLogging {
     * @return Needed information
     */
   private def extractInformation(
-      pageDoc: Document,
+      pageDoc: JsoupDocument,
       selectors: Selectors
   ): Try[RawEntryInformation] =
     Try {
@@ -165,10 +180,155 @@ object Analyzer extends LazyLogging {
       case failure @ Failure(_) => failure
     }
 
+  /**
+    * Extract the date information from web page document. If desired, it is first attempted to get it from Json LD
+    * information and then subsequently from entry attribute and entry content. If applicable, a regex is used to clean
+    * up the information.
+    *
+    * @param document   Web page document
+    * @param dateConfig Configuration on how to find the String
+    * @return A trial to get the information
+    */
   def extractDate(
+      document: JsoupDocument,
+      dateConfig: ProfileConfig.PageType.Selectors.Date
+  ): Option[String] =
+    /* If desired, attempt to get date time information from JSON-LD object */
+    getDateTimeString(document, dateConfig)
+      .flatMap {
+        case (rawDateTimeString, dateTimeFormat) =>
+          /* Date time string and format are extracted. If applicable, try to apply a regex to narrow the input */
+          applyDateTimeRegex(rawDateTimeString, dateConfig.pattern)
+            .map(
+              processedDateTimeString =>
+                (processedDateTimeString, dateTimeFormat)
+            )
+      }
+      .flatMap {
+        case (dateTimeString, dateTimeFormat) =>
+          /* Re-Format the date time string, so that it matches the ISO format */
+          reformatDateTimePattern(dateTimeString, dateTimeFormat)
+      } match {
+      case Success(dateTimeString) =>
+        Some(dateTimeString)
+      case Failure(exception) =>
+        logger.error(
+          "Extraction of date time information failed due to the following reason. Leave this information out.",
+          exception
+        )
+        None
+    }
+
+  /**
+    * Get date time string and matching format from page document.
+    *
+    * @param document   Web page document
+    * @param dateConfig Configuration on how to find the String
+    * @return A trial to get the information
+    */
+  def getDateTimeString(
+      document: JsoupDocument,
+      dateConfig: ProfileConfig.PageType.Selectors.Date
+  ): Try[(String, String)] =
+    if (dateConfig.tryJsonLdFirst) {
+      JsonLD.publishDate(document) match {
+        case Success(dateTimeString) =>
+          Success(dateTimeString, ISO_DATE_TIME_PATTERN)
+        case Failure(exception) =>
+          logger.warn(
+            "Getting date time information from JSON LD failed with following exception. Try to get from selected element.",
+            exception
+          )
+          getDateTimeStringFromElement(document, dateConfig).map(
+            (_, dateConfig.format)
+          )
+      }
+    } else {
+      getDateTimeStringFromElement(document, dateConfig).map(
+        (_, dateConfig.format)
+      )
+    }
+
+  /**
+    * Extract the string, that shall contain the date time, from the element attribute. If that fails, try to get it
+    * from the content itself.
+    *
+    * @param document   Web page document
+    * @param dateConfig Configuration on how to find the String
+    * @return A trial to get the information
+    */
+  def getDateTimeStringFromElement(
       document: Document,
       dateConfig: ProfileConfig.PageType.Selectors.Date
-  ): Option[String] = None
+  ): Try[String] = {
+    dateConfig.attributeVal match {
+      case Some(attribute) =>
+        Try(document >> element(dateConfig.selector)).flatMap {
+          dateTimeElement =>
+            if (dateTimeElement.hasAttr(attribute))
+              Success(dateTimeElement.attr(attribute))
+            else
+              getDateTimeStringFromContent(document, dateConfig.selector)
+        }
+      case None =>
+        getDateTimeStringFromContent(document, dateConfig.selector)
+    }
+  }
+
+  /**
+    * Extract the string, that shall contain the date time, from content
+    *
+    * @param document Web page document
+    * @param selector CSS selector to apply
+    * @return A trial to get the information
+    */
+  def getDateTimeStringFromContent(
+      document: Document,
+      selector: String
+  ): Try[String] = Try(document >> text(selector))
+
+  /**
+    * Apply an possibly given regex pattern to the given raw date time string and hand back the first match.
+    *
+    * @param rawDateTimeString The raw date time string
+    * @param pattern           The regex pattern to apply
+    * @return An attempt to get the information.
+    */
+  def applyDateTimeRegex(
+      rawDateTimeString: String,
+      pattern: Option[String]
+  ): Try[String] =
+    pattern
+      .map { pattern =>
+        pattern.r.findFirstIn(rawDateTimeString) match {
+          case Some(matchFound) => Success(matchFound)
+          case None =>
+            Failure(
+              AnalysisException(
+                s"Application of regex pattern '$pattern' onto '$rawDateTimeString' failed."
+              )
+            )
+        }
+      }
+      .getOrElse(Success(rawDateTimeString))
+
+  /**
+    * Bring an arbitrary date time pattern to an ISO date time pattern
+    *
+    * @param dateTimeString The input string
+    * @param dateTimeFormat The matching format
+    * @return A string in iso format
+    */
+  def reformatDateTimePattern(
+      dateTimeString: String,
+      dateTimeFormat: String
+  ): Try[String] =
+    Try {
+      LocalDateTime
+        .parse(dateTimeString, DateTimeFormatter.ofPattern(dateTimeFormat))
+        .atZone(ZoneId.of("UTC"))
+        .format(DateTimeFormatter.ofPattern(ISO_DATE_TIME_PATTERN))
+    }
 
   /**
     * Extract content from web page under consideration of exclude selectors, that are meant to odd out child elements,

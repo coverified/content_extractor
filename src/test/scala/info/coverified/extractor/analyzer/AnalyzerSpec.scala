@@ -19,9 +19,12 @@ import info.coverified.extractor.profile.ProfileConfig.Profile
 import info.coverified.test.scalatest.MockBrowser.DislikeThatUrlException
 import info.coverified.test.scalatest.{MockBrowser, ZioSpec}
 import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
+import org.jsoup.Jsoup
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.Inside.inside
 
+import java.time.{LocalDate, LocalDateTime, ZoneId, ZonedDateTime}
+import java.time.format.DateTimeFormatter
 import scala.util.{Failure, Success, Try}
 
 class AnalyzerSpec
@@ -46,7 +49,7 @@ class AnalyzerSpec
           Date(
             tryJsonLdFirst = false,
             selector = "#publishedAt",
-            format = "yyyy-MM-dd'T'HH:mm:ssZ",
+            format = "yyyy-MM-dd'T'HH:mm:ssX",
             attributeVal = None,
             pattern = None
           )
@@ -200,6 +203,297 @@ class AnalyzerSpec
               )
           }
         }
+      }
+    }
+
+    "extracting the date information" should {
+      val selector = "#date"
+
+      "fail, if date time cannot be obtained from content" in {
+        val document = JsoupDocument(Jsoup.parse("""
+            |<html>
+            | <body>
+            |   Nothing interesting here.
+            | </body>
+            |</html>
+            |""".stripMargin))
+
+        Analyzer.getDateTimeStringFromContent(document, selector) match {
+          case Failure(_) => succeed
+          case Success(_) =>
+            fail("Extraction of information was meant to fail, but passed.")
+        }
+      }
+
+      "succeed, if date time can be obtained from content" in {
+        val expected = "2021-07-20T23:00:00Z"
+        val document = JsoupDocument(Jsoup.parse(s"""
+            |<html>
+            | <body>
+            |   Nothing interesting here.
+            |   <div id="date">$expected</div>
+            | </body>
+            |</html>
+            |""".stripMargin))
+
+        Analyzer.getDateTimeStringFromContent(document, selector) match {
+          case Success(dateTimeString) => dateTimeString shouldBe expected
+          case Failure(_) =>
+            fail("Extraction of information failed, but was meant to pass.")
+        }
+      }
+
+      "get content based date time string, if element-wise receive is not desired" in {
+        val expected = "2021-07-20T23:00:00Z"
+        val document = JsoupDocument(Jsoup.parse(s"""
+             |<html>
+             | <body>
+             |   Nothing interesting here.
+             |   <time id="date" datetime="2021-07-20T23:05:00Z">$expected</div>
+             | </body>
+             |</html>
+             |""".stripMargin))
+
+        val config = Date(
+          tryJsonLdFirst = false,
+          selector = selector,
+          format = "yyyy-MM-dd'T'HH:mm:ssZ",
+          attributeVal = None,
+          pattern = None
+        )
+
+        Analyzer.getDateTimeStringFromElement(document, config) match {
+          case Success(dateTimeString) => dateTimeString shouldBe expected
+          case Failure(_) =>
+            fail("Extraction of information failed, but was meant to pass.")
+        }
+      }
+
+      "get content based date time string, if element-wise receive fails" in {
+        val expected = "2021-07-20T23:00:00Z"
+        val document = JsoupDocument(Jsoup.parse(s"""
+             |<html>
+             | <body>
+             |   Nothing interesting here.
+             |   <time id="date" thattime="2021-07-20T23:05:00Z">$expected</div>
+             | </body>
+             |</html>
+             |""".stripMargin))
+
+        val config = Date(
+          tryJsonLdFirst = false,
+          selector = selector,
+          format = "yyyy-MM-dd'T'HH:mm:ssZ",
+          attributeVal = None,
+          pattern = None
+        )
+
+        Analyzer.getDateTimeStringFromElement(document, config) match {
+          case Success(dateTimeString) => dateTimeString shouldBe expected
+          case Failure(_) =>
+            fail("Extraction of information failed, but was meant to pass.")
+        }
+      }
+
+      "get element based date time string, if element-wise receive is desired" in {
+        val expected = "2021-07-20T23:05:00Z"
+        val document = JsoupDocument(Jsoup.parse(s"""
+             |<html>
+             | <body>
+             |   Nothing interesting here.
+             |   <time id="date" datetime="$expected">2021-07-20T23:00:00Z</div>
+             | </body>
+             |</html>
+             |""".stripMargin))
+
+        val config = Date(
+          tryJsonLdFirst = false,
+          selector = selector,
+          format = "yyyy-MM-dd'T'HH:mm:ssZ",
+          attributeVal = Some("datetime"),
+          pattern = None
+        )
+
+        Analyzer.getDateTimeStringFromElement(document, config) match {
+          case Success(dateTimeString) => dateTimeString shouldBe expected
+          case Failure(_) =>
+            fail("Extraction of information failed, but was meant to pass.")
+        }
+      }
+
+      val fullDocument = JsoupDocument(Jsoup.parse(s"""
+        |<html>
+        | <head>
+        |   <script type="application/ld+json">
+        |{
+        |	"@context":			"http://schema.org",
+        |	"@type":			"Article",
+        |	"datePublished":	  "2021-07-20T23:20:00+01:00",
+        | "dateCreated":	    "2021-07-20T23:15:00+01:00",
+        |	"dateModified":	    "2021-07-20T23:10:00+01:00"
+        |}
+        |</script>
+        | </head>
+        | <body>
+        |   Nothing interesting here.
+        |   <time id="date" datetime="2021-07-20T23:05:00Z">2021-07-20T23:00:00Z</div>
+        | </body>
+        |</html>
+        |""".stripMargin))
+
+      "get date time string from correct source, if receive from JSON-LD is desired and succeeds" in {
+        val expected = "2021-07-20T23:20:00+01:00"
+
+        val config = Date(
+          tryJsonLdFirst = true,
+          selector = selector,
+          format = "yyyy-MM-dd'T'HH:mm:ssZ",
+          attributeVal = Some("datetime"),
+          pattern = None
+        )
+
+        Analyzer.getDateTimeString(fullDocument, config) match {
+          case Success(dateTimeString) =>
+            dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssX")
+          case Failure(_) =>
+            fail("Extraction of information failed, but was meant to pass.")
+        }
+      }
+
+      "get date time string from correct source, if receive from JSON-LD is desired and fails" in {
+        val fullDocument = JsoupDocument(Jsoup.parse(s"""
+          |<html>
+          | <body>
+          |   Nothing interesting here.
+          |   <time id="date" datetime="2021-07-20T23:05:00Z">2021-07-20T23:00:00Z</div>
+          | </body>
+          |</html>
+          |""".stripMargin))
+
+        val expected = "2021-07-20T23:05:00Z"
+
+        val config = Date(
+          tryJsonLdFirst = true,
+          selector = selector,
+          format = "yyyy-MM-dd'T'HH:mm:ssZ",
+          attributeVal = Some("datetime"),
+          pattern = None
+        )
+
+        Analyzer.getDateTimeString(fullDocument, config) match {
+          case Success(dateTimeString) =>
+            dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssZ")
+          case Failure(_) =>
+            fail("Extraction of information failed, but was meant to pass.")
+        }
+      }
+
+      "get date time string from correct source, if receive from element is desired and succeeds" in {
+        val expected = "2021-07-20T23:05:00Z"
+
+        val config = Date(
+          tryJsonLdFirst = false,
+          selector = selector,
+          format = "yyyy-MM-dd'T'HH:mm:ssZ",
+          attributeVal = Some("datetime"),
+          pattern = None
+        )
+
+        Analyzer.getDateTimeString(fullDocument, config) match {
+          case Success(dateTimeString) =>
+            dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssZ")
+          case Failure(_) =>
+            fail("Extraction of information failed, but was meant to pass.")
+        }
+      }
+
+      "get date time string from correct source, if receive from element is desired and fails" in {
+        val expected = "2021-07-20T23:00:00Z"
+
+        val config = Date(
+          tryJsonLdFirst = false,
+          selector = selector,
+          format = "yyyy-MM-dd'T'HH:mm:ssZ",
+          attributeVal = Some("datetimer"),
+          pattern = None
+        )
+
+        Analyzer.getDateTimeString(fullDocument, config) match {
+          case Success(dateTimeString) =>
+            dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssZ")
+          case Failure(_) =>
+            fail("Extraction of information failed, but was meant to pass.")
+        }
+      }
+
+      "get date time string from correct source, if receive from content is desired and succeeds" in {
+        val expected = "2021-07-20T23:05:00Z"
+
+        val config = Date(
+          tryJsonLdFirst = false,
+          selector = selector,
+          format = "yyyy-MM-dd'T'HH:mm:ssZ",
+          attributeVal = Some("datetime"),
+          pattern = None
+        )
+
+        Analyzer.getDateTimeString(fullDocument, config) match {
+          case Success(dateTimeString) =>
+            dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssZ")
+          case Failure(_) =>
+            fail("Extraction of information failed, but was meant to pass.")
+        }
+      }
+
+      "fails getting date time string, if non of the fall back works" in {
+        val config = Date(
+          tryJsonLdFirst = false,
+          selector = "some_wrong_selector",
+          format = "yyyy-MM-dd'T'HH:mm:ssZ",
+          attributeVal = None,
+          pattern = None
+        )
+
+        Analyzer.getDateTimeString(fullDocument, config) match {
+          case Success(dateTimeString) =>
+            fail("Extraction of information was meant to fail, but succeeded.")
+          case Failure(_) => succeed
+        }
+      }
+
+      "hand back original string, if no regex pattern shall be applied" in {
+        Analyzer.applyDateTimeRegex("20.07.2021 | Von", None) match {
+          case Success(value) => value shouldBe "20.07.2021 | Von"
+          case Failure(exception) =>
+            fail("Applying regex was meant to pass, but failed.", exception)
+        }
+      }
+
+      "correctly apply regex pattern" in {
+        Analyzer.applyDateTimeRegex(
+          "20.07.2021 | Von",
+          Some("\\d{2}\\.\\d{2}\\.\\d{4}")
+        ) match {
+          case Success(value) => value shouldBe "20.07.2021"
+          case Failure(exception) =>
+            fail("Applying regex was meant to pass, but failed.", exception)
+        }
+      }
+
+      "fail, if pattern does not apply" in {
+        Analyzer.applyDateTimeRegex("20.07.2021 | Von", Some("^BlaFoo\\d+")) match {
+          case Failure(_) => succeed
+          case Success(value) =>
+            fail(
+              s"Application of regex was meant to fail, but succeeded with '$value'."
+            )
+        }
+      }
+
+      "properly reformat a given date time string" in {
+        val expected = Success("2021-07-20T11:15:00Z")
+
+        Analyzer.reformatDateTimePattern("20.07.2021 11:15", "dd.MM.yyyy HH:mm") shouldBe expected
       }
     }
 
