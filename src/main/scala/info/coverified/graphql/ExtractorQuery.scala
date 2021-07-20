@@ -37,6 +37,7 @@ object ExtractorQuery {
     ".ods",
     ".zip",
     ".ics",
+    ".rss",
     /* Images */
     ".png",
     ".jpg",
@@ -47,6 +48,7 @@ object ExtractorQuery {
     ".wav",
     ".mp4",
     ".mp3",
+    ".swf",
     ".srt"
   )
 

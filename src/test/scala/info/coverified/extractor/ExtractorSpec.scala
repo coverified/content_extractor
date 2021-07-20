@@ -77,6 +77,7 @@ class ExtractorSpec
                 |           {name_not_contains_i:\\".ods\\"},
                 |           {name_not_contains_i:\\".zip\\"},
                 |           {name_not_contains_i:\\".ics\\"},
+                |           {name_not_contains_i:\\".rss\\"},
                 |           {name_not_contains_i:\\".png\\"},
                 |           {name_not_contains_i:\\".jpg\\"},
                 |           {name_not_contains_i:\\".jpeg\\"},
@@ -85,6 +86,7 @@ class ExtractorSpec
                 |           {name_not_contains_i:\\".wav\\"},
                 |           {name_not_contains_i:\\".mp4\\"},
                 |           {name_not_contains_i:\\".mp3\\"},
+                |           {name_not_contains_i:\\".swf\\"},
                 |           {name_not_contains_i:\\".srt\\"}
                 |           ],
                 |         lastCrawl:\\"1970-01-01T00:00:00.000Z\\"
@@ -146,6 +148,7 @@ class ExtractorSpec
                      |           \\{name_not_contains_i:\\\\"\\.ods\\\\"\\},
                      |           \\{name_not_contains_i:\\\\"\\.zip\\\\"\\},
                      |           \\{name_not_contains_i:\\\\"\\.ics\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.rss\\\\"\\},
                      |           \\{name_not_contains_i:\\\\"\\.png\\\\"\\},
                      |           \\{name_not_contains_i:\\\\"\\.jpg\\\\"\\},
                      |           \\{name_not_contains_i:\\\\"\\.jpeg\\\\"\\},
@@ -154,6 +157,7 @@ class ExtractorSpec
                      |           \\{name_not_contains_i:\\\\"\\.wav\\\\"\\},
                      |           \\{name_not_contains_i:\\\\"\\.mp4\\\\"\\},
                      |           \\{name_not_contains_i:\\\\"\\.mp3\\\\"\\},
+                     |           \\{name_not_contains_i:\\\\"\\.swf\\\\"\\},
                      |           \\{name_not_contains_i:\\\\"\\.srt\\\\"\\}
                      |           ],
                      |         lastCrawl_lte:\\\\"[\\w\\d.\\-:]+\\\\",
