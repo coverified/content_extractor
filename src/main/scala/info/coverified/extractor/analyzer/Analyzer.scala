@@ -332,11 +332,13 @@ object Analyzer extends LazyLogging {
     *
     * @param rawDateTimeString The raw date time string
     * @param pattern           The regex pattern to apply
+    * @param url               The corresponding url (only for debugging purposes)
     * @return An attempt to get the information.
     */
   def applyDateTimeRegex(
       rawDateTimeString: String,
-      pattern: Option[String]
+      pattern: Option[String],
+      url: String
   ): Try[String] =
     pattern
       .map { pattern =>
@@ -345,7 +347,7 @@ object Analyzer extends LazyLogging {
           case None =>
             Failure(
               AnalysisException(
-                s"Application of regex pattern '$pattern' onto '$rawDateTimeString' failed."
+                s"Application of regex pattern '$pattern' onto '$rawDateTimeString' failed. Source url: '$url'."
               )
             )
         }

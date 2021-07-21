@@ -490,7 +490,7 @@ class AnalyzerSpec
       }
 
       "hand back original string, if no regex pattern shall be applied" in {
-        Analyzer.applyDateTimeRegex("20.07.2021 | Von", None) match {
+        Analyzer.applyDateTimeRegex("20.07.2021 | Von", None, url) match {
           case Success(value) => value shouldBe "20.07.2021 | Von"
           case Failure(exception) =>
             fail("Applying regex was meant to pass, but failed.", exception)
@@ -500,7 +500,8 @@ class AnalyzerSpec
       "correctly apply regex pattern" in {
         Analyzer.applyDateTimeRegex(
           "20.07.2021 | Von",
-          Some("\\d{2}\\.\\d{2}\\.\\d{4}")
+          Some("\\d{2}\\.\\d{2}\\.\\d{4}"),
+          url
         ) match {
           case Success(value) => value shouldBe "20.07.2021"
           case Failure(exception) =>
@@ -509,11 +510,15 @@ class AnalyzerSpec
       }
 
       "fail, if pattern does not apply" in {
-        Analyzer.applyDateTimeRegex("20.07.2021 | Von", Some("^BlaFoo\\d+")) match {
+        Analyzer.applyDateTimeRegex(
+          "20.07.2021 | Von",
+          Some("^BlaFoo\\d+"),
+          url
+        ) match {
           case Failure(_) => succeed
           case Success(value) =>
             fail(
-              s"Application of regex was meant to fail, but succeeded with '$value'."
+              s"Application of regex was meant to fail, but succeeded with '$value'. Source url: '$url'."
             )
         }
       }
