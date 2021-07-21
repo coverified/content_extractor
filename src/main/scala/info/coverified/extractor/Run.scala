@@ -53,11 +53,13 @@ object Run extends App with LazyLogging {
 
     val extractor = Extractor(config, hostNameToProfileConfig)
     (for {
-      _ <- extractor.extractNewOnes
+      _ <- extractor
+        .extractNewOnes(config.repeatDelay)
         .provideCustomLayer(AsyncHttpClientZioBackend.layer())
         .delay(config.repeatDelay)
         .repeatWhile(!_)
-      _ <- extractor.extractExistingOnes
+      _ <- extractor
+        .extractExistingOnes(config.repeatDelay)
         .provideCustomLayer(AsyncHttpClientZioBackend.layer())
         .delay(config.repeatDelay)
         .repeatWhile(!_)

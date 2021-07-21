@@ -71,9 +71,12 @@ final case class Extractor private (
     * Visit a batch of urls from database, that have not been visited, yet. The batch size is determined by the
     * attribute "chunkSize".
     *
+    * @param repeatDelay Delay until the next evaluation starts (only for debugging)
     * @return An effect, that visits all new urls and extracts the content from web page
     */
-  def extractNewOnes: ZIO[Console with SttpClient, Throwable, Boolean] = {
+  def extractNewOnes(
+      repeatDelay: Duration
+  ): ZIO[Console with SttpClient, Throwable, Boolean] = {
     logger.info("Attempting to visit {} new, not yet visited urls.", chunkSize)
     handleNewUrls(chunkSize).map { visitedUrls =>
       val isLastChunk = visitedUrls < chunkSize
@@ -81,7 +84,8 @@ final case class Extractor private (
         "Handled {} new, not yet visited urls. {}",
         visitedUrls,
         if (isLastChunk) "This was the last chunk."
-        else "Repeat until all necessary urls have been visited."
+        else
+          s"Repeat until all necessary urls have been visited. Delay the next run for $repeatDelay."
       )
       isLastChunk
     }
@@ -91,9 +95,12 @@ final case class Extractor private (
     * Visit a batch of urls from database, that have been visited, yet, but need a refresh. The batch size is determined
     * by the attribute "chunkSize".
     *
+    * @param repeatDelay Delay until the next evaluation starts (only for debugging)
     * @return An effect, that re-visits all existing urls and extracts the content from web page
     */
-  def extractExistingOnes: ZIO[Console with SttpClient, Throwable, Boolean] = {
+  def extractExistingOnes(
+      repeatDelay: Duration
+  ): ZIO[Console with SttpClient, Throwable, Boolean] = {
     logger.info("Attempting to re-visit {} yet visited urls.", chunkSize)
     handleExistingUrls(chunkSize).map { visitedUrls =>
       val isLastChunk = visitedUrls < chunkSize
@@ -101,7 +108,8 @@ final case class Extractor private (
         "Handled {} yet visited urls. {}",
         visitedUrls,
         if (isLastChunk) "This was the last chunk."
-        else "Repeat until all necessary urls have been visited."
+        else
+          s"Repeat until all necessary urls have been visited. Delay the next run for $repeatDelay."
       )
       isLastChunk
     }
