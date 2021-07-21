@@ -77,7 +77,8 @@ object SttpStubbing {
                 },
                 date = "date:\\\\\"([^\"]*)\\\\\"".r
                   .findFirstMatchIn(queryString)
-                  .map(_.group(1))
+                  .map(_.group(1)),
+                disabled = None
               )
             )
           )

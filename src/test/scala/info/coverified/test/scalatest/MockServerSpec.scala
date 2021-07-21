@@ -6,7 +6,13 @@
 package info.coverified.test.scalatest
 
 import com.github.tomakehurst.wiremock.WireMockServer
+import com.github.tomakehurst.wiremock.client.WireMock.{
+  aResponse,
+  post,
+  urlEqualTo
+}
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration
+import com.github.tomakehurst.wiremock.stubbing.StubMapping
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import sttp.client3.UriContext
 
@@ -35,4 +41,12 @@ trait MockServerSpec
     mockServer.stop()
     super.afterAll()
   }
+
+  def defineStub(reply: String): StubMapping = mockServer.stubFor(
+    post(urlEqualTo("/api/graphql")).willReturn(
+      aResponse()
+        .withHeader("Content-Type", "text/plain")
+        .withBody(reply)
+    )
+  )
 }

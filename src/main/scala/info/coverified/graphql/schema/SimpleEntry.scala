@@ -15,7 +15,8 @@ object SimpleEntry {
       content: Option[String],
       summary: Option[String],
       url: Option[UrlSelection],
-      date: Option[String]
+      date: Option[String],
+      disabled: Option[Boolean]
   )
 
   def view[UrlSelection](
@@ -23,15 +24,16 @@ object SimpleEntry {
   ): SelectionBuilder[Entry, SimpleEntryView[UrlSelection]] =
     (Entry.id ~ Entry.name ~ Entry.content ~ Entry.summary ~ Entry.url(
       urlSelection
-    ) ~ Entry.date).mapN {
+    ) ~ Entry.date ~ Entry.disabled).mapN {
       (
           id: String,
           name: Option[String],
           content: Option[String],
           summary: Option[String],
           url: Option[UrlSelection],
-          date: Option[String]
+          date: Option[String],
+          disabled: Option[Boolean]
       ) =>
-        SimpleEntryView(id, name, content, summary, url, date)
+        SimpleEntryView(id, name, content, summary, url, date, disabled)
     }
 }

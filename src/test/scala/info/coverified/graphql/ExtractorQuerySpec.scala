@@ -37,7 +37,8 @@ class ExtractorQuerySpec extends MockServerSpec with GraphQlHelper {
             |        "language": null,
             |        "content": "",
             |        "summary": "",
-            |        "date": null
+            |        "date": null,
+            |        "disabled": false
             |      }
             |    ]
             |  }
@@ -58,7 +59,7 @@ class ExtractorQuerySpec extends MockServerSpec with GraphQlHelper {
           mockServer.verify(
             postRequestedFor(urlEqualTo("/api/graphql")).withRequestBody(
               new EqualToPattern(
-                "{\"query\":\"query{allEntries(where:{url:{id:\\\"ckr7fdbuw0218fdo803zdc1hy\\\"}},orderBy:[],skip:0){id name content summary url{id} date}}\",\"variables\":{}}"
+                "{\"query\":\"query{allEntries(where:{url:{id:\\\"ckr7fdbuw0218fdo803zdc1hy\\\"}},orderBy:[],skip:0){id name content summary url{id} date disabled}}\",\"variables\":{}}"
               )
             )
           )

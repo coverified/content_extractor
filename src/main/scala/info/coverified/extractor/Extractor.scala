@@ -42,7 +42,7 @@ import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import org.jsoup.HttpStatusException
 import sttp.client3.SttpClientException.ReadException
-import sttp.client3.asynchttpclient.zio.SttpClient
+import sttp.client3.asynchttpclient.zio.{AsyncHttpClientZioBackend, SttpClient}
 import sttp.model.Uri
 import zio.{IO, RIO, URIO, ZIO}
 import zio.console.Console
@@ -286,10 +286,21 @@ final case class Extractor private (
   ): URIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]] =
     createEntryInformation match {
       case cei @ CreateEntryInformation(title, summary, content, date) =>
-        IO.apply(buildEntry(urlId, title, summary, content, date))
-          .flatMap { selectionBuilder =>
-            storeMutation(selectionBuilder)
+        /* Check, if there isn't yet an entry with the same content */
+        val contentHash = cei.contentHash.toString
+        queryEntriesWithSameHash(contentHash)
+          .map {
+            buildEntryConsideringExistingEntries(
+              urlId,
+              title,
+              summary,
+              content,
+              date,
+              contentHash,
+              _
+            )
           }
+          .flatMap(storeMutation)
           .fold(
             exception => {
               logger.error(
@@ -301,6 +312,54 @@ final case class Extractor private (
             success => success
           )
     }
+
+  /**
+    * Query entries with the same content hash
+    *
+    * @param contentHash The queried content hash
+    * @return Possibly a list of entries with the same hash
+    */
+  private def queryEntriesWithSameHash(
+      contentHash: String
+  ): RIO[Console with SttpClient, Option[List[SimpleEntryView[String]]]] =
+    Connector
+      .sendRequest(
+        ExtractorQuery
+          .entriesWithGivenHash(contentHash)
+          .toRequest(apiUrl)
+      )
+
+  /**
+    * If there are no similar entries apparent, store the given information.
+    *
+    * @param urlId                Id of the entry's url
+    * @param title                Title of the new entry
+    * @param summary              Summary of the new entry
+    * @param content              Content of the new entry
+    * @param date                 Date of the new entry
+    * @param maybeApparentEntries Optional list of entries with same content
+    * @return A mutation or throw an exception
+    */
+  private def buildEntryConsideringExistingEntries(
+      urlId: String,
+      title: String,
+      summary: Option[String],
+      content: Option[String],
+      date: Option[String],
+      contentHash: String,
+      maybeApparentEntries: Option[List[SimpleEntryView[String]]]
+  ): SelectionBuilder[RootMutation, Option[SimpleEntryView[SimpleUrlView]]] = {
+    val disable = maybeApparentEntries.forall(_.nonEmpty)
+    if (disable) {
+      logger.warn(
+        s"There is / are already entries available with the same content hash code. They belong to the " +
+          s"urls with the following ids. Create an entry, but disable it.\n\t${maybeApparentEntries
+            .map(_.map(_.url.getOrElse("Cannot get url id")).mkString("\n\t"))
+            .getOrElse("Unable to extract url ids.")}"
+      )
+    }
+    buildEntry(urlId, title, summary, content, date, contentHash, disable)
+  }
 
   /**
     * Announce the derived view to API
@@ -508,11 +567,31 @@ final case class Extractor private (
             )
             updateEntry(id, title, summary, content, date)
         }
-      case Right(CreateEntryInformation(title, summary, content, date)) =>
+      case Right(cei @ CreateEntryInformation(title, summary, content, date)) =>
         logger.debug(
           "There is no entry apparent for yet visited url '{}'. Attempt to create a new one."
         )
-        Some(buildEntry(urlId, title, summary, content, date))
+        /* Check, if there isn't yet an entry with the same content. If so, do nothing, if not, build a new selection
+         * builder
+         * FIXME: Not the best imaginable solution... Direct evaluation should be omitted if possible */
+        val contentHash = cei.contentHash.toString
+        Some(
+          zio.Runtime.default.unsafeRun(
+            queryEntriesWithSameHash(contentHash)
+              .provideCustomLayer(AsyncHttpClientZioBackend.layer())
+              .map {
+                buildEntryConsideringExistingEntries(
+                  urlId,
+                  title,
+                  summary,
+                  content,
+                  date,
+                  contentHash,
+                  _
+                )
+              }
+          )
+        )
     }).map {
       storeMutation(_).fold(
         exception => {
@@ -697,11 +776,13 @@ object Extractor extends LazyLogging {
   /**
     * Build entry for extracted page information based on the different page types available.
     *
-    * @param urlId    Identifier of url in database
-    * @param title    Title of the page
-    * @param summary  Summary of the page
-    * @param content  Content of the entry
-    * @param date     Date of the article
+    * @param urlId        Identifier of url in database
+    * @param title        Title of the page
+    * @param summary      Summary of the page
+    * @param content      Content of the entry
+    * @param date         Date of the article
+    * @param contentHash  The content hash
+    * @param disabled     If the entry is disabled
     * @return A mutation to post to data base
     */
   private def buildEntry(
@@ -709,7 +790,9 @@ object Extractor extends LazyLogging {
       title: String,
       summary: Option[String],
       content: Option[String],
-      date: Option[String]
+      date: Option[String],
+      contentHash: String,
+      disabled: Boolean = false
   ): SelectionBuilder[RootMutation, Option[
     SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
   ]] =
@@ -724,7 +807,9 @@ object Extractor extends LazyLogging {
             UrlRelateToOneInput(
               connect = Some(UrlWhereUniqueInput(id = Some(urlId)))
             )
-          )
+          ),
+          contentHash = Some(contentHash),
+          disabled = Some(disabled)
         )
       )
     )(

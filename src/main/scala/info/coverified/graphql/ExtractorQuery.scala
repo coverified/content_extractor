@@ -127,4 +127,25 @@ object ExtractorQuery {
       where = EntryWhereInput(url = Some(UrlWhereInput(id = Some(urlId)))),
       skip = 0
     )(SimpleEntry.view(Url.id))
+
+  /**
+    * Query all entries with the given hash code
+    *
+    * @param contentHash Hash code of the content
+    * @return A List of applicable entries
+    */
+  def entriesWithGivenHash(
+      contentHash: String
+  ): SelectionBuilder[RootQuery, Option[
+    List[SimpleEntry.SimpleEntryView[String]]
+  ]] =
+    Query.allEntries(
+      where = EntryWhereInput(
+        contentHash = Some(contentHash),
+        disabled = Some(false)
+      ),
+      skip = 0
+    )(
+      SimpleEntry.view(Url.id)
+    )
 }

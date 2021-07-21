@@ -18,6 +18,22 @@ sealed trait EntryInformation {
 object EntryInformation {
 
   /**
+    * Calculate the hash code of a defined content of an Entry
+    *
+    * @param title    The actual content of the title
+    * @param summary  The actual content of the summary
+    * @param content  The actual content
+    * @param date     The actual date
+    * @return The hash code for the given fields
+    */
+  def contentHash(
+      title: String,
+      summary: String,
+      content: String,
+      date: String
+  ): Int = (title, summary, content, date).hashCode()
+
+  /**
     * Group all information, that are scraped from site
     *
     * @param title    Title of the page
@@ -73,7 +89,15 @@ object EntryInformation {
       override protected val summary: Option[String],
       override protected val content: Option[String],
       override protected val date: Option[String]
-  ) extends EntryInformation
+  ) extends EntryInformation {
+    def contentHash: Int =
+      EntryInformation.contentHash(
+        title,
+        summary.getOrElse(""),
+        content.getOrElse(""),
+        date.getOrElse("")
+      )
+  }
 
   object CreateEntryInformation {
     def apply(raw: RawEntryInformation): CreateEntryInformation =

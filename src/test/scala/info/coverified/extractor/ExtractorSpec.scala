@@ -5,7 +5,12 @@
 
 package info.coverified.extractor
 
+import caliban.client.Operations.RootMutation
+import caliban.client.SelectionBuilder
 import com.github.tomakehurst.wiremock.client.WireMock.{
+  aResponse,
+  containing,
+  post,
   postRequestedFor,
   urlEqualTo
 }
@@ -13,11 +18,12 @@ import com.github.tomakehurst.wiremock.matching.{EqualToPattern, RegexPattern}
 import info.coverified.extractor.analyzer.BrowserHelper
 import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.profile.ProfileConfig
-import info.coverified.graphql.ExtractorQuery
+import info.coverified.graphql.{Connector, ExtractorQuery}
+import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import info.coverified.test.scalatest.{GraphQlHelper, MockServerSpec}
 import sttp.client3.asynchttpclient.zio.SttpClient
-import zio.URIO
+import zio.{RIO, URIO, ZIO}
 import zio.console.Console
 
 import java.time.Duration
@@ -49,9 +55,9 @@ class ExtractorSpec
           )
 
         val firstEntries = 250
-        evaluateWithHttpClientLayer(
+        evaluateWithHttpClientLayer {
           extractor invokePrivate queryNewUrls(firstEntries)
-        )
+        }
 
         val nameNotFilter = (ExtractorQuery invokePrivate commonFileEndings())
           .map(fileEnding => s"""{name_not_contains_i:\\"$fileEnding\\"}""")
@@ -95,12 +101,12 @@ class ExtractorSpec
 
         val firstEntries = 250
         val reAnalysisInterVal = Duration.ofHours(48L)
-        evaluateWithHttpClientLayer(
+        evaluateWithHttpClientLayer {
           extractor invokePrivate queryExistingUrls(
             firstEntries,
             reAnalysisInterVal
           )
-        )
+        }
 
         val nameNotFilter = (ExtractorQuery invokePrivate commonFileEndings())
           .map(
@@ -138,6 +144,207 @@ class ExtractorSpec
                      |\\}
                      |""".stripMargin
                   )
+                )
+              )
+          )
+        }
+      }
+
+      val queryEntriesWithSameHash = PrivateMethod[
+        RIO[Console with SttpClient, Option[List[SimpleEntryView[String]]]]
+      ](Symbol("queryEntriesWithSameHash"))
+      "send correct query, when looking for similar entries" in {
+        defineStub("""
+                     |{
+                     |  "data": {
+                     |    "allEntries": [
+                     |      {
+                     |        "id": "ckr7fgk9d0798fdo8sas1v1us",
+                     |        "name": "",
+                     |        "hasBeenTagged": false,
+                     |        "url": {
+                     |          "id": "ckr7fdbuw0218fdo803zdc1hy"
+                     |        },
+                     |        "tags": [],
+                     |        "language": null,
+                     |        "content": "",
+                     |        "summary": "",
+                     |        "date": null,
+                     |        "disabled": false
+                     |      }
+                     |    ]
+                     |  }
+                     |}
+                     |""".stripMargin)
+
+        evaluateWithHttpClientLayer {
+          extractor invokePrivate queryEntriesWithSameHash(
+            "your_content_hash_here"
+          )
+        }
+
+        noException shouldBe thrownBy {
+          mockServer.verify(
+            postRequestedFor(urlEqualTo("/api/graphql"))
+              .withRequestBody(
+                new EqualToPattern(
+                  """{"query":"query{allEntries(where:{contentHash:\"your_content_hash_here\",disabled:false},orderBy:[],skip:0){id name content summary url{id} date disabled}}","variables":{}}"""
+                )
+              )
+          )
+        }
+      }
+
+      "stores an disabled entry, if already one exists" in {
+        val buildEntryConsideringExistingEntries = PrivateMethod[
+          SelectionBuilder[RootMutation, Option[SimpleEntryView[SimpleUrlView]]]
+        ](Symbol("buildEntryConsideringExistingEntries"))
+        defineStub("""
+                        |{
+                        |  "data": {
+                        |    "createEntry": {
+                        |      "id": "ckr7jno3i1708esoias8lztsz",
+                        |      "name": "String",
+                        |      "hasBeenTagged": false,
+                        |      "url": {
+                        |        "id": "ckr7jlfto1541esoia8xjc7n3",
+                        |        "name": "bla.foo",
+                        |        "source": {
+                        |          "id": "ckr7ihygt0062esoid13xod1w",
+                        |          "name": "bar",
+                        |          "acronym": "baz",
+                        |          "url": "bar.baz"
+                        |        }
+                        |      },
+                        |      "tags": [],
+                        |      "language": null,
+                        |      "content": "Some content",
+                        |      "summary": "Some summary",
+                        |      "date": "2021-07-20T11:15:00.000Z",
+                        |      "nextCrawl": null,
+                        |      "updatedAt": "2021-07-17T08:31:03.071Z",
+                        |      "profileHash": null,
+                        |      "eTag": null,
+                        |      "contentHash": "",
+                        |      "disabled": false
+                        |    }
+                        |  }
+                        |}
+                        |""".stripMargin)
+
+        noException shouldBe thrownBy {
+          val maybeExistingEntries = Some(
+            List(
+              SimpleEntryView(
+                id = "ckr7fgk9d0798fdo8sas1v1us",
+                name = None,
+                content = None,
+                summary = None,
+                url = None,
+                date = None,
+                disabled = Some(false)
+              )
+            )
+          )
+          val mutation = extractor invokePrivate buildEntryConsideringExistingEntries(
+            "urlId",
+            "The title",
+            Some("This summarizes everything"),
+            Some("This contains a lot."),
+            Some("2021-07-21T22:00:00Z"),
+            "contentHash",
+            maybeExistingEntries
+          )
+
+          evaluateWithHttpClientLayer {
+            Connector.sendRequest(
+              mutation
+                .toRequest(apiUri)
+                .header("x-coverified-internal-auth", internalSecret)
+            )
+          }
+
+          mockServer.verify(
+            postRequestedFor(urlEqualTo("/api/graphql"))
+              .withHeader(
+                "x-coverified-internal-auth",
+                new EqualToPattern(internalSecret, false)
+              )
+              .withRequestBody(
+                new EqualToPattern(
+                  """{"query":"mutation{createEntry(data:{name:\"The title\",url:{connect:{id:\"urlId\"}},content:\"This contains a lot.\",summary:\"This summarizes everything\",date:\"2021-07-21T22:00:00Z\",contentHash:\"contentHash\",disabled:true}){id name content summary url{id name source{id name acronym url}} date disabled}}","variables":{}}""".stripMargin
+                )
+              )
+          )
+        }
+      }
+
+      "stores an enabled entry, if none exists, yet" in {
+        val buildEntryConsideringExistingEntries = PrivateMethod[
+          SelectionBuilder[RootMutation, Option[SimpleEntryView[SimpleUrlView]]]
+        ](Symbol("buildEntryConsideringExistingEntries"))
+        defineStub("""
+                     |{
+                     |  "data": {
+                     |    "createEntry": {
+                     |      "id": "ckr7jno3i1708esoias8lztsz",
+                     |      "name": "String",
+                     |      "hasBeenTagged": false,
+                     |      "url": {
+                     |        "id": "ckr7jlfto1541esoia8xjc7n3",
+                     |        "name": "bla.foo",
+                     |        "source": {
+                     |          "id": "ckr7ihygt0062esoid13xod1w",
+                     |          "name": "bar",
+                     |          "acronym": "baz",
+                     |          "url": "bar.baz"
+                     |        }
+                     |      },
+                     |      "tags": [],
+                     |      "language": null,
+                     |      "content": "Some content",
+                     |      "summary": "Some summary",
+                     |      "date": "2021-07-20T11:15:00.000Z",
+                     |      "nextCrawl": null,
+                     |      "updatedAt": "2021-07-17T08:31:03.071Z",
+                     |      "profileHash": null,
+                     |      "eTag": null,
+                     |      "contentHash": "",
+                     |      "disabled": false
+                     |    }
+                     |  }
+                     |}
+                     |""".stripMargin)
+
+        noException shouldBe thrownBy {
+          val maybeExistingEntries = Some(List.empty[SimpleEntryView[String]])
+          val mutation = extractor invokePrivate buildEntryConsideringExistingEntries(
+            "urlId",
+            "The title",
+            Some("This summarizes everything"),
+            Some("This contains a lot."),
+            Some("2021-07-21T22:00:00Z"),
+            "contentHash",
+            maybeExistingEntries
+          )
+
+          evaluateWithHttpClientLayer {
+            Connector.sendRequest(
+              mutation
+                .toRequest(apiUri)
+                .header("x-coverified-internal-auth", internalSecret)
+            )
+          }
+
+          mockServer.verify(
+            postRequestedFor(urlEqualTo("/api/graphql"))
+              .withHeader(
+                "x-coverified-internal-auth",
+                new EqualToPattern(internalSecret, false)
+              )
+              .withRequestBody(
+                new EqualToPattern(
+                  """{"query":"mutation{createEntry(data:{name:\"The title\",url:{connect:{id:\"urlId\"}},content:\"This contains a lot.\",summary:\"This summarizes everything\",date:\"2021-07-21T22:00:00Z\",contentHash:\"contentHash\",disabled:false}){id name content summary url{id name source{id name acronym url}} date disabled}}","variables":{}}""".stripMargin
                 )
               )
           )
