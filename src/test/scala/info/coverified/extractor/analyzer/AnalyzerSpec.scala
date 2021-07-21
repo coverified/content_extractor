@@ -23,7 +23,7 @@ import org.jsoup.Jsoup
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.Inside.inside
 
-import java.time.{LocalDate, LocalDateTime, ZoneId, ZonedDateTime}
+import java.time.{LocalDateTime, ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
 import scala.util.{Failure, Success, Try}
 
@@ -51,7 +51,8 @@ class AnalyzerSpec
             selector = "#publishedAt",
             format = "yyyy-MM-dd'T'HH:mm:ssX",
             attributeVal = None,
-            pattern = None
+            pattern = None,
+            defaultZoneId = "Europe/Berlin"
           )
         ),
         image = Some("#pic"),
@@ -276,7 +277,8 @@ class AnalyzerSpec
           selector = selector,
           format = "yyyy-MM-dd'T'HH:mm:ssZ",
           attributeVal = None,
-          pattern = None
+          pattern = None,
+          defaultZoneId = "Europe/Berlin"
         )
 
         Analyzer.getDateTimeStringFromElement(document, config) match {
@@ -302,7 +304,8 @@ class AnalyzerSpec
           selector = selector,
           format = "yyyy-MM-dd'T'HH:mm:ssZ",
           attributeVal = None,
-          pattern = None
+          pattern = None,
+          defaultZoneId = "Europe/Berlin"
         )
 
         Analyzer.getDateTimeStringFromElement(document, config) match {
@@ -328,7 +331,8 @@ class AnalyzerSpec
           selector = selector,
           format = "yyyy-MM-dd'T'HH:mm:ssZ",
           attributeVal = Some("datetime"),
-          pattern = None
+          pattern = None,
+          defaultZoneId = "Europe/Berlin"
         )
 
         Analyzer.getDateTimeStringFromElement(document, config) match {
@@ -367,7 +371,8 @@ class AnalyzerSpec
           selector = selector,
           format = "yyyy-MM-dd'T'HH:mm:ssZ",
           attributeVal = Some("datetime"),
-          pattern = None
+          pattern = None,
+          defaultZoneId = "Europe/Berlin"
         )
 
         Analyzer.getDateTimeString(fullDocument, config) match {
@@ -395,7 +400,8 @@ class AnalyzerSpec
           selector = selector,
           format = "yyyy-MM-dd'T'HH:mm:ssZ",
           attributeVal = Some("datetime"),
-          pattern = None
+          pattern = None,
+          defaultZoneId = "Europe/Berlin"
         )
 
         Analyzer.getDateTimeString(fullDocument, config) match {
@@ -414,7 +420,8 @@ class AnalyzerSpec
           selector = selector,
           format = "yyyy-MM-dd'T'HH:mm:ssZ",
           attributeVal = Some("datetime"),
-          pattern = None
+          pattern = None,
+          defaultZoneId = "Europe/Berlin"
         )
 
         Analyzer.getDateTimeString(fullDocument, config) match {
@@ -433,7 +440,8 @@ class AnalyzerSpec
           selector = selector,
           format = "yyyy-MM-dd'T'HH:mm:ssZ",
           attributeVal = Some("datetimer"),
-          pattern = None
+          pattern = None,
+          defaultZoneId = "Europe/Berlin"
         )
 
         Analyzer.getDateTimeString(fullDocument, config) match {
@@ -452,7 +460,8 @@ class AnalyzerSpec
           selector = selector,
           format = "yyyy-MM-dd'T'HH:mm:ssZ",
           attributeVal = Some("datetime"),
-          pattern = None
+          pattern = None,
+          defaultZoneId = "Europe/Berlin"
         )
 
         Analyzer.getDateTimeString(fullDocument, config) match {
@@ -469,7 +478,8 @@ class AnalyzerSpec
           selector = "some_wrong_selector",
           format = "yyyy-MM-dd'T'HH:mm:ssZ",
           attributeVal = None,
-          pattern = None
+          pattern = None,
+          defaultZoneId = "Europe/Berlin"
         )
 
         Analyzer.getDateTimeString(fullDocument, config) match {

@@ -203,7 +203,11 @@ object Analyzer extends LazyLogging {
       .flatMap {
         case (dateTimeString, dateTimeFormat) =>
           /* Re-Format the date time string, so that it matches the ISO format */
-          reformatDateTimePattern(dateTimeString, dateTimeFormat) match {
+          reformatDateTimePattern(
+            dateTimeString,
+            dateTimeFormat,
+            ZoneId.of(dateConfig.defaultZoneId)
+          ) match {
             case success @ Success(_) => success
             case Failure(exception: DateTimeParseException) =>
               throw AnalysisException(

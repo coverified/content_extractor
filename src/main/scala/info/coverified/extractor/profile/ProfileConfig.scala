@@ -93,6 +93,7 @@ object ProfileConfig {
 
       final case class Date(
           attributeVal: scala.Option[java.lang.String],
+          defaultZoneId: java.lang.String,
           format: java.lang.String,
           pattern: scala.Option[java.lang.String],
           selector: java.lang.String,
@@ -109,6 +110,9 @@ object ProfileConfig {
               if (c.hasPathOrNull("attributeVal"))
                 Some(c.getString("attributeVal"))
               else None,
+            defaultZoneId =
+              if (c.hasPathOrNull("defaultZoneId")) c.getString("defaultZoneId")
+              else "Europe/Berlin",
             format =
               if (c.hasPathOrNull("format")) c.getString("format")
               else "yyyy-MM-dd'T'HH:mm:ssXXX",
