@@ -31,7 +31,7 @@ import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
 import net.ruippeixotog.scalascraper.scraper.HtmlValidator
 import org.jsoup.Jsoup
 
-import java.time.format.DateTimeFormatter
+import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.{Duration, LocalDateTime, ZoneId, ZonedDateTime}
 import scala.util.{Failure, Success, Try}
 
@@ -207,7 +207,15 @@ object Analyzer extends LazyLogging {
       .flatMap {
         case (dateTimeString, dateTimeFormat) =>
           /* Re-Format the date time string, so that it matches the ISO format */
-          reformatDateTimePattern(dateTimeString, dateTimeFormat)
+          reformatDateTimePattern(dateTimeString, dateTimeFormat) match {
+            case success @ Success(_) => success
+            case Failure(exception: DateTimeParseException) =>
+              throw AnalysisException(
+                s"Parsing of date time string '$dateTimeString' failed. Format string was '$dateTimeFormat'.",
+                exception
+              )
+            case failure @ Failure(_) => failure
+          }
       } match {
       case Success(dateTimeString) =>
         Some(dateTimeString)

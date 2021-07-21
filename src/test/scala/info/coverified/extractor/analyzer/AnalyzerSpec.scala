@@ -209,6 +209,23 @@ class AnalyzerSpec
     "extracting the date information" should {
       val selector = "#date"
 
+      val ISO_DATE_TIME_PATTERN =
+        PrivateMethod[String](Symbol("ISO_DATE_TIME_PATTERN"))
+
+      "correctly parse a valid ISO date time string to ZonedDateTime" in {
+        val input = "2019-06-27T22:00:00Z"
+        val expected =
+          ZonedDateTime.of(2019, 6, 27, 22, 0, 0, 0, ZoneId.of("Z"))
+
+        val dateTimePattern = Analyzer invokePrivate ISO_DATE_TIME_PATTERN()
+
+        val actual = ZonedDateTime.parse(
+          input,
+          DateTimeFormatter.ofPattern(dateTimePattern)
+        )
+        actual shouldBe expected
+      }
+
       "fail, if date time cannot be obtained from content" in {
         val document = JsoupDocument(Jsoup.parse("""
             |<html>
@@ -494,6 +511,14 @@ class AnalyzerSpec
         val expected = Success("2021-07-20T11:15:00Z")
 
         Analyzer.reformatDateTimePattern("20.07.2021 11:15", "dd.MM.yyyy HH:mm") shouldBe expected
+      }
+
+      "properly reformat date time string with 'Z' as time zone" in {
+        val input = "2019-06-27T22:00:00Z"
+        val expected = Success(input)
+        val dateTimeFormat = Analyzer invokePrivate ISO_DATE_TIME_PATTERN()
+
+        Analyzer.reformatDateTimePattern(input, dateTimeFormat) shouldBe expected
       }
     }
 
