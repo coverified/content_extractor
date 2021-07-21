@@ -520,6 +520,14 @@ class AnalyzerSpec
 
         Analyzer.reformatDateTimePattern(input, dateTimeFormat) shouldBe expected
       }
+
+      "properly reformat date time string with other time zone description" in {
+        val input = "2019-06-27T22:00:00+01:00"
+        val expected = Success("2019-06-27T22:00:00Z")
+        val dateTimeFormat = Analyzer invokePrivate ISO_DATE_TIME_PATTERN()
+
+        Analyzer.reformatDateTimePattern(input, dateTimeFormat) shouldBe expected
+      }
     }
 
     "building the entries with extracted information" should {

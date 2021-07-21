@@ -46,7 +46,7 @@ object Analyzer extends LazyLogging {
   private val USER_AGENT: String = "CoVerifiedBot-Extractor"
   private val BROWSE_TIME_OUT: Duration = Duration.ofMillis(30000L)
 
-  private val ISO_DATE_TIME_PATTERN = "yyyy-MM-dd'T'HH:mm:ssX"
+  private val ISO_DATE_TIME_PATTERN = "yyyy-MM-dd'T'HH:mm:ssXXX"
 
   def run(
       url: String,
