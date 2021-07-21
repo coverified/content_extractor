@@ -20,14 +20,7 @@ import org.jsoup.Jsoup
 
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.temporal.ChronoField._
-import java.time.{
-  DateTimeException,
-  Duration,
-  LocalDate,
-  LocalDateTime,
-  ZoneId,
-  ZonedDateTime
-}
+import java.time.{Duration, LocalDate, LocalDateTime, ZoneId}
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -204,7 +197,7 @@ object Analyzer extends LazyLogging {
       .flatMap {
         case (rawDateTimeString, dateTimeFormat) =>
           /* Date time string and format are extracted. If applicable, try to apply a regex to narrow the input */
-          applyDateTimeRegex(rawDateTimeString, dateConfig.pattern)
+          applyDateTimeRegex(rawDateTimeString, dateConfig.pattern, url)
             .map(
               processedDateTimeString =>
                 (processedDateTimeString, dateTimeFormat)
