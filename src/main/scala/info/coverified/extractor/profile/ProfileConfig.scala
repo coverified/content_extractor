@@ -111,7 +111,7 @@ object ProfileConfig {
               else None,
             format =
               if (c.hasPathOrNull("format")) c.getString("format")
-              else "yyyy-MM-dd'T'HH:mm:ssZ",
+              else "yyyy-MM-dd'T'HH:mm:ssX",
             pattern =
               if (c.hasPathOrNull("pattern")) Some(c.getString("pattern"))
               else None,
