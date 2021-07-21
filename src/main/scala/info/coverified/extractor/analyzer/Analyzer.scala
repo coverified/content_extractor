@@ -87,7 +87,7 @@ object Analyzer extends LazyLogging {
       profileConfig: ProfileConfig
   ): Try[RawEntryInformation] =
     getSelectors(url, pageDoc, profileConfig).flatMap(
-      extractInformation(pageDoc, _)
+      extractInformation(pageDoc, _, url)
     )
 
   /**
@@ -151,29 +151,37 @@ object Analyzer extends LazyLogging {
     *
     * @param pageDoc   Page document
     * @param selectors Selectors to use
+    * @param url       The corresponding url (only for debugging purposes)
     * @return Needed information
     */
   private def extractInformation(
       pageDoc: JsoupDocument,
-      selectors: Selectors
+      selectors: Selectors,
+      url: String
   ): Try[RawEntryInformation] =
     Try {
       RawEntryInformation(
         pageDoc >> text(selectors.title),
         selectors.summary.flatMap(pageDoc >?> text(_)),
         pageDoc >?> text(selectors.content.selector),
-        selectors.date.flatMap(extractDate(pageDoc, _))
+        selectors.date.flatMap(extractDate(pageDoc, _, url))
       )
     } match {
       case success @ Success(_) => success
       case Failure(nse: NoSuchElementException) =>
         Failure(
           AnalysisException(
-            "Unable to extract mandatory title from web page!",
+            s"Unable to extract mandatory title from web page @ url '$url'!",
             nse
           )
         )
-      case failure @ Failure(_) => failure
+      case Failure(ex) =>
+        Failure(
+          AnalysisException(
+            s"Unknown exception during information extraction from url '$url'.",
+            ex
+          )
+        )
     }
 
   /**
@@ -183,14 +191,16 @@ object Analyzer extends LazyLogging {
     *
     * @param document   Web page document
     * @param dateConfig Configuration on how to find the String
+    * @param url        The corresponding url (only for debugging purposes)
     * @return A trial to get the information
     */
   def extractDate(
       document: JsoupDocument,
-      dateConfig: ProfileConfig.PageType.Selectors.Date
+      dateConfig: ProfileConfig.PageType.Selectors.Date,
+      url: String
   ): Option[String] =
     /* If desired, attempt to get date time information from JSON-LD object */
-    getDateTimeString(document, dateConfig)
+    getDateTimeString(document, dateConfig, url)
       .flatMap {
         case (rawDateTimeString, dateTimeFormat) =>
           /* Date time string and format are extracted. If applicable, try to apply a regex to narrow the input */
@@ -211,10 +221,16 @@ object Analyzer extends LazyLogging {
             case success @ Success(_) => success
             case Failure(exception: DateTimeParseException) =>
               throw AnalysisException(
-                s"Parsing of date time string '$dateTimeString' failed. Format string was '$dateTimeFormat'.",
+                s"Parsing of date time string '$dateTimeString' failed. Format string was '$dateTimeFormat'. Source url: '$url'",
                 exception
               )
-            case failure @ Failure(_) => failure
+            case Failure(ex) =>
+              Failure(
+                AnalysisException(
+                  s"Unknown exception during re-formatting of date time string. dateTimeString = '$dateTimeString', format = '$dateTimeFormat', url = '$url'",
+                  ex
+                )
+              )
           }
       } match {
       case Success(dateTimeString) =>
@@ -232,11 +248,13 @@ object Analyzer extends LazyLogging {
     *
     * @param document   Web page document
     * @param dateConfig Configuration on how to find the String
+    * @param url        The corresponding url (only for debugging purposes)
     * @return A trial to get the information
     */
   def getDateTimeString(
       document: JsoupDocument,
-      dateConfig: ProfileConfig.PageType.Selectors.Date
+      dateConfig: ProfileConfig.PageType.Selectors.Date,
+      url: String
   ): Try[(String, String)] =
     if (dateConfig.tryJsonLdFirst) {
       JsonLD.publishDate(document) match {
@@ -244,15 +262,15 @@ object Analyzer extends LazyLogging {
           Success(dateTimeString, ISO_DATE_TIME_PATTERN)
         case Failure(exception) =>
           logger.warn(
-            "Getting date time information from JSON LD failed with following exception. Try to get from selected element.",
+            s"Getting date time information from JSON LD @ '$url' failed with following exception. Try to get from selected element.",
             exception
           )
-          getDateTimeStringFromElement(document, dateConfig).map(
+          getDateTimeStringFromElement(document, dateConfig, url).map(
             (_, dateConfig.format)
           )
       }
     } else {
-      getDateTimeStringFromElement(document, dateConfig).map(
+      getDateTimeStringFromElement(document, dateConfig, url).map(
         (_, dateConfig.format)
       )
     }
@@ -263,11 +281,13 @@ object Analyzer extends LazyLogging {
     *
     * @param document   Web page document
     * @param dateConfig Configuration on how to find the String
+    * @param url        The corresponding url (only for debugging purposes)
     * @return A trial to get the information
     */
   def getDateTimeStringFromElement(
       document: Document,
-      dateConfig: ProfileConfig.PageType.Selectors.Date
+      dateConfig: ProfileConfig.PageType.Selectors.Date,
+      url: String
   ): Try[String] = {
     dateConfig.attributeVal match {
       case Some(attribute) =>
@@ -276,10 +296,10 @@ object Analyzer extends LazyLogging {
             if (dateTimeElement.hasAttr(attribute))
               Success(dateTimeElement.attr(attribute))
             else
-              getDateTimeStringFromContent(document, dateConfig.selector)
+              getDateTimeStringFromContent(document, dateConfig.selector, url)
         }
       case None =>
-        getDateTimeStringFromContent(document, dateConfig.selector)
+        getDateTimeStringFromContent(document, dateConfig.selector, url)
     }
   }
 
@@ -288,12 +308,24 @@ object Analyzer extends LazyLogging {
     *
     * @param document Web page document
     * @param selector CSS selector to apply
+    * @param url      The corresponding url (only for debugging purposes)
     * @return A trial to get the information
     */
   def getDateTimeStringFromContent(
       document: Document,
-      selector: String
-  ): Try[String] = Try(document >> text(selector))
+      selector: String,
+      url: String
+  ): Try[String] = Try(document >> text(selector)) match {
+    case Failure(exception: NoSuchElementException) =>
+      Failure(
+        AnalysisException(
+          s"Cannot extract date time from content with '$selector' as selector @ url '$url'.",
+          exception
+        )
+      )
+    case failure @ Failure(_) => failure
+    case success @ Success(_) => success
+  }
 
   /**
     * Apply an possibly given regex pattern to the given raw date time string and hand back the first match.

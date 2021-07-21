@@ -209,9 +209,9 @@ class AnalyzerSpec
 
     "extracting the date information" should {
       val selector = "#date"
-
       val ISO_DATE_TIME_PATTERN =
         PrivateMethod[String](Symbol("ISO_DATE_TIME_PATTERN"))
+      val url = "test.url"
 
       "correctly parse a valid ISO date time string to ZonedDateTime" in {
         val input = "2019-06-27T22:00:00Z"
@@ -236,7 +236,7 @@ class AnalyzerSpec
             |</html>
             |""".stripMargin))
 
-        Analyzer.getDateTimeStringFromContent(document, selector) match {
+        Analyzer.getDateTimeStringFromContent(document, selector, url) match {
           case Failure(_) => succeed
           case Success(_) =>
             fail("Extraction of information was meant to fail, but passed.")
@@ -254,7 +254,7 @@ class AnalyzerSpec
             |</html>
             |""".stripMargin))
 
-        Analyzer.getDateTimeStringFromContent(document, selector) match {
+        Analyzer.getDateTimeStringFromContent(document, selector, url) match {
           case Success(dateTimeString) => dateTimeString shouldBe expected
           case Failure(_) =>
             fail("Extraction of information failed, but was meant to pass.")
@@ -281,7 +281,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeStringFromElement(document, config) match {
+        Analyzer.getDateTimeStringFromElement(document, config, url) match {
           case Success(dateTimeString) => dateTimeString shouldBe expected
           case Failure(_) =>
             fail("Extraction of information failed, but was meant to pass.")
@@ -308,7 +308,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeStringFromElement(document, config) match {
+        Analyzer.getDateTimeStringFromElement(document, config, url) match {
           case Success(dateTimeString) => dateTimeString shouldBe expected
           case Failure(_) =>
             fail("Extraction of information failed, but was meant to pass.")
@@ -335,7 +335,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeStringFromElement(document, config) match {
+        Analyzer.getDateTimeStringFromElement(document, config, url) match {
           case Success(dateTimeString) => dateTimeString shouldBe expected
           case Failure(_) =>
             fail("Extraction of information failed, but was meant to pass.")
@@ -375,7 +375,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeString(fullDocument, config) match {
+        Analyzer.getDateTimeString(fullDocument, config, url) match {
           case Success(dateTimeString) =>
             dateTimeString shouldBe (expected, expectedDateTimePattern)
           case Failure(_) =>
@@ -404,7 +404,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeString(fullDocument, config) match {
+        Analyzer.getDateTimeString(fullDocument, config, url) match {
           case Success(dateTimeString) =>
             dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssZ")
           case Failure(_) =>
@@ -424,7 +424,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeString(fullDocument, config) match {
+        Analyzer.getDateTimeString(fullDocument, config, url) match {
           case Success(dateTimeString) =>
             dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssZ")
           case Failure(_) =>
@@ -444,7 +444,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeString(fullDocument, config) match {
+        Analyzer.getDateTimeString(fullDocument, config, url) match {
           case Success(dateTimeString) =>
             dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssZ")
           case Failure(_) =>
@@ -464,7 +464,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeString(fullDocument, config) match {
+        Analyzer.getDateTimeString(fullDocument, config, url) match {
           case Success(dateTimeString) =>
             dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssZ")
           case Failure(_) =>
@@ -482,8 +482,8 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeString(fullDocument, config) match {
-          case Success(dateTimeString) =>
+        Analyzer.getDateTimeString(fullDocument, config, url) match {
+          case Success(_) =>
             fail("Extraction of information was meant to fail, but succeeded.")
           case Failure(_) => succeed
         }
@@ -574,16 +574,18 @@ class AnalyzerSpec
     "building the entries with extracted information" should {
       val extractInformation =
         PrivateMethod[Try[RawEntryInformation]](Symbol("extractInformation"))
+      val url = "test.url"
 
       "throw an AnalysisException, if the mandatory title cannot be extracted" in {
         inside(
           Analyzer invokePrivate extractInformation(
             urlPageDocWithoutTitle.toScraperDoc,
-            validPageType.selectors
+            validPageType.selectors,
+            url
           )
         ) {
           case Failure(analysisException: AnalysisException) =>
-            analysisException.msg shouldBe "Unable to extract mandatory title from web page!"
+            analysisException.msg shouldBe "Unable to extract mandatory title from web page @ url 'test.url'!"
             analysisException.cause
               .isInstanceOf[NoSuchElementException] shouldBe true
           case Failure(exception) =>
@@ -602,7 +604,8 @@ class AnalyzerSpec
         inside(
           Analyzer invokePrivate extractInformation(
             validUrlPageDoc.toScraperDoc,
-            validPageType.selectors
+            validPageType.selectors,
+            url
           )
         ) {
           case Success(
@@ -624,7 +627,8 @@ class AnalyzerSpec
         inside(
           Analyzer invokePrivate extractInformation(
             validUrlPageDocWithoutOptionalInformation.toScraperDoc,
-            validPageType.selectors
+            validPageType.selectors,
+            url
           )
         ) {
           case Success(
