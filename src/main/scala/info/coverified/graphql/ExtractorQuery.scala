@@ -38,18 +38,23 @@ object ExtractorQuery {
     ".zip",
     ".ics",
     ".rss",
+    ".rtf",
     /* Images */
     ".png",
     ".jpg",
     ".jpeg",
     ".svg",
     ".gif",
+    ".bmp",
+    ".eps",
     /* Audio / Video */
     ".wav",
     ".mp4",
     ".mp3",
     ".swf",
-    ".srt"
+    /* Other stuff */
+    ".srt",
+    ".m4r"
   )
 
   private def excludeCommonFiles: List[UrlWhereInput] =

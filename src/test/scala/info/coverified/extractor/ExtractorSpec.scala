@@ -13,6 +13,7 @@ import com.github.tomakehurst.wiremock.matching.{EqualToPattern, RegexPattern}
 import info.coverified.extractor.analyzer.BrowserHelper
 import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.profile.ProfileConfig
+import info.coverified.graphql.ExtractorQuery
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import info.coverified.test.scalatest.{GraphQlHelper, MockServerSpec}
 import sttp.client3.asynchttpclient.zio.SttpClient
@@ -20,7 +21,6 @@ import zio.URIO
 import zio.console.Console
 
 import java.time.Duration
-import scala.jdk.CollectionConverters._
 
 class ExtractorSpec
     extends MockServerSpec
@@ -38,6 +38,8 @@ class ExtractorSpec
       internalSecret,
       500
     )
+    val commonFileEndings =
+      PrivateMethod[List[String]](Symbol("commonFileEndings"))
 
     "handling new urls" should {
       "send correct url query to GraphQL API" in {
@@ -50,6 +52,10 @@ class ExtractorSpec
         evaluateWithHttpClientLayer(
           extractor invokePrivate queryNewUrls(firstEntries)
         )
+
+        val nameNotFilter = (ExtractorQuery invokePrivate commonFileEndings())
+          .map(fileEnding => s"""{name_not_contains_i:\\"$fileEnding\\"}""")
+          .mkString(",\n")
 
         noException shouldBe thrownBy {
           mockServer.verify(
@@ -64,30 +70,7 @@ class ExtractorSpec
                 |     allUrls(
                 |       where:{
                 |         AND:[
-                |           {name_not_contains_i:\\".epub\\"},
-                |           {name_not_contains_i:\\".pdf\\"},
-                |           {name_not_contains_i:\\".doc\\"},
-                |           {name_not_contains_i:\\".docx\\"},
-                |           {name_not_contains_i:\\".xls\\"},
-                |           {name_not_contains_i:\\".xlsm\\"},
-                |           {name_not_contains_i:\\".xlsx\\"},
-                |           {name_not_contains_i:\\".ppt\\"},
-                |           {name_not_contains_i:\\".pptx\\"},
-                |           {name_not_contains_i:\\".odt\\"},
-                |           {name_not_contains_i:\\".ods\\"},
-                |           {name_not_contains_i:\\".zip\\"},
-                |           {name_not_contains_i:\\".ics\\"},
-                |           {name_not_contains_i:\\".rss\\"},
-                |           {name_not_contains_i:\\".png\\"},
-                |           {name_not_contains_i:\\".jpg\\"},
-                |           {name_not_contains_i:\\".jpeg\\"},
-                |           {name_not_contains_i:\\".svg\\"},
-                |           {name_not_contains_i:\\".gif\\"},
-                |           {name_not_contains_i:\\".wav\\"},
-                |           {name_not_contains_i:\\".mp4\\"},
-                |           {name_not_contains_i:\\".mp3\\"},
-                |           {name_not_contains_i:\\".swf\\"},
-                |           {name_not_contains_i:\\".srt\\"}
+                |           $nameNotFilter
                 |           ],
                 |         lastCrawl:\\"1970-01-01T00:00:00.000Z\\"
                 |       },
@@ -119,6 +102,13 @@ class ExtractorSpec
           )
         )
 
+        val nameNotFilter = (ExtractorQuery invokePrivate commonFileEndings())
+          .map(
+            fileEnding =>
+              s"""\\{name_not_contains_i:\\\\"\\$fileEnding\\\\"\\}"""
+          )
+          .mkString(",\n")
+
         noException shouldBe thrownBy {
           mockServer.verify(
             postRequestedFor(urlEqualTo("/api/graphql"))
@@ -135,30 +125,7 @@ class ExtractorSpec
                      |     allUrls\\(
                      |       where:\\{
                      |         AND:\\[
-                     |           \\{name_not_contains_i:\\\\"\\.epub\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.pdf\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.doc\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.docx\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.xls\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.xlsm\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.xlsx\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.ppt\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.pptx\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.odt\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.ods\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.zip\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.ics\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.rss\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.png\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.jpg\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.jpeg\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.svg\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.gif\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.wav\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.mp4\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.mp3\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.swf\\\\"\\},
-                     |           \\{name_not_contains_i:\\\\"\\.srt\\\\"\\}
+                     |           $nameNotFilter
                      |           ],
                      |         lastCrawl_lte:\\\\"[\\w\\d.\\-:]+\\\\",
                      |         lastCrawl_gt:\\\\"1970-01-01T00:00:00\\.000Z\\\\"
