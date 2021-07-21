@@ -360,6 +360,7 @@ class AnalyzerSpec
 
       "get date time string from correct source, if receive from JSON-LD is desired and succeeds" in {
         val expected = "2021-07-20T23:20:00+01:00"
+        val expectedDateTimePattern = Analyzer invokePrivate ISO_DATE_TIME_PATTERN()
 
         val config = Date(
           tryJsonLdFirst = true,
@@ -371,7 +372,7 @@ class AnalyzerSpec
 
         Analyzer.getDateTimeString(fullDocument, config) match {
           case Success(dateTimeString) =>
-            dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssX")
+            dateTimeString shouldBe (expected, expectedDateTimePattern)
           case Failure(_) =>
             fail("Extraction of information failed, but was meant to pass.")
         }
@@ -507,10 +508,21 @@ class AnalyzerSpec
         }
       }
 
-      "properly reformat a given date time string" in {
-        val expected = Success("2021-07-20T11:15:00Z")
+      "properly reformat a given date time string with fall back time zone" in {
+        val input = "20.07.2021 11:15"
+        val format = "dd.MM.yyyy HH:mm"
+        val fallBackZone = ZoneId.of("Europe/Berlin")
 
-        Analyzer.reformatDateTimePattern("20.07.2021 11:15", "dd.MM.yyyy HH:mm") shouldBe expected
+        val expected = Success(
+          LocalDateTime
+            .parse(input, DateTimeFormatter.ofPattern(format))
+            .atZone(fallBackZone)
+            .withZoneSameInstant(ZoneId.of("UTC"))
+            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssX"))
+        )
+
+        /* If no time zone information is provided, assume we are in UTC */
+        Analyzer.reformatDateTimePattern(input, format, fallBackZone) shouldBe expected
       }
 
       "properly reformat date time string with 'Z' as time zone" in {
@@ -523,10 +535,29 @@ class AnalyzerSpec
 
       "properly reformat date time string with other time zone description" in {
         val input = "2019-06-27T22:00:00+01:00"
-        val expected = Success("2019-06-27T22:00:00Z")
+        /* The input is given in another time zone, therefore the instant is transferred to UTC. */
+        val expected = Success("2019-06-27T21:00:00Z")
         val dateTimeFormat = Analyzer invokePrivate ISO_DATE_TIME_PATTERN()
 
         Analyzer.reformatDateTimePattern(input, dateTimeFormat) shouldBe expected
+      }
+
+      "properly reformat date time string with missing time" in {
+        val input = "01.03.2021"
+        val format = "dd.MM.yyyy"
+        val fallBackZone = ZoneId.of("Europe/Berlin")
+        val expected = Success(
+          LocalDateTime
+            .parse(
+              input + "T00:00:00",
+              DateTimeFormatter.ofPattern(format + "'T'HH:mm:ss")
+            )
+            .atZone(fallBackZone)
+            .withZoneSameInstant(ZoneId.of("UTC"))
+            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssX"))
+        )
+
+        Analyzer.reformatDateTimePattern(input, format, fallBackZone) shouldBe expected
       }
     }
 

@@ -5,24 +5,11 @@
 
 package info.coverified.extractor.analyzer
 
-import com.google.gson.{
-  JsonArray,
-  JsonNull,
-  JsonObject,
-  JsonParser,
-  JsonPrimitive
-}
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
-import net.ruippeixotog.scalascraper.model.{
-  Document,
-  Element,
-  ElementNode,
-  ElementQuery,
-  TextNode
-}
+import net.ruippeixotog.scalascraper.model.{Document, ElementNode, TextNode}
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.exceptions.AnalysisException
@@ -32,7 +19,15 @@ import net.ruippeixotog.scalascraper.scraper.HtmlValidator
 import org.jsoup.Jsoup
 
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
-import java.time.{Duration, LocalDateTime, ZoneId, ZonedDateTime}
+import java.time.temporal.ChronoField._
+import java.time.{
+  DateTimeException,
+  Duration,
+  LocalDate,
+  LocalDateTime,
+  ZoneId,
+  ZonedDateTime
+}
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -47,6 +42,7 @@ object Analyzer extends LazyLogging {
   private val BROWSE_TIME_OUT: Duration = Duration.ofMillis(30000L)
 
   private val ISO_DATE_TIME_PATTERN = "yyyy-MM-dd'T'HH:mm:ssXXX"
+  private val TARGET_TIME_ZONE = ZoneId.of("UTC")
 
   def run(
       url: String,
@@ -321,7 +317,9 @@ object Analyzer extends LazyLogging {
       .getOrElse(Success(rawDateTimeString))
 
   /**
-    * Bring an arbitrary date time pattern to an ISO date time pattern
+    * Bring an arbitrary date time pattern to an ISO date time pattern. The input string is parsed with it's given time
+    * zone information and transferred to UTC. If no time zone information is available, we use fall back information.
+    * If no time information is given at all, set it to the beginning of the day.
     *
     * @param dateTimeString The input string
     * @param dateTimeFormat The matching format
@@ -329,14 +327,34 @@ object Analyzer extends LazyLogging {
     */
   def reformatDateTimePattern(
       dateTimeString: String,
-      dateTimeFormat: String
+      dateTimeFormat: String,
+      fallBackZone: ZoneId = ZoneId.of("Europe/Berlin")
   ): Try[String] =
     Try {
-      LocalDateTime
-        .parse(dateTimeString, DateTimeFormatter.ofPattern(dateTimeFormat))
-        .atZone(ZoneId.of("UTC"))
-        .format(DateTimeFormatter.ofPattern(ISO_DATE_TIME_PATTERN))
-    }
+      val dateTimeFormatter = DateTimeFormatter.ofPattern(dateTimeFormat)
+      val temporalAccessor = dateTimeFormatter.parse(dateTimeString)
+
+      val atLeastOneOfThatFieldsForTime =
+        Seq(HOUR_OF_DAY, HOUR_OF_AMPM, CLOCK_HOUR_OF_DAY, CLOCK_HOUR_OF_AMPM)
+      if (atLeastOneOfThatFieldsForTime.exists(temporalAccessor.isSupported(_))) {
+        /* The string contains time information. Try to figure out, in which time zone the time is given. If some is,
+         * apparent, take that for parsing, otherwise use the fall back one. */
+        val timeZone = Try {
+          temporalAccessor.query(ZoneId.from(_))
+        }.getOrElse {
+          logger.debug(
+            s"Unable to get zone id from '$dateTimeString'. Take target time zone '$fallBackZone'."
+          )
+          fallBackZone
+        }
+
+        LocalDateTime.from(temporalAccessor).atZone(timeZone)
+      } else {
+        /* The string does not contain time information. It is set to 00:00 h */
+        LocalDate.from(temporalAccessor).atStartOfDay(fallBackZone)
+      }
+    }.map(_.withZoneSameInstant(TARGET_TIME_ZONE))
+      .map(_.format(DateTimeFormatter.ofPattern(ISO_DATE_TIME_PATTERN)))
 
   /**
     * Extract content from web page under consideration of exclude selectors, that are meant to odd out child elements,
