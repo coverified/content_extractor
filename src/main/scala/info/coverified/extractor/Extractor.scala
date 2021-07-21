@@ -20,7 +20,7 @@ import info.coverified.extractor.analyzer.EntryInformation.{
   RawEntryInformation,
   UpdateEntryInformation
 }
-import info.coverified.extractor.analyzer.Analyzer
+import info.coverified.extractor.analyzer.{Analyzer, EntryInformation}
 import info.coverified.extractor.config.Config
 import info.coverified.extractor.exceptions.{
   ConfigException,
@@ -565,7 +565,15 @@ final case class Extractor private (
             logger.debug(
               "There is an entry existent for url '{}' and an update is needed."
             )
-            updateEntry(id, title, summary, content, date)
+            val contentHash = EntryInformation
+              .contentHash(
+                title,
+                summary.getOrElse(""),
+                content.getOrElse(""),
+                date.getOrElse("")
+              )
+              .toString
+            updateEntry(id, title, summary, content, date, contentHash)
         }
       case Right(cei @ CreateEntryInformation(title, summary, content, date)) =>
         logger.debug(
@@ -640,7 +648,8 @@ final case class Extractor private (
             existingContent,
             existingSummary,
             _,
-            existingDate
+            existingDate,
+            _
           )
           ) =>
         rawInformation match {
@@ -819,11 +828,12 @@ object Extractor extends LazyLogging {
   /**
     * Build a mutation, that updates the entry
     *
-    * @param entryId  Identifier of the entry
-    * @param title    Title
-    * @param summary  Summary
-    * @param content  Content
-    * @param date     Date of the article
+    * @param entryId      Identifier of the entry
+    * @param title        Title
+    * @param summary      Summary
+    * @param content      Content
+    * @param date         Date of the article
+    * @param contentHash  The hash of the updated content
     * @return A mutation to post to data base
     */
   def updateEntry(
@@ -831,7 +841,8 @@ object Extractor extends LazyLogging {
       title: String,
       summary: Option[String],
       content: Option[String],
-      date: Option[String]
+      date: Option[String],
+      contentHash: String
   ): SelectionBuilder[RootMutation, Option[
     SimpleEntry.SimpleEntryView[SimpleUrlView]
   ]] =
@@ -844,7 +855,8 @@ object Extractor extends LazyLogging {
           content = content,
           hasBeenTagged = Some(false),
           date = date,
-          tags = Some(TagRelateToManyInput(disconnectAll = Some(true)))
+          tags = Some(TagRelateToManyInput(disconnectAll = Some(true))),
+          contentHash = Some(contentHash)
         )
       )
     )(SimpleEntry.view(SimpleUrl.view))
