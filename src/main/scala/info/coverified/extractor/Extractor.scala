@@ -202,7 +202,10 @@ final case class Extractor private (
     */
   def handleNewUrl(url: SimpleUrlView): URIO[
     Console with SttpClient,
-    (Option[SimpleUrlView], Option[SimpleEntryView[SimpleUrlView]])
+    (
+        Option[SimpleUrlView],
+        Option[SimpleEntryView[SimpleUrlView, TagView[String]]]
+    )
   ] = {
     logger.debug("Handling not yet visited url '{}' ({}).", url.id, url.name)
     updateUrlView(url).zipPar(scrapeAndCreateNewEntry(url))
@@ -247,7 +250,9 @@ final case class Extractor private (
     */
   def scrapeAndCreateNewEntry(
       url: SimpleUrlView
-  ): URIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]] =
+  ): URIO[Console with SttpClient, Option[
+    SimpleEntryView[SimpleUrlView, TagView[String]]
+  ]] =
     ZIO
       .fromTry {
         logger.debug("Scraping url '{}' ({}).", url.id, url.name)
@@ -304,7 +309,9 @@ final case class Extractor private (
   def storeNewEntry(
       urlId: String,
       createEntryInformation: CreateEntryInformation
-  ): URIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]] =
+  ): URIO[Console with SttpClient, Option[
+    SimpleEntryView[SimpleUrlView, TagView[String]]
+  ]] =
     createEntryInformation match {
       case cei @ CreateEntryInformation(title, summary, content, date, tags) =>
         /* Check, if there isn't yet an entry with the same content */
@@ -344,7 +351,9 @@ final case class Extractor private (
     */
   private def queryEntriesWithSameHash(
       contentHash: String
-  ): RIO[Console with SttpClient, Option[List[SimpleEntryView[String]]]] =
+  ): RIO[Console with SttpClient, Option[
+    List[SimpleEntryView[String, TagView[String]]]
+  ]] =
     Connector
       .sendRequest(
         ExtractorQuery
@@ -373,9 +382,13 @@ final case class Extractor private (
       date: Option[String],
       maybeTags: Option[List[String]],
       contentHash: String,
-      maybeApparentEntries: Option[List[SimpleEntryView[String]]],
+      maybeApparentEntries: Option[
+        List[SimpleEntryView[String, TagView[String]]]
+      ],
       timeToNextCrawl: Duration
-  ): SelectionBuilder[RootMutation, Option[SimpleEntryView[SimpleUrlView]]] = {
+  ): SelectionBuilder[RootMutation, Option[
+    SimpleEntryView[SimpleUrlView, TagView[String]]
+  ]] = {
     /* Check, if the model needs to be disabled */
     val disable = maybeApparentEntries.forall(_.nonEmpty)
     if (disable) {
@@ -495,10 +508,10 @@ final case class Extractor private (
     */
   private def storeMutation(
       mutation: SelectionBuilder[RootMutation, Option[
-        SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+        SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView, TagView[String]]
       ]]
   ): RIO[Console with SttpClient, Option[
-    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView, TagView[String]]
   ]] =
     Connector.sendRequest(
       mutation
@@ -658,9 +671,11 @@ final case class Extractor private (
     * @return An option onto an disabling effect
     */
   private def attemptToDisable(
-      maybeEntries: Option[List[SimpleEntryView[_]]]
+      maybeEntries: Option[List[SimpleEntryView[_, _]]]
   ): Option[
-    RIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]]
+    RIO[Console with SttpClient, Option[
+      SimpleEntryView[SimpleUrlView, TagView[String]]
+    ]]
   ] = maybeEntries.flatMap(_.headOption).map { existingEntry =>
     logger.debug(
       s"Mark the entry with id '${existingEntry.id}' as disabled."
@@ -676,13 +691,18 @@ final case class Extractor private (
     */
   private def markAsDisabled(
       id: String
-  ): RIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]] =
+  ): RIO[Console with SttpClient, Option[
+    SimpleEntryView[SimpleUrlView, TagView[String]]
+  ]] =
     Connector.sendRequest(
       Mutation
         .updateEntry(
           id,
           Some(EntryUpdateInput(disabled = Some(true)))
-        )(SimpleEntry.view(SimpleUrl.view))
+        )(
+          SimpleEntry
+            .view(SimpleUrl.view, Tag.view(CoVerifiedClientSchema.Language.id))
+        )
         .toRequest(apiUrl)
         .header("x-coverified-internal-auth", authSecret)
     )
@@ -699,9 +719,11 @@ final case class Extractor private (
   def handleExistingEntry(
       urlId: String,
       scrapedInformation: RawEntryInformation,
-      maybeApparentEntry: Option[SimpleEntryView[String]]
+      maybeApparentEntry: Option[SimpleEntryView[String, TagView[String]]]
   ): Option[
-    URIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]]
+    URIO[Console with SttpClient, Option[
+      SimpleEntryView[SimpleUrlView, TagView[String]]
+    ]]
   ] = {
     logger.debug("Handle possibly existing entry for url '{}'.", urlId)
     (checkAgainstExisting(scrapedInformation, maybeApparentEntry) match {
@@ -803,7 +825,7 @@ final case class Extractor private (
     */
   private def checkAgainstExisting(
       rawInformation: RawEntryInformation,
-      maybeApparentEntry: Option[SimpleEntryView[String]]
+      maybeApparentEntry: Option[SimpleEntryView[String, TagView[String]]]
   ): Either[Option[UpdateEntryInformation], CreateEntryInformation] =
     maybeApparentEntry match {
       case Some(
@@ -814,6 +836,7 @@ final case class Extractor private (
             existingSummary,
             _,
             existingDate,
+            _,
             _
           )
           ) =>
@@ -849,7 +872,9 @@ final case class Extractor private (
 object Extractor extends LazyLogging {
   type HandleEntryAndUrlEffect = (
       Option[
-        RIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]]
+        RIO[Console with SttpClient, Option[
+          SimpleEntryView[SimpleUrlView, TagView[String]]
+        ]]
       ],
       Option[RIO[Console with SttpClient, Option[SimpleUrlView]]]
   )
@@ -975,7 +1000,7 @@ object Extractor extends LazyLogging {
         (Seq[TagWhereUniqueInput], Seq[TagCreateInput])
       ]
   ): SelectionBuilder[RootMutation, Option[
-    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
+    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView, TagView[String]]
   ]] =
     Mutation.createEntry(
       Some(
@@ -1004,7 +1029,8 @@ object Extractor extends LazyLogging {
         )
       )
     )(
-      SimpleEntry.view(SimpleUrl.view)
+      SimpleEntry
+        .view(SimpleUrl.view, Tag.view(CoVerifiedClientSchema.Language.id))
     )
 
   /**
@@ -1029,7 +1055,7 @@ object Extractor extends LazyLogging {
       timeToNextCrawl: Duration,
       disabled: Boolean = false
   ): SelectionBuilder[RootMutation, Option[
-    SimpleEntry.SimpleEntryView[SimpleUrlView]
+    SimpleEntry.SimpleEntryView[SimpleUrlView, TagView[String]]
   ]] =
     Mutation.updateEntry(
       entryId,
@@ -1046,7 +1072,10 @@ object Extractor extends LazyLogging {
           nextCrawl = determineNextCrawl(timeToNextCrawl)
         )
       )
-    )(SimpleEntry.view(SimpleUrl.view))
+    )(
+      SimpleEntry
+        .view(SimpleUrl.view, Tag.view(CoVerifiedClientSchema.Language.id))
+    )
 
   /**
     * Determine the instant of the next crawl

@@ -8,7 +8,6 @@ package info.coverified.extractor
 import caliban.client.Operations.RootMutation
 import caliban.client.SelectionBuilder
 import com.github.tomakehurst.wiremock.client.WireMock.{
-  post,
   postRequestedFor,
   urlEqualTo
 }
@@ -26,7 +25,7 @@ import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import info.coverified.test.scalatest.{GraphQlHelper, MockServerSpec}
 import sttp.client3.asynchttpclient.zio.SttpClient
-import zio.{RIO, URIO, ZIO}
+import zio.{RIO, URIO}
 import zio.console.Console
 
 import java.time.Duration
@@ -154,7 +153,9 @@ class ExtractorSpec
       }
 
       val queryEntriesWithSameHash = PrivateMethod[
-        RIO[Console with SttpClient, Option[List[SimpleEntryView[String]]]]
+        RIO[Console with SttpClient, Option[
+          List[SimpleEntryView[String, TagView[String]]]
+        ]]
       ](Symbol("queryEntriesWithSameHash"))
       "send correct query, when looking for similar entries" in {
         defineStub("""
@@ -191,7 +192,7 @@ class ExtractorSpec
             postRequestedFor(urlEqualTo("/api/graphql"))
               .withRequestBody(
                 new EqualToPattern(
-                  """{"query":"query{allEntries(where:{contentHash:\"your_content_hash_here\",disabled:false},orderBy:[],skip:0){id name content summary url{id} date disabled}}","variables":{}}"""
+                  """{"query":"query{allEntries(where:{contentHash:\"your_content_hash_here\",disabled:false},orderBy:[],skip:0){id name content summary url{id} date disabled tags(where:{},orderBy:[],skip:0){id name language{id} highlighted generated}}}","variables":{}}"""
                 )
               )
           )
@@ -199,7 +200,9 @@ class ExtractorSpec
       }
 
       val buildEntryConsideringExistingStuff = PrivateMethod[
-        SelectionBuilder[RootMutation, Option[SimpleEntryView[SimpleUrlView]]]
+        SelectionBuilder[RootMutation, Option[
+          SimpleEntryView[SimpleUrlView, TagView[String]]
+        ]]
       ](Symbol("buildEntryConsideringExistingStuff"))
       "stores an disabled entry, if already one exists" in {
         defineStub("""
@@ -245,7 +248,8 @@ class ExtractorSpec
                 summary = None,
                 url = None,
                 date = None,
-                disabled = Some(false)
+                disabled = Some(false),
+                tags = None
               )
             )
           )
@@ -277,7 +281,7 @@ class ExtractorSpec
               )
               .withRequestBody(
                 new RegexPattern(
-                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},tags:\{},content:\\"This contains a lot\.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".+\\",contentHash:\\"contentHash\\",disabled:true}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled}}","variables":\{}}"""
+                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},tags:\{},content:\\"This contains a lot\.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".*\\",contentHash:\\"contentHash\\",disabled:true}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled tags\(where:\{},orderBy:\[\],skip:0\)\{id name language\{id} highlighted generated}}}","variables":\{}}"""
                 )
               )
           )
@@ -319,7 +323,8 @@ class ExtractorSpec
                      |""".stripMargin)
 
         noException shouldBe thrownBy {
-          val maybeExistingEntries = Some(List.empty[SimpleEntryView[String]])
+          val maybeExistingEntries =
+            Some(List.empty[SimpleEntryView[String, TagView[String]]])
           val mutation = extractor invokePrivate buildEntryConsideringExistingStuff(
             "urlId",
             "The title",
@@ -348,7 +353,7 @@ class ExtractorSpec
               )
               .withRequestBody(
                 new RegexPattern(
-                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},tags:\{},content:\\"This contains a lot.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".+\\",contentHash:\\"contentHash\\",disabled:false}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled}}","variables":\{}}"""
+                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},tags:\{},content:\\"This contains a lot\.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".*\\",contentHash:\\"contentHash\\",disabled:false}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled tags\(where:\{},orderBy:\[\],skip:0\)\{id name language\{id} highlighted generated}}}","variables":\{}}"""
                 )
               )
           )
@@ -356,7 +361,9 @@ class ExtractorSpec
       }
 
       val markAsDisabled = PrivateMethod[
-        RIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]]
+        RIO[Console with SttpClient, Option[
+          SimpleEntryView[SimpleUrlView, TagView[String]]
+        ]]
       ](Symbol("markAsDisabled"))
       "send correct disabling query to GraphQL" in {
         val id = "some_id"
@@ -404,7 +411,7 @@ class ExtractorSpec
               )
               .withRequestBody(
                 new EqualToPattern(
-                  s"""{"query":"mutation{updateEntry(id:\\\"$id\\\",data:{disabled:true}){id name content summary url{id name source{id name acronym url}} date disabled}}","variables":{}}""".stripMargin
+                  s"""{"query":"mutation{updateEntry(id:\\\"$id\\\",data:{disabled:true}){id name content summary url{id name source{id name acronym url}} date disabled tags(where:{},orderBy:[],skip:0){id name language{id} highlighted generated}}}","variables":{}}""".stripMargin
                 )
               )
           )
@@ -412,11 +419,12 @@ class ExtractorSpec
       }
 
       val attemptToDisable = PrivateMethod[Option[
-        RIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]]
+        RIO[Console with SttpClient, Option[
+          SimpleEntryView[SimpleUrlView, TagView[String]]
+        ]]
       ]](Symbol("attemptToDisable"))
       "does not disable anything, if no existing entry is apparent" in {
-        val id = "some_id"
-        val maybeEntries = Some(List.empty[SimpleEntryView[_]])
+        val maybeEntries = Some(List.empty[SimpleEntryView[_, _]])
 
         extractor invokePrivate attemptToDisable(maybeEntries) match {
           case None => succeed
@@ -468,7 +476,8 @@ class ExtractorSpec
               summary = None,
               url = None,
               date = None,
-              disabled = Some(false)
+              disabled = Some(false),
+              tags = None
             )
           )
         )
@@ -485,7 +494,7 @@ class ExtractorSpec
               )
               .withRequestBody(
                 new EqualToPattern(
-                  s"""{"query":"mutation{updateEntry(id:\\\"$id\\\",data:{disabled:true}){id name content summary url{id name source{id name acronym url}} date disabled}}","variables":{}}""".stripMargin
+                  s"""{"query":"mutation{updateEntry(id:\\\"$id\\\",data:{disabled:true}){id name content summary url{id name source{id name acronym url}} date disabled tags(where:{},orderBy:[],skip:0){id name language{id} highlighted generated}}}","variables":{}}""".stripMargin
                 )
               )
           )

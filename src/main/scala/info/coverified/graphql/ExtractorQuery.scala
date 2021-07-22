@@ -7,13 +7,19 @@ package info.coverified.graphql
 
 import caliban.client.Operations.RootQuery
 import caliban.client.SelectionBuilder
+import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   EntryWhereInput,
   Query,
+  Tag,
   Url,
   UrlWhereInput
 }
-import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
+import info.coverified.graphql.schema.{
+  CoVerifiedClientSchema,
+  SimpleEntry,
+  SimpleUrl
+}
 
 import java.time.format.DateTimeFormatter
 import java.time.{Duration, ZoneId, ZonedDateTime}
@@ -121,12 +127,12 @@ object ExtractorQuery {
     * @return An equivalent [[SelectionBuilder]]
     */
   def existingEntry(urlId: String): SelectionBuilder[RootQuery, Option[
-    List[SimpleEntry.SimpleEntryView[String]]
+    List[SimpleEntry.SimpleEntryView[String, TagView[String]]]
   ]] =
     Query.allEntries(
       where = EntryWhereInput(url = Some(UrlWhereInput(id = Some(urlId)))),
       skip = 0
-    )(SimpleEntry.view(Url.id))
+    )(SimpleEntry.view(Url.id, Tag.view(CoVerifiedClientSchema.Language.id)))
 
   /**
     * Query all entries with the given hash code
@@ -137,7 +143,7 @@ object ExtractorQuery {
   def entriesWithGivenHash(
       contentHash: String
   ): SelectionBuilder[RootQuery, Option[
-    List[SimpleEntry.SimpleEntryView[String]]
+    List[SimpleEntry.SimpleEntryView[String, TagView[String]]]
   ]] =
     Query.allEntries(
       where = EntryWhereInput(
@@ -146,6 +152,6 @@ object ExtractorQuery {
       ),
       skip = 0
     )(
-      SimpleEntry.view(Url.id)
+      SimpleEntry.view(Url.id, Tag.view(CoVerifiedClientSchema.Language.id))
     )
 }
