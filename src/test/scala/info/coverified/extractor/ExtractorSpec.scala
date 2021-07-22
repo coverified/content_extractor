@@ -350,6 +350,143 @@ class ExtractorSpec
           )
         }
       }
+
+      val markAsDisabled = PrivateMethod[
+        RIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]]
+      ](Symbol("markAsDisabled"))
+      "send correct disabling query to GraphQL" in {
+        val id = "some_id"
+        defineStub("""
+           |{
+           |  "data": {
+           |    "updateEntry": {
+           |      "id": "ckr7jno3i1708esoias8lztsz",
+           |      "name": "String",
+           |      "hasBeenTagged": false,
+           |      "url": {
+           |        "id": "ckr7jlfto1541esoia8xjc7n3",
+           |        "name": "bla.foo",
+           |        "source": {
+           |          "id": "ckr7ihygt0062esoid13xod1w",
+           |          "name": "bar",
+           |          "acronym": "baz",
+           |          "url": "bar.baz"
+           |        }
+           |      },
+           |      "tags": [],
+           |      "language": null,
+           |      "content": "Some content",
+           |      "summary": "Some summary",
+           |      "date": "2021-07-20T11:15:00.000Z",
+           |      "nextCrawl": null,
+           |      "updatedAt": "2021-07-17T08:31:03.071Z",
+           |      "profileHash": null,
+           |      "eTag": null,
+           |      "contentHash": "",
+           |      "disabled": true
+           |    }
+           |  }
+           |}
+           |""".stripMargin)
+
+        evaluateWithHttpClientLayer(extractor invokePrivate markAsDisabled(id))
+
+        noException shouldBe thrownBy {
+          mockServer.verify(
+            postRequestedFor(urlEqualTo("/api/graphql"))
+              .withHeader(
+                "x-coverified-internal-auth",
+                new EqualToPattern(internalSecret, false)
+              )
+              .withRequestBody(
+                new EqualToPattern(
+                  s"""{"query":"mutation{updateEntry(id:\\\"$id\\\",data:{disabled:true}){id name content summary url{id name source{id name acronym url}} date disabled}}","variables":{}}""".stripMargin
+                )
+              )
+          )
+        }
+      }
+
+      val attemptToDisable = PrivateMethod[Option[
+        RIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]]
+      ]](Symbol("attemptToDisable"))
+      "does not disable anything, if no existing entry is apparent" in {
+        val id = "some_id"
+        val maybeEntries = Some(List.empty[SimpleEntryView[_]])
+
+        extractor invokePrivate attemptToDisable(maybeEntries) match {
+          case None => succeed
+          case Some(_) =>
+            fail("It isn't expected to get an effect to disable anything.")
+        }
+      }
+
+      "send correct disabling query to GraphQL, if applicable" in {
+        val id = "some_id"
+        defineStub("""
+                     |{
+                     |  "data": {
+                     |    "updateEntry": {
+                     |      "id": "ckr7jno3i1708esoias8lztsz",
+                     |      "name": "String",
+                     |      "hasBeenTagged": false,
+                     |      "url": {
+                     |        "id": "ckr7jlfto1541esoia8xjc7n3",
+                     |        "name": "bla.foo",
+                     |        "source": {
+                     |          "id": "ckr7ihygt0062esoid13xod1w",
+                     |          "name": "bar",
+                     |          "acronym": "baz",
+                     |          "url": "bar.baz"
+                     |        }
+                     |      },
+                     |      "tags": [],
+                     |      "language": null,
+                     |      "content": "Some content",
+                     |      "summary": "Some summary",
+                     |      "date": "2021-07-20T11:15:00.000Z",
+                     |      "nextCrawl": null,
+                     |      "updatedAt": "2021-07-17T08:31:03.071Z",
+                     |      "profileHash": null,
+                     |      "eTag": null,
+                     |      "contentHash": "",
+                     |      "disabled": true
+                     |    }
+                     |  }
+                     |}
+                     |""".stripMargin)
+        val maybeEntries = Some(
+          List(
+            SimpleEntryView(
+              id = id,
+              name = None,
+              content = None,
+              summary = None,
+              url = None,
+              date = None,
+              disabled = Some(false)
+            )
+          )
+        )
+
+        (extractor invokePrivate attemptToDisable(maybeEntries))
+          .map(evaluateWithHttpClientLayer(_))
+
+        noException shouldBe thrownBy {
+          mockServer.verify(
+            postRequestedFor(urlEqualTo("/api/graphql"))
+              .withHeader(
+                "x-coverified-internal-auth",
+                new EqualToPattern(internalSecret, false)
+              )
+              .withRequestBody(
+                new EqualToPattern(
+                  s"""{"query":"mutation{updateEntry(id:\\\"$id\\\",data:{disabled:true}){id name content summary url{id name source{id name acronym url}} date disabled}}","variables":{}}""".stripMargin
+                )
+              )
+          )
+        }
+      }
     }
   }
 

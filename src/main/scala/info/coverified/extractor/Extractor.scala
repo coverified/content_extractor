@@ -495,56 +495,71 @@ final case class Extractor private (
               )
               IO.apply((): Unit)
           }).zipPar(updateUrlView(url))
+        case Failure(httpError: HttpStatusException)
+            if httpError.getStatusCode == 404 =>
+          /* Desired web page is not available. Let it untouched. */
+          logger.warn(
+            s"The desired web page '${url.name}' cannot be found. If available, mark existing entry as disabled."
+          )
+          attemptToDisable(maybeEntries)
+            .getOrElse {
+              logger.debug(
+                s"There is no existing entry for url '${url.name}', that could be disabled."
+              )
+              IO.apply((): Unit)
+            }
+            .zipPar(updateUrlView(url))
         case Failure(exception) =>
+          /* Scraping of web page failed. Due to unknown reason. Do not alter the entry. */
           exception match {
             case _: HttpStatusException | _: SocketTimeoutException =>
               logger.debug(
-                "Received failure case for a failure, that has already been logged. Attempt to delete possible existing entry."
+                "Received failure case for a failure, that has already been logged. Don't update anything."
               )
             case _ =>
               logger.error(
-                s"Getting content of url ${url.id} (${url.name}) failed due to the following reason. Attempt to delete possible existing entry.",
+                s"Getting content of url ${url.id} (${url.name}) failed due to the following reason. Let the entry untouched",
                 exception
               )
           }
-          (maybeEntries
-            .flatMap(_.headOption)
-            .map(entry => deleteEntry(entry.id)) match {
-            case Some(effect) =>
-              logger.debug(
-                "There is an entry existent for url '{}' ({}). Attempt to delete it.",
-                url.id,
-                url.name
-              )
-              effect
-            case None =>
-              logger.debug(
-                "No update necessary for url '{}' ({}).",
-                url.id,
-                url.name
-              )
-              IO.apply((): Unit)
-          }).zipPar(updateUrlView(url))
+
+          IO.apply((): Unit).zipPar(updateUrlView(url))
       }
     } yield ()
   }
 
   /**
-    * Sends a delete request for the entry with given id
+    * If there is any entry apparent, disable it. If none is available, return empty optional
     *
-    * FIXME:
-    *  - Test
-    *  - Private
-    *
-    * @param id Identifier of the entry to delete
-    * @return The equivalent effect
+    * @param maybeEntries Optional list of entries
+    * @return An option onto an disabling effect
     */
-  def deleteEntry(
+  private def attemptToDisable(
+      maybeEntries: Option[List[SimpleEntryView[_]]]
+  ): Option[
+    RIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]]
+  ] = maybeEntries.flatMap(_.headOption).map { existingEntry =>
+    logger.debug(
+      s"Mark the entry with id '${existingEntry.id}' as disabled."
+    )
+    markAsDisabled(existingEntry.id)
+  }
+
+  /**
+    * Mark the given entry as disabled.
+    *
+    * @param id Id of entry to disable
+    * @return View onto the disabled entry
+    */
+  private def markAsDisabled(
       id: String
   ): RIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]] =
     Connector.sendRequest(
       Mutation
-        .deleteEntry(id)(SimpleEntry.view(SimpleUrl.view))
+        .updateEntry(
+          id,
+          Some(EntryUpdateInput(disabled = Some(true)))
+        )(SimpleEntry.view(SimpleUrl.view))
         .toRequest(apiUrl)
         .header("x-coverified-internal-auth", authSecret)
     )
