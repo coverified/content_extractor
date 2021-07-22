@@ -837,7 +837,7 @@ final case class Extractor private (
             _,
             existingDate,
             _,
-            _
+            maybeExistingTags
           )
           ) =>
         rawInformation match {
@@ -846,13 +846,15 @@ final case class Extractor private (
               scrapedSummary,
               scrapedContent,
               scrapedDate,
-              tags
+              maybeTags
               ) =>
             /* Check, if at least one of the different parts of the entry has changed */
+            val tagsChanged = tagsHaveChanged(maybeExistingTags, maybeTags)
+
             Left(
               Option.when(
                 !maybeExistingTitle
-                  .contains(scrapedTitle) || existingSummary != scrapedSummary || existingContent != scrapedContent || existingDate != scrapedDate
+                  .contains(scrapedTitle) || existingSummary != scrapedSummary || existingContent != scrapedContent || existingDate != scrapedDate || tagsChanged
               )(
                 UpdateEntryInformation(
                   id,
@@ -860,13 +862,46 @@ final case class Extractor private (
                   scrapedSummary,
                   scrapedContent,
                   scrapedDate,
-                  None // TODO
+                  maybeTags
                 )
               )
             )
         }
       case None => Right(CreateEntryInformation(rawInformation))
     }
+
+  /**
+    * Figure out, if something regarding the page provided tags has changed
+    *
+    * @param maybeExistingTags Collection of tags registered in existing entry
+    * @param maybePageTags     Tags from web page
+    * @return true, if something has changed
+    */
+  def tagsHaveChanged(
+      maybeExistingTags: Option[List[TagView[String]]],
+      maybePageTags: Option[List[String]]
+  ): Boolean =
+    maybeExistingTags
+      .map { existingTags =>
+        val existingPageTags = existingTags.filter(_.generated.contains(false))
+        existingPageTags.size != maybePageTags
+          .map(_.size)
+          .getOrElse(0) || maybePageTags
+          .map(
+            tags =>
+              !tags.forall(
+                tag => existingTags.exists(_.name.contains(tag))
+              )
+          )
+          .getOrElse {
+            /* Tags from web page are empty. Something has changed, if there are page tags apparent in the known entry. */
+            existingPageTags.nonEmpty
+          }
+      }
+      .getOrElse {
+        /* Tags in existing entry are empty. There has something changed, if the page tags aren't empty */
+        maybePageTags.nonEmpty && maybePageTags.exists(_.nonEmpty)
+      }
 }
 
 object Extractor extends LazyLogging {

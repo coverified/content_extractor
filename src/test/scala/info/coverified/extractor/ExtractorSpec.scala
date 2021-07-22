@@ -613,6 +613,126 @@ class ExtractorSpec
           )
         )
       }
+
+      "detect unchanged tags, if both existing and page tags are undefined" in {
+        val maybeExistingEntries = None
+        val pageTags = None
+
+        extractor.tagsHaveChanged(maybeExistingEntries, pageTags) shouldBe false
+      }
+
+      "detect unchanged tags, if existing tags are undefined and page tags are empty" in {
+        val maybeExistingEntries = None
+        val pageTags = Some(List.empty)
+
+        extractor.tagsHaveChanged(maybeExistingEntries, pageTags) shouldBe false
+      }
+
+      "detect unchanged tags with one generated tag" in {
+        val maybeExistingEntries = Some(
+          List(
+            TagView[String](
+              id = "generated",
+              name = None,
+              language = None,
+              highlighted = None,
+              generated = Some(true)
+            )
+          )
+        )
+        val pageTags = None
+
+        extractor.tagsHaveChanged(maybeExistingEntries, pageTags) shouldBe false
+      }
+
+      "detect unchanged tags with one generated tag and empty page tag list" in {
+        val maybeExistingEntries = Some(
+          List(
+            TagView[String](
+              id = "generated",
+              name = None,
+              language = None,
+              highlighted = None,
+              generated = Some(true)
+            )
+          )
+        )
+        val pageTags = Some(List.empty)
+
+        extractor.tagsHaveChanged(maybeExistingEntries, pageTags) shouldBe false
+      }
+
+      "detect unchanged tags if both existing and page tags are the same" in {
+        val maybeExistingEntries = Some(
+          List(
+            TagView[String](
+              id = "generated",
+              name = None,
+              language = None,
+              highlighted = None,
+              generated = Some(true)
+            ),
+            TagView[String](
+              id = "page",
+              name = Some("Foo"),
+              language = None,
+              highlighted = None,
+              generated = Some(false)
+            )
+          )
+        )
+        val pageTags = Some(List("Foo"))
+
+        extractor.tagsHaveChanged(maybeExistingEntries, pageTags) shouldBe false
+      }
+
+      "detect changed tags if there is an additional page tag" in {
+        val maybeExistingEntries = Some(
+          List(
+            TagView[String](
+              id = "generated",
+              name = None,
+              language = None,
+              highlighted = None,
+              generated = Some(true)
+            ),
+            TagView[String](
+              id = "page",
+              name = Some("Foo"),
+              language = None,
+              highlighted = None,
+              generated = Some(false)
+            )
+          )
+        )
+        val pageTags = Some(List("Foo", "Bar"))
+
+        extractor.tagsHaveChanged(maybeExistingEntries, pageTags) shouldBe true
+      }
+
+      "detect changed tags if there is a removed page tag" in {
+        val maybeExistingEntries = Some(
+          List(
+            TagView[String](
+              id = "generated",
+              name = None,
+              language = None,
+              highlighted = None,
+              generated = Some(true)
+            ),
+            TagView[String](
+              id = "page",
+              name = Some("Foo"),
+              language = None,
+              highlighted = None,
+              generated = Some(false)
+            )
+          )
+        )
+        val pageTags = Some(List.empty)
+
+        extractor.tagsHaveChanged(maybeExistingEntries, pageTags) shouldBe true
+      }
     }
   }
 
