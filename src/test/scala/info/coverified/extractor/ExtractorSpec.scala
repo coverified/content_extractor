@@ -8,9 +8,6 @@ package info.coverified.extractor
 import caliban.client.Operations.RootMutation
 import caliban.client.SelectionBuilder
 import com.github.tomakehurst.wiremock.client.WireMock.{
-  aResponse,
-  containing,
-  post,
   postRequestedFor,
   urlEqualTo
 }
@@ -253,7 +250,8 @@ class ExtractorSpec
             Some("This contains a lot."),
             Some("2021-07-21T22:00:00Z"),
             "contentHash",
-            maybeExistingEntries
+            maybeExistingEntries,
+            Duration.ofHours(48L)
           )
 
           evaluateWithHttpClientLayer {
@@ -271,8 +269,8 @@ class ExtractorSpec
                 new EqualToPattern(internalSecret, false)
               )
               .withRequestBody(
-                new EqualToPattern(
-                  """{"query":"mutation{createEntry(data:{name:\"The title\",url:{connect:{id:\"urlId\"}},content:\"This contains a lot.\",summary:\"This summarizes everything\",date:\"2021-07-21T22:00:00Z\",contentHash:\"contentHash\",disabled:true}){id name content summary url{id name source{id name acronym url}} date disabled}}","variables":{}}""".stripMargin
+                new RegexPattern(
+                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},content:\\"This contains a lot\.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".+\\",contentHash:\\"contentHash\\",disabled:true}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled}}","variables":\{}}"""
                 )
               )
           )
@@ -325,7 +323,8 @@ class ExtractorSpec
             Some("This contains a lot."),
             Some("2021-07-21T22:00:00Z"),
             "contentHash",
-            maybeExistingEntries
+            maybeExistingEntries,
+            Duration.ofHours(48L)
           )
 
           evaluateWithHttpClientLayer {
@@ -343,8 +342,8 @@ class ExtractorSpec
                 new EqualToPattern(internalSecret, false)
               )
               .withRequestBody(
-                new EqualToPattern(
-                  """{"query":"mutation{createEntry(data:{name:\"The title\",url:{connect:{id:\"urlId\"}},content:\"This contains a lot.\",summary:\"This summarizes everything\",date:\"2021-07-21T22:00:00Z\",contentHash:\"contentHash\",disabled:false}){id name content summary url{id name source{id name acronym url}} date disabled}}","variables":{}}""".stripMargin
+                new RegexPattern(
+                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},content:\\"This contains a lot.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".+\\",contentHash:\\"contentHash\\",disabled:false}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled}}","variables":\{}}"""
                 )
               )
           )

@@ -305,7 +305,8 @@ final case class Extractor private (
               content,
               date,
               contentHash,
-              _
+              _,
+              reAnalysisInterval
             )
           }
           .flatMap(storeMutation)
@@ -346,6 +347,7 @@ final case class Extractor private (
     * @param content              Content of the new entry
     * @param date                 Date of the new entry
     * @param maybeApparentEntries Optional list of entries with same content
+    * @param timeToNextCrawl   Duration, until the next analysis shall take place
     * @return A mutation or throw an exception
     */
   private def buildEntryConsideringExistingEntries(
@@ -355,7 +357,8 @@ final case class Extractor private (
       content: Option[String],
       date: Option[String],
       contentHash: String,
-      maybeApparentEntries: Option[List[SimpleEntryView[String]]]
+      maybeApparentEntries: Option[List[SimpleEntryView[String]]],
+      timeToNextCrawl: Duration
   ): SelectionBuilder[RootMutation, Option[SimpleEntryView[SimpleUrlView]]] = {
     val disable = maybeApparentEntries.forall(_.nonEmpty)
     if (disable) {
@@ -366,7 +369,16 @@ final case class Extractor private (
             .getOrElse("Unable to extract url ids.")}"
       )
     }
-    buildEntry(urlId, title, summary, content, date, contentHash, disable)
+    buildEntry(
+      urlId,
+      title,
+      summary,
+      content,
+      date,
+      contentHash,
+      timeToNextCrawl,
+      disable
+    )
   }
 
   /**
@@ -596,7 +608,15 @@ final case class Extractor private (
                 date.getOrElse("")
               )
               .toString
-            updateEntry(id, title, summary, content, date, contentHash)
+            updateEntry(
+              id,
+              title,
+              summary,
+              content,
+              date,
+              contentHash,
+              reAnalysisInterval
+            )
         }
       case Right(cei @ CreateEntryInformation(title, summary, content, date)) =>
         logger.debug(
@@ -618,7 +638,8 @@ final case class Extractor private (
                   content,
                   date,
                   contentHash,
-                  _
+                  _,
+                  reAnalysisInterval
                 )
               }
           )
@@ -808,13 +829,14 @@ object Extractor extends LazyLogging {
   /**
     * Build entry for extracted page information based on the different page types available.
     *
-    * @param urlId        Identifier of url in database
-    * @param title        Title of the page
-    * @param summary      Summary of the page
-    * @param content      Content of the entry
-    * @param date         Date of the article
-    * @param contentHash  The content hash
-    * @param disabled     If the entry is disabled
+    * @param urlId              Identifier of url in database
+    * @param title              Title of the page
+    * @param summary            Summary of the page
+    * @param content            Content of the entry
+    * @param date               Date of the article
+    * @param contentHash        The content hash
+    * @param disabled           If the entry is disabled
+    * @param timeToNextCrawl Duration, until the next analysis shall take place
     * @return A mutation to post to data base
     */
   private def buildEntry(
@@ -824,6 +846,7 @@ object Extractor extends LazyLogging {
       content: Option[String],
       date: Option[String],
       contentHash: String,
+      timeToNextCrawl: Duration,
       disabled: Boolean = false
   ): SelectionBuilder[RootMutation, Option[
     SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView]
@@ -841,7 +864,8 @@ object Extractor extends LazyLogging {
             )
           ),
           contentHash = Some(contentHash),
-          disabled = Some(disabled)
+          disabled = Some(disabled),
+          nextCrawl = determineNextCrawl(timeToNextCrawl)
         )
       )
     )(
@@ -857,6 +881,7 @@ object Extractor extends LazyLogging {
     * @param content      Content
     * @param date         Date of the article
     * @param contentHash  The hash of the updated content
+    * @param disabled     If the content is disabled
     * @return A mutation to post to data base
     */
   def updateEntry(
@@ -865,7 +890,9 @@ object Extractor extends LazyLogging {
       summary: Option[String],
       content: Option[String],
       date: Option[String],
-      contentHash: String
+      contentHash: String,
+      timeToNextCrawl: Duration,
+      disabled: Boolean = false
   ): SelectionBuilder[RootMutation, Option[
     SimpleEntry.SimpleEntryView[SimpleUrlView]
   ]] =
@@ -879,10 +906,29 @@ object Extractor extends LazyLogging {
           hasBeenTagged = Some(false),
           date = date,
           tags = Some(TagRelateToManyInput(disconnectAll = Some(true))),
-          contentHash = Some(contentHash)
+          contentHash = Some(contentHash),
+          disabled = Some(disabled),
+          nextCrawl = determineNextCrawl(timeToNextCrawl)
         )
       )
     )(SimpleEntry.view(SimpleUrl.view))
+
+  /**
+    * Determine the instant of the next crawl
+    *
+    * @param timeToNextCrawl Duration, when the next crawl happens
+    * @return An Option onto a String
+    */
+  def determineNextCrawl(timeToNextCrawl: Duration): Option[String] = {
+    val nextCrawlDateTime =
+      ZonedDateTime.now(ZoneId.of("UTC")).plus(timeToNextCrawl)
+    Some(
+      "\\[UTC]$".r.replaceAllIn(
+        DateTimeFormatter.ISO_DATE_TIME.format(nextCrawlDateTime),
+        ""
+      )
+    )
+  }
 
   /**
     * Build the mutation, that is used for updating the url entry in database
