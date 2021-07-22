@@ -284,13 +284,31 @@ object Analyzer extends LazyLogging {
   ): Try[String] = {
     dateConfig.attributeVal match {
       case Some(attribute) =>
-        Try(document >> element(dateConfig.selector)).flatMap {
-          dateTimeElement =>
+        Try(document >> element(dateConfig.selector))
+          .flatMap { dateTimeElement =>
             if (dateTimeElement.hasAttr(attribute))
               Success(dateTimeElement.attr(attribute))
             else
               getDateTimeStringFromContent(document, dateConfig.selector, url)
-        }
+          }
+          .transform(
+            Success(_), {
+              case nsex: NoSuchElementException =>
+                Failure(
+                  AnalysisException(
+                    s"Cannot extract date time element with selector '${dateConfig.selector}' from url '$url'.",
+                    nsex
+                  )
+                )
+              case ex =>
+                Failure(
+                  AnalysisException(
+                    s"Unknown exception during extraction of date time from element with selector '${dateConfig.selector}' from url '$url'.",
+                    ex
+                  )
+                )
+            }
+          )
       case None =>
         getDateTimeStringFromContent(document, dateConfig.selector, url)
     }
