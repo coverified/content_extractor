@@ -336,6 +336,7 @@ final case class Extractor private (
         ExtractorQuery
           .entriesWithGivenHash(contentHash)
           .toRequest(apiUrl)
+          .header("x-coverified-internal-auth", authSecret)
       )
 
   /**
@@ -488,7 +489,12 @@ final case class Extractor private (
         .zipPar {
           logger.debug("Querying entries for url '{}' ({}).", url.id, url.name)
           Connector
-            .sendRequest(ExtractorQuery.existingEntry(url.id).toRequest(apiUrl))
+            .sendRequest(
+              ExtractorQuery
+                .existingEntry(url.id)
+                .toRequest(apiUrl)
+                .header("x-coverified-internal-auth", authSecret)
+            )
         }
       _ <- tryRawEntryInformation match {
         case Success(information) =>
