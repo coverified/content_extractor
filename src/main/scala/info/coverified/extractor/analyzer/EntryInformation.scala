@@ -109,6 +109,12 @@ object EntryInformation {
 
   object CreateEntryInformation {
     def apply(raw: RawEntryInformation): CreateEntryInformation =
-      new CreateEntryInformation(raw.title, raw.summary, raw.content, raw.date, raw.tags)
+      new CreateEntryInformation(
+        raw.title,
+        raw.summary,
+        raw.content,
+        raw.date,
+        raw.tags
+      )
   }
 }

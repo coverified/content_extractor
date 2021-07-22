@@ -619,7 +619,7 @@ class AnalyzerSpec
                 summary,
                 content,
                 date,
-              tags
+                tags
               )
               ) =>
             title shouldBe "Url page with all information available"
@@ -644,7 +644,7 @@ class AnalyzerSpec
                 summary,
                 content,
                 date,
-              tags
+                tags
               )
               ) =>
             title shouldBe "Url page with all information available"

@@ -158,7 +158,9 @@ object Analyzer extends LazyLogging {
         selectors.summary.flatMap(pageDoc >?> text(_)),
         pageDoc >?> text(selectors.content.selector),
         selectors.date.flatMap(extractDate(pageDoc, _, url)),
-        selectors.tags.flatMap(pageDoc >?> texts(_)).map(_.toList)
+        selectors.tags
+          .flatMap(pageDoc >?> texts(_))
+          .flatMap(tags => Option.when(tags.nonEmpty)(tags.toList))
       )
     } match {
       case success @ Success(_) => success

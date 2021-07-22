@@ -8,6 +8,7 @@ package info.coverified.extractor
 import caliban.client.Operations.RootMutation
 import caliban.client.SelectionBuilder
 import com.github.tomakehurst.wiremock.client.WireMock.{
+  post,
   postRequestedFor,
   urlEqualTo
 }
@@ -15,6 +16,11 @@ import com.github.tomakehurst.wiremock.matching.{EqualToPattern, RegexPattern}
 import info.coverified.extractor.analyzer.BrowserHelper
 import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.profile.ProfileConfig
+import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
+import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  TagCreateInput,
+  TagWhereUniqueInput
+}
 import info.coverified.graphql.{Connector, ExtractorQuery}
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
@@ -192,10 +198,10 @@ class ExtractorSpec
         }
       }
 
+      val buildEntryConsideringExistingStuff = PrivateMethod[
+        SelectionBuilder[RootMutation, Option[SimpleEntryView[SimpleUrlView]]]
+      ](Symbol("buildEntryConsideringExistingStuff"))
       "stores an disabled entry, if already one exists" in {
-        val buildEntryConsideringExistingEntries = PrivateMethod[
-          SelectionBuilder[RootMutation, Option[SimpleEntryView[SimpleUrlView]]]
-        ](Symbol("buildEntryConsideringExistingEntries"))
         defineStub("""
                         |{
                         |  "data": {
@@ -243,12 +249,13 @@ class ExtractorSpec
               )
             )
           )
-          val mutation = extractor invokePrivate buildEntryConsideringExistingEntries(
+          val mutation = extractor invokePrivate buildEntryConsideringExistingStuff(
             "urlId",
             "The title",
             Some("This summarizes everything"),
             Some("This contains a lot."),
             Some("2021-07-21T22:00:00Z"),
+            None,
             "contentHash",
             maybeExistingEntries,
             Duration.ofHours(48L)
@@ -270,7 +277,7 @@ class ExtractorSpec
               )
               .withRequestBody(
                 new RegexPattern(
-                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},content:\\"This contains a lot\.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".+\\",contentHash:\\"contentHash\\",disabled:true}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled}}","variables":\{}}"""
+                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},tags:\{},content:\\"This contains a lot\.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".+\\",contentHash:\\"contentHash\\",disabled:true}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled}}","variables":\{}}"""
                 )
               )
           )
@@ -278,9 +285,6 @@ class ExtractorSpec
       }
 
       "stores an enabled entry, if none exists, yet" in {
-        val buildEntryConsideringExistingEntries = PrivateMethod[
-          SelectionBuilder[RootMutation, Option[SimpleEntryView[SimpleUrlView]]]
-        ](Symbol("buildEntryConsideringExistingEntries"))
         defineStub("""
                      |{
                      |  "data": {
@@ -316,12 +320,13 @@ class ExtractorSpec
 
         noException shouldBe thrownBy {
           val maybeExistingEntries = Some(List.empty[SimpleEntryView[String]])
-          val mutation = extractor invokePrivate buildEntryConsideringExistingEntries(
+          val mutation = extractor invokePrivate buildEntryConsideringExistingStuff(
             "urlId",
             "The title",
             Some("This summarizes everything"),
             Some("This contains a lot."),
             Some("2021-07-21T22:00:00Z"),
+            None,
             "contentHash",
             maybeExistingEntries,
             Duration.ofHours(48L)
@@ -343,7 +348,7 @@ class ExtractorSpec
               )
               .withRequestBody(
                 new RegexPattern(
-                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},content:\\"This contains a lot.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".+\\",contentHash:\\"contentHash\\",disabled:false}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled}}","variables":\{}}"""
+                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},tags:\{},content:\\"This contains a lot.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".+\\",contentHash:\\"contentHash\\",disabled:false}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled}}","variables":\{}}"""
                 )
               )
           )
@@ -485,6 +490,119 @@ class ExtractorSpec
               )
           )
         }
+      }
+    }
+
+    "handling page defined tags" should {
+      "correctly ask for existing tags" in {
+        defineStub("""{
+            |  "data": {
+            |    "allTags": [
+            |      {
+            |        "id": "ckrfhetxs0332ilops6o8jmoj",
+            |        "name": "Foo",
+            |        "language": {
+            |          "id": "ckrfhejwi0226ilop7c5u3h6h"
+            |        },
+            |        "generated": false,
+            |        "highlighted": false
+            |      }
+            |    ]
+            |  }
+            |}
+            |""".stripMargin)
+
+        noException shouldBe thrownBy {
+          extractor.getExistingTags
+
+          mockServer.verify(
+            postRequestedFor(urlEqualTo("/api/graphql"))
+              .withHeader(
+                "x-coverified-internal-auth",
+                new EqualToPattern(internalSecret, false)
+              )
+              .withRequestBody(
+                new EqualToPattern(
+                  """{"query":"query{allTags(where:{generated:false},orderBy:[],skip:0){id name language{id} highlighted generated}}","variables":{}}"""
+                )
+              )
+          )
+        }
+      }
+
+      "correctly map tags to existing tags" in {
+        val existingTag = TagView(
+          id = "ckrfhetxs0332ilops6o8jmoj",
+          name = Some("Foo"),
+          language = Some("ckrfhejwi0226ilop7c5u3h6h"),
+          highlighted = Some(false),
+          generated = Some(false)
+        )
+        val existingTags = List(existingTag)
+        val tags = List("Foo", "Bar")
+
+        val tagToExistingTag = extractor.mapTagToExistingTag(tags, existingTags)
+        tagToExistingTag.size shouldBe 2
+        tagToExistingTag.get("Bar") shouldBe Some(None)
+        tagToExistingTag.get("Foo") match {
+          case Some(Some(TagWhereUniqueInput(id, name))) =>
+            id shouldBe Some(existingTag.id)
+            name shouldBe None
+          case Some(None) =>
+            fail("I expect to get a connection model for tag 'Foo'.")
+          case None => fail("Tag 'Foo' shall be part of the mapping.")
+        }
+      }
+
+      "correctly set up creation models" in {
+        val tagToExistingTag = Map(
+          "Foo" -> Some(
+            TagWhereUniqueInput(id = Some("ckrfhetxs0332ilops6o8jmoj"))
+          ),
+          "Bar" -> None
+        )
+
+        val creationModels = extractor.createModelToCreateTag(tagToExistingTag)
+        creationModels.size shouldBe 1
+        creationModels.head match {
+          case TagCreateInput(name, language, highlighted, generated) =>
+            name shouldBe Some("Bar")
+            language shouldBe None
+            highlighted shouldBe None
+            generated shouldBe Some(false)
+        }
+      }
+
+      "correctly combine all information, when handling tags for a new entry" in {
+        val tags = List("Foo", "Bar")
+        defineStub("""{
+            |  "data": {
+            |    "allTags": [
+            |      {
+            |        "id": "ckrfhetxs0332ilops6o8jmoj",
+            |        "name": "Foo",
+            |        "language": {
+            |          "id": "ckrfhejwi0226ilop7c5u3h6h"
+            |        },
+            |        "generated": false,
+            |        "highlighted": false
+            |      }
+            |    ]
+            |  }
+            |}
+            |""".stripMargin)
+
+        extractor.connectToOrCreateTag(tags) shouldBe (
+          Seq(TagWhereUniqueInput(id = Some("ckrfhetxs0332ilops6o8jmoj"))),
+          Seq(
+            TagCreateInput(
+              name = Some("Bar"),
+              language = None,
+              highlighted = None,
+              generated = Some(false)
+            )
+          )
+        )
       }
     }
   }
