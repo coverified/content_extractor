@@ -60,7 +60,7 @@ class AnalyzerSpec
         summary = Some("#summary"),
         title = "#title",
         video = Some("#vid"),
-        tags = None
+        tags = Some(".tag")
       )
     )
 
@@ -618,13 +618,15 @@ class AnalyzerSpec
                 title,
                 summary,
                 content,
-                date
+                date,
+              tags
               )
               ) =>
             title shouldBe "Url page with all information available"
             summary.getOrElse(fail("Expected to get a summary.")) shouldBe "This is a summary"
             content shouldBe Some("And with all the content.")
             date shouldBe Some("2021-06-03T13:37:00Z")
+            tags shouldBe Some(List("aTag", "bTag", "cTag", "dTag"))
         }
       }
 
@@ -641,13 +643,15 @@ class AnalyzerSpec
                 title,
                 summary,
                 content,
-                date
+                date,
+              tags
               )
               ) =>
             title shouldBe "Url page with all information available"
             summary shouldBe None
             content shouldBe None
             date shouldBe None
+            tags shouldBe None
         }
       }
     }

@@ -293,7 +293,7 @@ final case class Extractor private (
       createEntryInformation: CreateEntryInformation
   ): URIO[Console with SttpClient, Option[SimpleEntryView[SimpleUrlView]]] =
     createEntryInformation match {
-      case cei @ CreateEntryInformation(title, summary, content, date) =>
+      case cei @ CreateEntryInformation(title, summary, content, date, tags) =>
         /* Check, if there isn't yet an entry with the same content */
         val contentHash = cei.contentHash.toString
         queryEntriesWithSameHash(contentHash)
@@ -602,7 +602,7 @@ final case class Extractor private (
     (checkAgainstExisting(scrapedInformation, maybeApparentEntry) match {
       case Left(maybeUpdateInformation) =>
         maybeUpdateInformation.map {
-          case UpdateEntryInformation(id, title, summary, content, date) =>
+          case UpdateEntryInformation(id, title, summary, content, date, tags) =>
             logger.debug(
               "There is an entry existent for url '{}' and an update is needed."
             )
@@ -624,7 +624,7 @@ final case class Extractor private (
               reAnalysisInterval
             )
         }
-      case Right(cei @ CreateEntryInformation(title, summary, content, date)) =>
+      case Right(cei @ CreateEntryInformation(title, summary, content, date, tags)) =>
         logger.debug(
           "There is no entry apparent for yet visited url '{}'. Attempt to create a new one."
         )
@@ -707,7 +707,8 @@ final case class Extractor private (
               scrapedTitle,
               scrapedSummary,
               scrapedContent,
-              scrapedDate
+              scrapedDate,
+          tags
               ) =>
             /* Check, if at least one of the different parts of the entry has changed */
             Left(
@@ -720,7 +721,8 @@ final case class Extractor private (
                   scrapedTitle,
                   scrapedSummary,
                   scrapedContent,
-                  scrapedDate
+                  scrapedDate,
+                  None // TODO
                 )
               )
             )

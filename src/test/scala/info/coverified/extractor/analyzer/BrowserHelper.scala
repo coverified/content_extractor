@@ -33,6 +33,13 @@ trait BrowserHelper {
       |
       |      <img src="find/me/here" id="pic"/>
       |    </p>
+      |    <p>
+      |      Tags:
+      |      <div class="tag">aTag</div>
+      |      <div class="tag">bTag</div>
+      |      <div class="tag">cTag</div>
+      |      <div class="tag">dTag</div>
+      |    </p>
       |</body>
       |""".stripMargin
   )

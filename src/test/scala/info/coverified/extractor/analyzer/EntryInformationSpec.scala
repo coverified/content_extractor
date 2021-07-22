@@ -38,7 +38,8 @@ class EntryInformationSpec extends UnitSpec {
           title = "The title",
           summary = Some("This summarizes everything"),
           content = Some("This contains a lot."),
-          date = Some("2021-07-21T22:00:00Z")
+          date = Some("2021-07-21T22:00:00Z"),
+          tags = Some(List("aTag", "bTag", "cTag", "dTag"))
         ).contentHash shouldBe 328104163
       }
 
@@ -47,7 +48,8 @@ class EntryInformationSpec extends UnitSpec {
           title = "The title",
           summary = None,
           content = None,
-          date = None
+          date = None,
+          tags = None
         ).contentHash shouldBe 318208789
       }
     }
