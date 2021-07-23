@@ -17,8 +17,10 @@ import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  EntryWhereUniqueInput,
   Tag,
   TagCreateInput,
+  TagRelateToManyInput,
   TagWhereUniqueInput
 }
 import info.coverified.graphql.{Connector, ExtractorQuery}
@@ -282,7 +284,7 @@ class ExtractorSpec
               )
               .withRequestBody(
                 new RegexPattern(
-                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},tags:\{},content:\\"This contains a lot\.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".*\\",contentHash:\\"contentHash\\",disabled:true}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled tags\(where:\{},orderBy:\[\],skip:0\)\{id name language\{id} highlighted generated}}}","variables":\{}}"""
+                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},content:\\"This contains a lot\.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".*\\",contentHash:\\"contentHash\\",disabled:true}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled tags\(where:\{},orderBy:\[\],skip:0\)\{id name language\{id} highlighted generated}}}","variables":\{}}"""
                 )
               )
           )
@@ -354,7 +356,7 @@ class ExtractorSpec
               )
               .withRequestBody(
                 new RegexPattern(
-                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},tags:\{},content:\\"This contains a lot\.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".*\\",contentHash:\\"contentHash\\",disabled:false}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled tags\(where:\{},orderBy:\[\],skip:0\)\{id name language\{id} highlighted generated}}}","variables":\{}}"""
+                  """\{"query":"mutation\{createEntry\(data:\{name:\\"The title\\",url:\{connect:\{id:\\"urlId\\"}},content:\\"This contains a lot\.\\",summary:\\"This summarizes everything\\",date:\\"2021-07-21T22:00:00Z\\",nextCrawl:\\".*\\",contentHash:\\"contentHash\\",disabled:false}\)\{id name content summary url\{id name source\{id name acronym url}} date disabled tags\(where:\{},orderBy:\[\],skip:0\)\{id name language\{id} highlighted generated}}}","variables":\{}}"""
                 )
               )
           )
@@ -611,6 +613,73 @@ class ExtractorSpec
               highlighted = None,
               generated = Some(false)
             )
+          )
+        )
+      }
+
+      val buildTagRelationInput = PrivateMethod[Option[TagRelateToManyInput]](
+        Symbol("buildTagRelationInput")
+      )
+      "correctly build relation information, if no tag needs to be connected or created" in {
+        val maybeConnectToAndCreateTags = None
+
+        Extractor invokePrivate buildTagRelationInput(
+          maybeConnectToAndCreateTags
+        ) shouldBe None
+      }
+
+      "correctly build relation information, if relation information are empty" in {
+        val maybeConnectToAndCreateTags = Some((List.empty, List.empty))
+
+        Extractor invokePrivate buildTagRelationInput(
+          maybeConnectToAndCreateTags
+        ) shouldBe None
+      }
+
+      "correctly build relation information, if only one connect element is set" in {
+        val connectToTag = TagWhereUniqueInput(id = Some("some_id"))
+        val maybeConnectToAndCreateTags = Some((List(connectToTag), List.empty))
+
+        Extractor invokePrivate buildTagRelationInput(
+          maybeConnectToAndCreateTags
+        ) shouldBe Some(
+          TagRelateToManyInput(connect = Some(List(Some(connectToTag))))
+        )
+      }
+
+      "correctly build relation information, if only one create element is set" in {
+        val createTag = TagCreateInput(
+          name = Some("bla"),
+          language = None,
+          highlighted = None,
+          generated = Some(false)
+        )
+        val maybeConnectToAndCreateTags = Some((List.empty, List(createTag)))
+
+        Extractor invokePrivate buildTagRelationInput(
+          maybeConnectToAndCreateTags
+        ) shouldBe Some(
+          TagRelateToManyInput(create = Some(List(Some(createTag))))
+        )
+      }
+
+      "correctly build relation information, if both are set" in {
+        val createTag = TagCreateInput(
+          name = Some("bla"),
+          language = None,
+          highlighted = None,
+          generated = Some(false)
+        )
+        val connectToTag = TagWhereUniqueInput(id = Some("some_id"))
+        val maybeConnectToAndCreateTags =
+          Some((List(connectToTag), List(createTag)))
+
+        Extractor invokePrivate buildTagRelationInput(
+          maybeConnectToAndCreateTags
+        ) shouldBe Some(
+          TagRelateToManyInput(
+            connect = Some(List(Some(connectToTag))),
+            create = Some(List(Some(createTag)))
           )
         )
       }

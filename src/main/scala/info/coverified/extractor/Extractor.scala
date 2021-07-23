@@ -975,21 +975,49 @@ object Extractor extends LazyLogging {
           contentHash = Some(contentHash),
           disabled = Some(disabled),
           nextCrawl = determineNextCrawl(timeToNextCrawl),
-          tags =
-            Some(
-              TagRelateToManyInput(
-                create =
-                  maybeConnectToAndCreateTags.map(_._2.map(Some(_)).toList),
-                connect =
-                  maybeConnectToAndCreateTags.map(_._1.map(Some(_)).toList)
-              )
-            )
+          tags = buildTagRelationInput(maybeConnectToAndCreateTags)
         )
       )
     )(
       SimpleEntry
         .view(SimpleUrl.view, Tag.view(CoVerifiedClientSchema.Language.id))
-    ) /**
+    )
+
+  /**
+    * Build correct relation input for tags, taking empty relations into account (e.g. an empty connect to list is
+    * represented as None instead)
+    *
+    * @param maybeConnectToAndCreateTags An optional tuple of relations to build
+    * @return An optional model for setting up tag relations properly
+    */
+  private def buildTagRelationInput(
+      maybeConnectToAndCreateTags: Option[
+        (
+            Seq[CoVerifiedClientSchema.TagWhereUniqueInput],
+            Seq[CoVerifiedClientSchema.TagCreateInput]
+        )
+      ]
+  ): Option[TagRelateToManyInput] = maybeConnectToAndCreateTags.flatMap {
+    case (connectRelation, createRelation) =>
+      val maybeConnectRelation = Option.when(connectRelation.nonEmpty)(
+        connectRelation.map(Some(_)).toList
+      )
+      val maybeCreateRelation =
+        Option.when(createRelation.nonEmpty)(createRelation.map(Some(_)).toList)
+
+      (maybeCreateRelation, maybeConnectRelation) match {
+        case (None, None) => None
+        case (create, connect) =>
+          Some(
+            TagRelateToManyInput(
+              create = create,
+              connect = connect
+            )
+          )
+      }
+  }
+
+  /**
     * Determine, to which tags to connect to and which need to be created
     *
     * @param tags Selection of tags from web page
@@ -1115,10 +1143,7 @@ object Extractor extends LazyLogging {
     val disconnectFrom =
       determineTagsToDisconnectFrom(maybeExistingTags, maybePageTags)
     val maybeConnectAndCreatePageTags =
-      maybePageTags.map(connectToOrCreateTag(_, apiUrl, authSecret)).map {
-        case (maybeConnectTo, maybeCreate) =>
-          (maybeConnectTo.toList.map(Some(_)), maybeCreate.toList.map(Some(_)))
-      }
+      maybePageTags.map(connectToOrCreateTag(_, apiUrl, authSecret))
 
     Mutation.updateEntry(
       entryId,
@@ -1129,13 +1154,7 @@ object Extractor extends LazyLogging {
           content = content,
           hasBeenTagged = Some(false),
           date = date,
-          tags = Some(
-            TagRelateToManyInput(
-              disconnect = disconnectFrom,
-              connect = maybeConnectAndCreatePageTags.map(_._1),
-              create = maybeConnectAndCreatePageTags.map(_._2)
-            )
-          ),
+          tags = buildTagRelationInput(maybeConnectAndCreatePageTags),
           contentHash = Some(contentHash),
           disabled = Some(disabled),
           nextCrawl = determineNextCrawl(timeToNextCrawl)
