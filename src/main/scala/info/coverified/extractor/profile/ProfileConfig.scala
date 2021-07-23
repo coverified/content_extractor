@@ -50,7 +50,7 @@ object ProfileConfig {
     )
     object Selectors {
       final case class Content(
-          exclude_selector: scala.Option[scala.List[java.lang.String]],
+          excludeSelectors: scala.Option[scala.List[java.lang.String]],
           selector: java.lang.String
       )
       object Content {
@@ -60,11 +60,11 @@ object ProfileConfig {
             $tsCfgValidator: $TsCfgValidator
         ): ProfileConfig.PageType.Selectors.Content = {
           ProfileConfig.PageType.Selectors.Content(
-            exclude_selector =
-              if (c.hasPathOrNull("exclude_selector"))
+            excludeSelectors =
+              if (c.hasPathOrNull("excludeSelectors"))
                 scala.Some(
                   $_L$_str(
-                    c.getList("exclude_selector"),
+                    c.getList("excludeSelectors"),
                     parentPath,
                     $tsCfgValidator
                   )

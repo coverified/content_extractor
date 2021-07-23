@@ -20,8 +20,6 @@ import info.coverified.extractor.profile.ProfileConfig.Profile
 import info.coverified.test.scalatest.MockBrowser.DislikeThatUrlException
 import info.coverified.test.scalatest.{MockBrowser, ZioSpec}
 import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
-import net.ruippeixotog.scalascraper.dsl.DSL._
-import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import org.jsoup.Jsoup
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.Inside.inside
@@ -48,7 +46,7 @@ class AnalyzerSpec
         audio = None,
         breadcrumb = Some("#breadcrumb"),
         content =
-          Selectors.Content(selector = "#content", exclude_selector = None),
+          Selectors.Content(selector = "#content", excludeSelectors = None),
         date = Some(
           Date(
             tryJsonLdFirst = false,

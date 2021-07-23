@@ -9,19 +9,12 @@ import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
-import net.ruippeixotog.scalascraper.model.{
-  Document,
-  Element,
-  ElementNode,
-  Node,
-  TextNode
-}
+import net.ruippeixotog.scalascraper.model.Document
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig.PageType
 import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
-import net.ruippeixotog.scalascraper.scraper.HtmlValidator
 import org.jsoup.Jsoup
 
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
@@ -165,7 +158,7 @@ object Analyzer extends LazyLogging {
         extractContent(
           pageDoc,
           selectors.content.selector,
-          selectors.content.exclude_selector
+          selectors.content.excludeSelectors
         ),
         selectors.date.flatMap(extractDate(pageDoc, _, url)),
         selectors.tags
