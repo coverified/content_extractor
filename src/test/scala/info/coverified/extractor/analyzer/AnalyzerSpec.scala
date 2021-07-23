@@ -6,6 +6,7 @@
 package info.coverified.extractor.analyzer
 
 import info.coverified.extractor.analyzer.BrowserHelper.RichDocument
+import info.coverified.extractor.analyzer.ContentExtractorHelper.ExtractorTestCase
 import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.exceptions.AnalysisException
@@ -19,6 +20,8 @@ import info.coverified.extractor.profile.ProfileConfig.Profile
 import info.coverified.test.scalatest.MockBrowser.DislikeThatUrlException
 import info.coverified.test.scalatest.{MockBrowser, ZioSpec}
 import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
+import net.ruippeixotog.scalascraper.dsl.DSL._
+import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import org.jsoup.Jsoup
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.Inside.inside
@@ -31,7 +34,8 @@ class AnalyzerSpec
     extends ZioSpec
     with ProfileConfigHelper
     with BrowserHelper
-    with MockitoSugar {
+    with MockitoSugar
+    with ContentExtractorHelper {
   "Given an analyzer" when {
     val validPageType = ProfileConfig.PageType(
       condition = Condition(
@@ -652,6 +656,47 @@ class AnalyzerSpec
             content shouldBe None
             date shouldBe None
             tags shouldBe None
+        }
+      }
+    }
+
+    "extracting content" should {
+      val extractContent =
+        PrivateMethod[Option[String]](Symbol("extractContent"))
+
+      "properly filter out content in different scenarios" in {
+        val testCases =
+          Table(
+            "testCase",
+            testCase0,
+            testCase1,
+            testCase2,
+            testCase3,
+            testCase4,
+            testCase5
+          )
+
+        forAll(testCases) {
+          case ExtractorTestCase(
+              rawDocument,
+              expectedContent,
+              contentSelector,
+              excludeSelectors
+              ) =>
+            Analyzer invokePrivate extractContent(
+              rawDocument,
+              contentSelector,
+              excludeSelectors
+            ) match {
+              case Some(content) =>
+                logger.debug(
+                  "\nExpected:\n\t{}\nActual:\n\t{}",
+                  expectedContent,
+                  content
+                )
+                content shouldBe expectedContent
+              case None => fail("Filtering content was meant to succeed.")
+            }
         }
       }
     }

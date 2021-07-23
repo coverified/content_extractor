@@ -9,7 +9,13 @@ import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
-import net.ruippeixotog.scalascraper.model.{Document, ElementNode, TextNode}
+import net.ruippeixotog.scalascraper.model.{
+  Document,
+  Element,
+  ElementNode,
+  Node,
+  TextNode
+}
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.exceptions.AnalysisException
@@ -156,7 +162,11 @@ object Analyzer extends LazyLogging {
       RawEntryInformation(
         pageDoc >> text(selectors.title),
         selectors.summary.flatMap(pageDoc >?> text(_)),
-        pageDoc >?> text(selectors.content.selector),
+        extractContent(
+          pageDoc,
+          selectors.content.selector,
+          selectors.content.exclude_selector
+        ),
         selectors.date.flatMap(extractDate(pageDoc, _, url)),
         selectors.tags
           .flatMap(pageDoc >?> texts(_))
@@ -412,73 +422,31 @@ object Analyzer extends LazyLogging {
     * Extract content from web page under consideration of exclude selectors, that are meant to odd out child elements,
     * that are to be excluded from real content
     *
-    * FIXME: Test
-    * FIXME: Private
-    *
-    * @param document         The total web page's document
-    * @param contentSelector  Selector to find the overall content of the page
-    * @param excludeSelectors Selectors for the elements to be excluded
+    * @param document             The total web page's document
+    * @param contentSelector      Selector to find the overall content of the page
+    * @param maybeExludeSelectors Selectors for the elements to be excluded
     * @return
     */
-  def extractContent(
+  private def extractContent(
       document: Document,
       contentSelector: String,
-      excludeSelectors: Seq[String]
-  ): Option[String] =
-    document >?> element(contentSelector)
-      .map {
-        _.childNodes
-          .map {
-            /* Check the single children. If it's plain text, just go over it, if it's an element, check, if any of the
-             * exclude selectors applies */
-            case TextNode(text)       => text
-            case ElementNode(element) =>
-              /* Parse the outer html code of the element, so that the validation can be performed */
-              val elementDocument =
-                JsoupDocument(Jsoup.parse(element.outerHtml))
-              checkDocument(elementDocument, excludeSelectors).getOrElse {
-                logger.debug(
-                  "Document is neglected due to exclude selector. Apply empty string."
-                )
-                ""
-              }
-          }
-          .mkString(" ")
-      }
-      .map { joined =>
-        /* Trim leading and trailing whitespaces */
-        "^ +| +$".r.replaceAllIn(joined, "")
-      }
-      .map { joinedAndTrimmed =>
-        /* Remove duplicated white spaces */
-        " {2,}".r.replaceAllIn(joinedAndTrimmed, " ")
+      maybeExludeSelectors: Option[List[String]]
+  ): Option[String] = document >?> element(contentSelector).map {
+    selectedElement =>
+      /* Remove all elements to be excluded from the page doc */
+      val selectedDocument = Jsoup.parse(selectedElement.outerHtml)
+      maybeExludeSelectors.foreach { excludeSelectors =>
+        excludeSelectors
+          .map(
+            excludeSelector =>
+              selectedDocument.select(
+                ("^" + contentSelector + " ?").r
+                  .replaceAllIn(excludeSelector, "")
+              )
+          )
+          .map(_.remove())
       }
 
-  /**
-    * Check a document against exclude selectors. If none of them matches, it returns the text content of the document
-    *
-    * FIXME: Test
-    * FIXME: Private
-    *
-    * @param document         The document to check
-    * @param excludeSelectors Exclude selectors
-    * @return An [[Option]] onto the matching content
-    */
-  def checkDocument(
-      document: Document,
-      excludeSelectors: Seq[String]
-  ): Option[String] = excludeSelectors.foldLeft(Option.apply("")) {
-    case (Some(_), excludeSelector) =>
-      document >/~ HtmlValidator(elements(excludeSelector))(_.isEmpty) match {
-        case Left(()) =>
-          logger.debug(
-            "Detected content to be excluded based on '{}'.",
-            excludeSelector
-          )
-          None
-        case Right(passedDocument) =>
-          Some(passedDocument >> allText)
-      }
-    case (None, _) => None
+      JsoupDocument(selectedDocument) >> text
   }
 }
