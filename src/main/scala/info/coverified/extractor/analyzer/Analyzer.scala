@@ -150,7 +150,9 @@ object Analyzer extends LazyLogging {
       pageDoc: JsoupDocument,
       selectors: Selectors,
       url: String
-  ): Try[RawEntryInformation] =
+  ): Try[RawEntryInformation] = {
+    val scrapeStart = System.currentTimeMillis()
+    logger.debug("Begin scraping content of url '{}'.", url)
     Try {
       RawEntryInformation(
         pageDoc >> text(selectors.title),
@@ -166,8 +168,21 @@ object Analyzer extends LazyLogging {
           .flatMap(tags => Option.when(tags.nonEmpty)(tags.toList))
       )
     } match {
-      case success @ Success(_) => success
+      case success @ Success(_) =>
+        val timeSpent = System.currentTimeMillis() - scrapeStart
+        logger.debug(
+          "Successfully scraped page document of url '{}' within {} ms",
+          url,
+          timeSpent
+        )
+        success
       case Failure(nse: NoSuchElementException) =>
+        val timeSpent = System.currentTimeMillis() - scrapeStart
+        logger.debug(
+          "Scraping of page document of url '{}' failed after {} ms.",
+          url,
+          timeSpent
+        )
         Failure(
           AnalysisException(
             s"Unable to extract mandatory title from web page @ url '$url'!",
@@ -175,6 +190,12 @@ object Analyzer extends LazyLogging {
           )
         )
       case Failure(ex) =>
+        val timeSpent = System.currentTimeMillis() - scrapeStart
+        logger.debug(
+          "Scraping of page document of url '{}' failed after {} ms.",
+          url,
+          timeSpent
+        )
         Failure(
           AnalysisException(
             s"Unknown exception during information extraction from url '$url'.",
@@ -182,6 +203,7 @@ object Analyzer extends LazyLogging {
           )
         )
     }
+  }
 
   /**
     * Extract the date information from web page document. If desired, it is first attempted to get it from Json LD
