@@ -139,7 +139,10 @@ final case class Extractor private (
     logger.info("Attempting to handle new urls.")
     for {
       newUrls <- queryNewUrls(first)
-      _ <- ZIO.collectAllPar(newUrls.map(handleNewUrl))
+      _ <- {
+        logger.debug("Treat {} new urls in parallel.", newUrls)
+        ZIO.collectAllPar(newUrls.map(handleNewUrl))
+      }
       noOfReceivedUrls <- IO.apply(newUrls.size)
     } yield noOfReceivedUrls
   }
@@ -152,11 +155,13 @@ final case class Extractor private (
     */
   private def queryNewUrls(
       first: Int
-  ): URIO[Console with SttpClient, List[SimpleUrlView]] =
+  ): URIO[Console with SttpClient, List[SimpleUrlView]] = {
+    logger.debug("Query the next {} new urls", first)
     queryUrls(ExtractorQuery.newUrls(first), exception => {
       logger.error("Requesting not yet handled urls failed.", exception)
       List.empty[SimpleUrlView]
     })
+  }
 
   /**
     * Query all urls with specified selection builder
@@ -182,7 +187,9 @@ final case class Extractor private (
       )
       .fold(
         errorHandling, {
-          case Some(urlViews) => urlViews
+          case Some(urlViews) =>
+            logger.debug("Received {} urls.", urlViews.size)
+            urlViews
           case None =>
             logger.warn(
               "Did receive empty optional on attempt to query not yet handled urls."
@@ -240,7 +247,7 @@ final case class Extractor private (
       },
       success => {
         logger.debug(
-          "Updating url '' ('') was successful.",
+          "Updating url '{}' ('{}') was successful.",
           view.id,
           view.name.getOrElse("")
         )

@@ -41,7 +41,7 @@
         </logger>
         <asyncRoot level="trace">
             <AppenderRef ref="Sentry"/>
-            <AppenderRef ref="Console" level="info"/>
+            <AppenderRef ref="Console" level="debug"/>
             <AppenderRef ref="RF" level="debug"/>
         </asyncRoot>
     </Loggers>
