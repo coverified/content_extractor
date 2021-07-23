@@ -31,7 +31,7 @@ import scala.util.{Failure, Success, Try}
   */
 object Analyzer extends LazyLogging {
   private val USER_AGENT: String = "CoVerifiedBot-Extractor"
-  private val BROWSE_TIME_OUT: Duration = Duration.ofMillis(30000L)
+  private val BROWSE_TIME_OUT: Duration = Duration.ofMillis(3000L)
 
   private val ISO_DATE_TIME_PATTERN = "yyyy-MM-dd'T'HH:mm:ssXXX"
   private val TARGET_TIME_ZONE = ZoneId.of("UTC")
@@ -57,7 +57,7 @@ object Analyzer extends LazyLogging {
         .ignoreContentType(false)
         .userAgent(USER_AGENT)
         .timeout(BROWSE_TIME_OUT.toMillis.toInt)
-        .followRedirects(true)
+        .followRedirects(false)
         .execute()
         .parse()
     )
