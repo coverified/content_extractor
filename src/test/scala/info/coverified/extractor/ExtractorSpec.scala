@@ -17,6 +17,7 @@ import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  Tag,
   TagCreateInput,
   TagWhereUniqueInput
 }
@@ -710,6 +711,10 @@ class ExtractorSpec
         extractor.tagsHaveChanged(maybeExistingEntries, pageTags) shouldBe true
       }
 
+      val determineTagsToDisconnectFrom =
+        PrivateMethod[Option[List[Some[TagWhereUniqueInput]]]](
+          Symbol("determineTagsToDisconnectFrom")
+        )
       "detect changed tags if there is a removed page tag" in {
         val maybeExistingEntries = Some(
           List(
@@ -732,6 +737,139 @@ class ExtractorSpec
         val pageTags = Some(List.empty)
 
         extractor.tagsHaveChanged(maybeExistingEntries, pageTags) shouldBe true
+      }
+
+      "attempt to not disconnect from anything correctly" in {
+        val maybeExistingTags = None
+        val maybePageTags = None
+
+        Extractor invokePrivate determineTagsToDisconnectFrom(
+          maybeExistingTags,
+          maybePageTags
+        ) shouldBe None
+      }
+
+      "attempt to not disconnect from anything correctly, if lists are there, but empty" in {
+        val maybeExistingTags = Some(List.empty)
+        val maybePageTags = Some(List.empty)
+
+        Extractor invokePrivate determineTagsToDisconnectFrom(
+          maybeExistingTags,
+          maybePageTags
+        ) shouldBe None
+      }
+
+      "determine all generate tags to remove from correctly" in {
+        val maybeExistingTags = Some(
+          List(
+            TagView[String](
+              id = "generated0",
+              name = None,
+              language = None,
+              highlighted = None,
+              generated = Some(true)
+            ),
+            TagView[String](
+              id = "generated1",
+              name = None,
+              language = None,
+              highlighted = None,
+              generated = Some(true)
+            )
+          )
+        )
+        val maybePageTags = None
+
+        Extractor invokePrivate determineTagsToDisconnectFrom(
+          maybeExistingTags,
+          maybePageTags
+        ) shouldBe Some(
+          List(
+            Some(TagWhereUniqueInput(id = Some("generated0"))),
+            Some(TagWhereUniqueInput(id = Some("generated1")))
+          )
+        )
+      }
+
+      "not attempt to disconnect from anything, if nothing has changed" in {
+        val maybeExistingTags = Some(
+          List(
+            TagView[String](
+              id = "page0",
+              name = Some("Foo"),
+              language = None,
+              highlighted = None,
+              generated = Some(false)
+            ),
+            TagView[String](
+              id = "page1",
+              name = Some("Bar"),
+              language = None,
+              highlighted = None,
+              generated = Some(false)
+            )
+          )
+        )
+        val maybePageTags = Some(List("Foo", "Bar"))
+
+        Extractor invokePrivate determineTagsToDisconnectFrom(
+          maybeExistingTags,
+          maybePageTags
+        ) shouldBe None
+      }
+
+      "not attempt to disconnect from anything, if only new page tags where added" in {
+        val maybeExistingTags = Some(
+          List(
+            TagView[String](
+              id = "page0",
+              name = Some("Foo"),
+              language = None,
+              highlighted = None,
+              generated = Some(false)
+            ),
+            TagView[String](
+              id = "page1",
+              name = Some("Bar"),
+              language = None,
+              highlighted = None,
+              generated = Some(false)
+            )
+          )
+        )
+        val maybePageTags = Some(List("Foo", "Bar", "Baz"))
+
+        Extractor invokePrivate determineTagsToDisconnectFrom(
+          maybeExistingTags,
+          maybePageTags
+        ) shouldBe None
+      }
+
+      "determine tags to be removed correctly, if a page tag has been removed" in {
+        val maybeExistingTags = Some(
+          List(
+            TagView[String](
+              id = "page0",
+              name = Some("Foo"),
+              language = None,
+              highlighted = None,
+              generated = Some(false)
+            ),
+            TagView[String](
+              id = "page1",
+              name = Some("Bar"),
+              language = None,
+              highlighted = None,
+              generated = Some(false)
+            )
+          )
+        )
+        val maybePageTags = Some(List("Foo"))
+
+        Extractor invokePrivate determineTagsToDisconnectFrom(
+          maybeExistingTags,
+          maybePageTags
+        ) shouldBe Some(List(Some(TagWhereUniqueInput(id = Some("page1")))))
       }
     }
   }

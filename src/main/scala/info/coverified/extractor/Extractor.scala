@@ -1110,12 +1110,15 @@ object Extractor extends LazyLogging {
     SimpleEntry.SimpleEntryView[SimpleUrlView, TagView[String]]
   ]] = {
     /* Handle existing entries, take especially care of what has been generated and what has been provided by page.
-     * The agreement is, that all generated tags are disconnected */
-    val disconnectFromGenerated = maybeExistingTags.map { existingTags =>
-      existingTags.map(tag => Some(TagWhereUniqueInput(id = Some(tag.id))))
-    }
+     * The agreement is, that all generated tags are disconnected. Additionally, all page tags are removed, that are not
+     * apparent anymore. */
+    val disconnectFrom =
+      determineTagsToDisconnectFrom(maybeExistingTags, maybePageTags)
     val maybeConnectAndCreatePageTags =
-      maybePageTags.map(connectToOrCreateTag(_, apiUrl, authSecret))
+      maybePageTags.map(connectToOrCreateTag(_, apiUrl, authSecret)).map {
+        case (maybeConnectTo, maybeCreate) =>
+          (maybeConnectTo.toList.map(Some(_)), maybeCreate.toList.map(Some(_)))
+      }
 
     Mutation.updateEntry(
       entryId,
@@ -1128,11 +1131,9 @@ object Extractor extends LazyLogging {
           date = date,
           tags = Some(
             TagRelateToManyInput(
-              disconnect = disconnectFromGenerated,
-              connect =
-                maybeConnectAndCreatePageTags.map(_._1.toList.map(Some(_))),
-              create =
-                maybeConnectAndCreatePageTags.map(_._2.toList.map(Some(_)))
+              disconnect = disconnectFrom,
+              connect = maybeConnectAndCreatePageTags.map(_._1),
+              create = maybeConnectAndCreatePageTags.map(_._2)
             )
           ),
           contentHash = Some(contentHash),
@@ -1145,6 +1146,44 @@ object Extractor extends LazyLogging {
         .view(SimpleUrl.view, Tag.view(CoVerifiedClientSchema.Language.id))
     )
   }
+
+  /**
+    * Determine a list of models, that describe, from which tags to disconnect from. Those are all generated ones and
+    * those, that are not yet apparent on the page anymore.
+    *
+    * @param maybeExistingTags  Optional list of yet know tags for that entry
+    * @param maybePageTags      Optional list of tags on the web page
+    * @return An optional List of models, that describe tags
+    */
+  private def determineTagsToDisconnectFrom(
+      maybeExistingTags: Option[List[TagView[String]]],
+      maybePageTags: Option[List[String]]
+  ): Option[List[Some[TagWhereUniqueInput]]] = {
+    val disconnectFromGenerated = maybeExistingTags.map { existingTags =>
+      existingTags
+        .filter(_.generated.contains(true))
+        .map(tag => Some(TagWhereUniqueInput(id = Some(tag.id))))
+    }
+    val disconnectFromRemoved = maybeExistingTags.map(
+      existingTags =>
+        existingTags
+          .filter(isPageTagAndRemoved(_, maybePageTags.getOrElse(List.empty)))
+          .map(tag => Some(TagWhereUniqueInput(id = Some(tag.id))))
+    )
+    val listOfTags = disconnectFromGenerated.getOrElse(List.empty) ++ disconnectFromRemoved
+      .getOrElse(List.empty)
+    Option.when(listOfTags.nonEmpty)(listOfTags)
+  }
+
+  /**
+    * Check, if the given existing tag is a page tag and if it has been removed from currently crawled page tags
+    */
+  private val isPageTagAndRemoved: (TagView[String], List[String]) => Boolean =
+    (existingTag: TagView[String], pageTags: List[String]) =>
+      existingTag.generated.contains(false) && (existingTag.name match {
+        case Some(name) => !pageTags.contains(name)
+        case None       => true
+      })
 
   /**
     * Determine the instant of the next crawl
