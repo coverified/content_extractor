@@ -70,6 +70,7 @@ dependencies {
 	implementation 'org.apache.logging.log4j:log4j-api:2.14.0' // log4j
 	implementation 'org.apache.logging.log4j:log4j-core:2.14.0' // log4j
 	implementation 'org.apache.logging.log4j:log4j-slf4j-impl:2.14.0' // log4j -> slf4j
+	implementation "com.typesafe.scala-logging:scala-logging_${scalaVersion}:3.9.2" // akka scala logging
 
 	// Error reporting
 	implementation "io.sentry:sentry:$sentryVersion"
@@ -91,4 +92,12 @@ dependencies {
 	testImplementation "com.github.tomakehurst:wiremock-jre8:2.29.0"
 
 	implementation 'org.typelevel:jawn-parser_2.13:1.2.0'
+
+	// CORE akka //
+	implementation platform("com.typesafe.akka:akka-bom_${scalaVersion}:2.6.14")
+	implementation "com.typesafe.akka:akka-actor-typed_${scalaVersion}"
+
+	implementation "com.typesafe.akka:akka-stream_${scalaVersion}"
+	testImplementation "com.typesafe.akka:akka-actor-testkit-typed_${scalaVersion}"
+
 }
