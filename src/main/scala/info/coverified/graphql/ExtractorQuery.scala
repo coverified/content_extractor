@@ -80,7 +80,11 @@ object ExtractorQuery {
     Query.allUrls(
       where = UrlWhereInput(
         lastCrawl = Some(DUMMY_LAST_CRAWL_DATE_TIME),
-        AND = Some(excludeCommonFiles)
+        AND = Some(
+          excludeCommonFiles ++ List(
+            UrlWhereInput(name_not_contains_i = Some("/Videos/"))
+          )
+        )
       ),
       skip = 0,
       first = Some(first)
@@ -112,7 +116,11 @@ object ExtractorQuery {
           )
         ),
         lastCrawl_gt = Some(DUMMY_LAST_CRAWL_DATE_TIME),
-        AND = Some(excludeCommonFiles)
+        AND = Some(
+          excludeCommonFiles ++ List(
+            UrlWhereInput(name_not_contains_i = Some("/Videos/"))
+          )
+        )
       ),
       skip = 0,
       first = Some(first)
