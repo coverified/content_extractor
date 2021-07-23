@@ -522,7 +522,7 @@ class ExtractorSpec
             |""".stripMargin)
 
         noException shouldBe thrownBy {
-          extractor.getExistingTags
+          Extractor.getExistingTags(apiUri, internalSecret)
 
           mockServer.verify(
             postRequestedFor(urlEqualTo("/api/graphql"))
@@ -550,7 +550,7 @@ class ExtractorSpec
         val existingTags = List(existingTag)
         val tags = List("Foo", "Bar")
 
-        val tagToExistingTag = extractor.mapTagToExistingTag(tags, existingTags)
+        val tagToExistingTag = Extractor.mapTagToExistingTag(tags, existingTags)
         tagToExistingTag.size shouldBe 2
         tagToExistingTag.get("Bar") shouldBe Some(None)
         tagToExistingTag.get("Foo") match {
@@ -571,7 +571,7 @@ class ExtractorSpec
           "Bar" -> None
         )
 
-        val creationModels = extractor.createModelToCreateTag(tagToExistingTag)
+        val creationModels = Extractor.createModelToCreateTag(tagToExistingTag)
         creationModels.size shouldBe 1
         creationModels.head match {
           case TagCreateInput(name, language, highlighted, generated) =>
@@ -601,7 +601,7 @@ class ExtractorSpec
             |}
             |""".stripMargin)
 
-        extractor.connectToOrCreateTag(tags) shouldBe (
+        Extractor.connectToOrCreateTag(tags, apiUri, internalSecret) shouldBe (
           Seq(TagWhereUniqueInput(id = Some("ckrfhetxs0332ilops6o8jmoj"))),
           Seq(
             TagCreateInput(
