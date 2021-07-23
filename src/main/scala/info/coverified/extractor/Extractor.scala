@@ -228,15 +228,25 @@ final case class Extractor private (
             .toRequest(apiUrl)
             .header("x-coverified-internal-auth", authSecret)
         )
-    }).fold(exception => {
-      logger.error(
-        "Updating url entry for url '{}' ({}) failed.",
-        view.id,
-        view.name,
-        exception
-      )
-      None
-    }, identity)
+    }).fold(
+      exception => {
+        logger.error(
+          "Updating url entry for url '{}' ({}) failed.",
+          view.id,
+          view.name,
+          exception
+        )
+        None
+      },
+      success => {
+        logger.debug(
+          "Updating url '' ('') was successful.",
+          view.id,
+          view.name.getOrElse("")
+        )
+        success
+      }
+    )
 
   /**
     * Scrapes the url and creates a new entry
