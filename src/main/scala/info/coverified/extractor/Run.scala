@@ -47,6 +47,11 @@ object Run extends App with LazyLogging {
         }
     }
 
+    logger.debug(
+      "The extractor configuration is: {}",
+      config.copy(authSecret = "*****")
+    )
+
     /* Get all page profiles and map the corresponding hostname, it applies to, to the actual profile config */
     val hostNameToProfileConfig =
       Extractor.getAllConfigs(config.profileDirectoryPath)

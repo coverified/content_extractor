@@ -229,7 +229,11 @@ final case class Extractor private (
   ): URIO[Console with SttpClient, Option[SimpleUrlView]] =
     (view match {
       case SimpleUrlView(id, url, sourceId) =>
-        logger.debug("Updating the entry for url ' {}'.", view.id)
+        logger.debug(
+          "Attempt to update the url '{}' ('{}').",
+          view.id,
+          view.name
+        )
         val mutation = buildUrlUpdateMutation(id, url, sourceId)
         Connector.sendRequest(
           mutation
