@@ -141,7 +141,7 @@ final case class Extractor private (
     for {
       newUrls <- queryNewUrls(first)
       _ <- {
-        logger.debug("Treat {} new urls in parallel.", newUrls)
+        logger.debug("Treat {} new urls in parallel.", newUrls.size)
         ZIO.collectAllPar(newUrls.map(handleNewUrl))
       }
       noOfReceivedUrls <- IO.apply(newUrls.size)

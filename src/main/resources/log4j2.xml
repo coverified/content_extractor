@@ -39,6 +39,14 @@
             <AppenderRef ref="Console" level="info"/>
             <AppenderRef ref="connector_RF" level="trace"/>
         </logger>
+        <logger name="io.netty" level="debug" additivity="false">
+            <AppenderRef ref="Console" level="info"/>
+            <AppenderRef ref="connector_RF" level="debug"/>
+        </logger>
+        <logger name="org.asynchttpclient.netty" level="debug" additivity="false">
+            <AppenderRef ref="Console" level="info"/>
+            <AppenderRef ref="connector_RF" level="debug"/>
+        </logger>
         <asyncRoot level="trace">
             <AppenderRef ref="Sentry"/>
             <AppenderRef ref="Console" level="debug"/>
