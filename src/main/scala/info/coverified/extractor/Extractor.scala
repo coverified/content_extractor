@@ -24,6 +24,7 @@ import info.coverified.extractor.analyzer.EntryInformation.{
 import info.coverified.extractor.analyzer.{Analyzer, EntryInformation}
 import info.coverified.extractor.config.Config
 import info.coverified.extractor.exceptions.{
+  AnalysisException,
   ConfigException,
   ExtractionException
 }
@@ -298,6 +299,13 @@ final case class Extractor private (
                 url.id,
                 url.name,
                 httpStatusException
+              )
+            case aex: AnalysisException =>
+              logger.error(
+                "Analysis exception during browsing of new url '{}' ('{}'). No entry created.",
+                url.id,
+                url.name,
+                aex
               )
             case unknown =>
               logger.error(
