@@ -28,7 +28,6 @@ import info.coverified.extractor.exceptions.{
   ExtractionException
 }
 import info.coverified.extractor.profile.ProfileConfig
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Query.Language
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.{Connector, ExtractorQuery}
 import info.coverified.graphql.schema.{
@@ -46,7 +45,6 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   TagRelateToManyInput,
   TagWhereInput,
   TagWhereUniqueInput,
-  TagsCreateInput,
   UrlRelateToOneInput,
   UrlUpdateInput,
   UrlWhereUniqueInput
@@ -294,7 +292,14 @@ final case class Extractor private (
           }
           None
         },
-        identity
+        success => {
+          logger.debug(
+            "Storing of new entry for url '{}' ('{}') was successful.",
+            url.id,
+            url.name.getOrElse("")
+          )
+          success
+        }
       )
 
   /**
