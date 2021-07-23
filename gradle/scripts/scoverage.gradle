@@ -4,6 +4,6 @@ scoverage {
 	coverageOutputHTML = false
 	coverageOutputXML = true
 	coverageOutputCobertura = true
-	minimumRate = 0.0 // minimum code coverage
+	minimumRate = 0.5 // minimum code coverage
 	coverageDebug = false
 }
