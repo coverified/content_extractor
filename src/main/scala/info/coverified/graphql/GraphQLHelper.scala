@@ -14,7 +14,8 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Source,
   SourceWhereInput,
   Tag,
-  TagWhereInput
+  TagWhereInput,
+  UrlUpdateInput
 }
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
@@ -25,6 +26,9 @@ import info.coverified.graphql.schema.{
 }
 import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
 import sttp.model.Uri
+
+import java.time.format.DateTimeFormatter
+import java.time.{ZoneId, ZonedDateTime}
 
 class GraphQLHelper(private val apiUri: Uri, private val authSecret: String) {
 
@@ -94,6 +98,24 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String) {
       ]]
   ): Option[SimpleEntryView[SimpleUrlView, TagView[String]]] =
     sendMutationWithHeader(entryMutation)
+
+  def updateUrl(urlId: String) =
+    sendMutationWithHeader(
+      Mutation.updateUrl(
+        urlId,
+        Some(
+          UrlUpdateInput(
+            lastCrawl = Some(
+              "\\[UTC]$".r.replaceAllIn(
+                DateTimeFormatter.ISO_DATE_TIME
+                  .format(ZonedDateTime.now(ZoneId.of("UTC"))),
+                ""
+              )
+            )
+          )
+        )
+      )(SimpleUrl.view)
+    )
 
   /**
     * Sends the given request with specified auth header to the GraphQL and directly run the equivalent ZIO-Effect

@@ -13,6 +13,7 @@ import java.time.Duration
 
 sealed trait MutatorMessage
 object MutatorMessage {
+
   final case class InitMutator(
       apiUri: Uri,
       authToken: String,
@@ -24,8 +25,10 @@ object MutatorMessage {
       urlId: String,
       replyTo: ActorRef[SourceHandlerMessage]
   ) extends MutatorMessage
+
   final case class UpdateUrl(
       urlId: String,
       replyTo: ActorRef[SourceHandlerMessage]
   ) extends MutatorMessage
+
 }

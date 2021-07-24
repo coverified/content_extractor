@@ -98,12 +98,14 @@ object Mutator {
           "Attempting to update the url with id '{}'.",
           urlId
         )
-        /*
-         * TODO
-         *    1) Setup and send mutation
-         *
-         * You may make use of Extractor#buildUrlUpdateMutation (ll. 1267)
-         */
+
+        helper.updateUrl(urlId) match {
+          case Some(_) =>
+            context.log.debug(s"Updated url '$urlId'")
+          case None =>
+          // todo report to source handler
+        }
+
         Behaviors.same
       case _ => Behaviors.unhandled
     }
