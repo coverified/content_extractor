@@ -15,7 +15,7 @@ import java.time.Duration
   */
 sealed trait SupervisorMessage
 object SupervisorMessage {
-  final case class InitSupervisorMessage(
+  final case class InitSupervisor(
       apiUri: Uri,
       profileDirectoryPath: String,
       reAnalysisInterval: Duration,
@@ -23,8 +23,8 @@ object SupervisorMessage {
       chunkSize: Int,
       repeatDelay: Duration
   ) extends SupervisorMessage
-  object InitSupervisorMessage {
-    def apply(config: Config): InitSupervisorMessage = config match {
+  object InitSupervisor {
+    def apply(config: Config): InitSupervisor = config match {
       case Config(
           apiUri,
           profileDirectoryPath,
@@ -33,7 +33,7 @@ object SupervisorMessage {
           chunkSize,
           repeatDelay
           ) =>
-        new InitSupervisorMessage(
+        new InitSupervisor(
           apiUri,
           profileDirectoryPath,
           reAnalysisInterval,

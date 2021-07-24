@@ -6,11 +6,15 @@
 package info.coverified.extractor.actor
 
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.Behavior
+import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors._
-import info.coverified.extractor.messages.SupervisorMessage
+import info.coverified.extractor.messages.SourceHandlerMessage.InitSourceHandler
+import info.coverified.extractor.messages.{
+  SourceHandlerMessage,
+  SupervisorMessage
+}
 import info.coverified.extractor.messages.SupervisorMessage.{
-  InitSupervisorMessage,
+  InitSupervisor,
   SourceHandled
 }
 import info.coverified.graphql.GraphQLHelper
@@ -27,7 +31,7 @@ object ExtractionSupervisor {
   def uninitialized: Receive[SupervisorMessage] = receive[SupervisorMessage] {
     case (
         context,
-        msg @ InitSupervisorMessage(
+        msg @ InitSupervisor(
           apiUri,
           profileDirectoryPath,
           reAnalysisInterval,
@@ -58,16 +62,27 @@ object ExtractionSupervisor {
             sources.size
           )
 
-          val activeSources = sources.map {
-            source =>
-              /* TODO: Spawn a source handler and ask it to handle do it's stuff */
-              // context.log.info("Attempt to handle new urls")
-              // val urlHandler = context.spawn(UrlHandler(), "UrlHandler")
-              // urlHandler ! HandleNewUrls(stateData, context.self)
-              // handlingNewUrls(stateData)
-              source.id
-          }
-          handleSourceResponses(stateData, activeSources.toVector)
+          val activeSources = sources.map { source =>
+            context.log.debug(
+              "Spawning an actor for source '{}' ('{}').",
+              source.id,
+              source.url
+            )
+            val handler =
+              context.spawn(SourceHandler(), "SourceHandler_" + source.id)
+            handler ! InitSourceHandler(
+              apiUri,
+              profileDirectoryPath,
+              reAnalysisInterval,
+              authSecret,
+              chunkSize,
+              repeatDelay,
+              source,
+              context.self
+            )
+            source.id -> handler
+          }.toMap
+          handleSourceResponses(stateData, activeSources)
         case None =>
           context.log.warn(
             "Querying sources did not return a sensible reply. Shut down."
@@ -85,17 +100,20 @@ object ExtractionSupervisor {
     */
   def handleSourceResponses(
       stateData: ExtractorStateData,
-      activeSources: Vector[String]
+      activeSources: Map[String, ActorRef[SourceHandlerMessage]]
   ): Receive[SupervisorMessage] = Behaviors.receive[SupervisorMessage] {
     case (context, SourceHandled(sourceId)) =>
-      context.log.debug("Handler for source '{}' reported to have finished.")
-      val stillActiveSources = activeSources.filterNot(_ == sourceId)
+      context.log
+        .debug("Handler for source '{}' reported to have finished.", sourceId)
+      val stillActiveSources = activeSources.filterNot {
+        case (key, _) => key == sourceId
+      }
       if (stillActiveSources.nonEmpty) {
         context.log.debug(
           "Still waiting for the following sources to terminate:\n\t{}",
           stillActiveSources.mkString("\n\t")
         )
-        Behaviors.same
+        handleSourceResponses(stateData, stillActiveSources)
       } else {
         context.log.info(
           "All sources have reported to have finished. Good night! zzz"

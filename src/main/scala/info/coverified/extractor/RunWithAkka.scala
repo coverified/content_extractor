@@ -10,7 +10,7 @@ import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.actor.ExtractionSupervisor
 import info.coverified.extractor.config.Config
 import info.coverified.extractor.messages.SupervisorMessage
-import info.coverified.extractor.messages.SupervisorMessage.InitSupervisorMessage
+import info.coverified.extractor.messages.SupervisorMessage.InitSupervisor
 
 import scala.util.{Failure, Success}
 
@@ -47,6 +47,6 @@ object RunWithAkka extends LazyLogging {
       ExtractionSupervisor(),
       "ExtractionSupervisor"
     )
-    actorSystem ! InitSupervisorMessage(config)
+    actorSystem ! InitSupervisor(config)
   }
 }
