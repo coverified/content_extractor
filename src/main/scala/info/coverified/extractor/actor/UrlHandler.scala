@@ -8,6 +8,11 @@ package info.coverified.extractor.actor
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import info.coverified.extractor.analyzer.Analyzer
+import info.coverified.extractor.analyzer.EntryInformation.CreateEntryInformation
+import info.coverified.extractor.messages.MutatorMessage.{
+  CreateEntry,
+  UpdateUrl
+}
 import info.coverified.extractor.messages.SourceHandlerMessage.{
   NewUrlHandledSuccessfully,
   NewUrlHandledWithFailure
@@ -35,20 +40,26 @@ class UrlHandler {
       mutator: ActorRef[MutatorMessage]
   ): Behaviors.Receive[UrlHandlerMessage] =
     Behaviors.receive[UrlHandlerMessage] {
-      case (context, HandleNewUrl(url, urlId, pageProfile, replyTo)) =>
+      case (context, HandleNewUrl(url, urlId, pageProfile, sourceHandler)) =>
         context.log.info("Start content extraction for new url '{}'.", url)
 
         Analyzer.run(url, pageProfile) match {
           case Success(rawEntryInformation) =>
             context.log.debug("Visiting of web site '{}' successful.", url)
-            replyTo ! NewUrlHandledSuccessfully(url)
+            sourceHandler ! NewUrlHandledSuccessfully(url)
+            mutator ! CreateEntry(
+              CreateEntryInformation(rawEntryInformation),
+              sourceHandler
+            )
+            mutator ! UpdateUrl(urlId, sourceHandler)
             Behaviors.same
           case Failure(exception) =>
             context.log.error(
               "Error during visit of web site '{}'. Report to my source handler.",
               url
             )
-            replyTo ! NewUrlHandledWithFailure(url, urlId, exception)
+            sourceHandler ! NewUrlHandledWithFailure(url, urlId, exception)
+            mutator ! UpdateUrl(urlId, sourceHandler)
             Behaviors.same
         }
       case _ => Behaviors.unhandled

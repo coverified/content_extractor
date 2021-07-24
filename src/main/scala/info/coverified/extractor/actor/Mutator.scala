@@ -47,7 +47,8 @@ object Mutator {
         Behaviors.same
       case (context, UpdateUrl(urlId, replyTo)) =>
         context.log.debug(
-          "Attempting to create a new entry. Check if there is one with same content."
+          "Attempting to update the url with id '{}'.",
+          urlId
         )
         /*
          * TODO

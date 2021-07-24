@@ -16,6 +16,6 @@ object UrlHandlerMessage {
       url: String,
       urlId: String,
       pageProfile: ProfileConfig,
-      replyTo: ActorRef[SourceHandlerMessage]
+      replyToSourceHandler: ActorRef[SourceHandlerMessage]
   ) extends UrlHandlerMessage
 }
