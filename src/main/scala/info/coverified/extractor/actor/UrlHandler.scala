@@ -15,7 +15,7 @@ class UrlHandler {
   def idle: Behaviors.Receive[UrlHandlerMessage] =
     Behaviors.receive[UrlHandlerMessage] {
       case (context, HandleNewUrl(url, replyTo)) =>
-        context.log.info("I got asked to handle a new url ''.", url)
+        context.log.info("I got asked to handle a new url '{}'.", url)
         replyTo ! NewUrlHandled(url)
         Behaviors.stopped
       case _ => Behaviors.unhandled

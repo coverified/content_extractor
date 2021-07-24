@@ -38,6 +38,15 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String) {
     queryWithHeader(ExtractorQuery.newUrls(amount))
 
   /**
+    * Query all not yet visited urls
+    *
+    * @param sourceId The identifier of the source, the url shall belong to
+    * @return An option onto a list of new urls
+    */
+  def queryNewUrls(sourceId: String): Option[List[SimpleUrl.SimpleUrlView]] =
+    queryWithHeader(ExtractorQuery.newUrls(sourceId))
+
+  /**
     * Sends the given request with specified auth header to the GraphQL and directly run the equivalent ZIO-Effect
     *
     * @param selectionBuilder Selection builder to apply

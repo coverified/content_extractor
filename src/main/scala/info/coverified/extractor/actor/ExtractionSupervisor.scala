@@ -71,7 +71,7 @@ object ExtractionSupervisor {
             context.log.debug(
               "Spawning an actor for source '{}' ('{}').",
               source.id,
-              source.url
+              source.name.getOrElse("")
             )
             val handler =
               context.spawn(SourceHandler(), "SourceHandler_" + source.id)
@@ -118,10 +118,13 @@ object ExtractionSupervisor {
       val stillToBeActivedSourceHandlers = initializedSources.filterNot {
         case (key, _) => key == sourceId
       }
-      context.log.debug(
-        "Still initializing source handler for sources:\n\t{}",
-        stillToBeActivedSourceHandlers.mkString("\n\t")
-      )
+      if (stillToBeActivedSourceHandlers.nonEmpty)
+        context.log.debug(
+          "Still initializing source handler for sources:\n\t{}",
+          stillToBeActivedSourceHandlers.mkString("\n\t")
+        )
+      else
+        context.log.debug("All source handlers initialized.")
       val newActiveSource = activeSources + (sourceId -> replyTo)
       replyTo ! Run(context.self)
       handleSourceResponses(

@@ -11,6 +11,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   EntryWhereInput,
   Query,
+  SourceWhereInput,
   Tag,
   Url,
   UrlWhereInput
@@ -77,6 +78,44 @@ object ExtractorQuery {
   def newUrls(
       first: Int
   ): SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
+    newUrls(Some(first))
+
+  /**
+    * Query all new urls
+    *
+    * @return A selection build to query all not yet visited urls
+    */
+  def newUrls
+      : SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
+    newUrls(None)
+
+  /**
+    * Query all new urls for a given source
+    *
+    * @param sourceId Id of the source, the url shall belong to
+    * @return A selection build to query all not yet visited urls, that belong to a source
+    */
+  def newUrls(
+      sourceId: String
+  ): SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
+    Query.allUrls(
+      where = UrlWhereInput(
+        lastCrawl = Some(DUMMY_LAST_CRAWL_DATE_TIME),
+        AND = Some(
+          excludeCommonFiles ++ List(
+            UrlWhereInput(name_not_contains_i = Some("/Videos/")),
+            UrlWhereInput(source = Some(SourceWhereInput(id = Some(sourceId))))
+          )
+        )
+      ),
+      skip = 0
+    )(
+      SimpleUrl.view
+    )
+
+  private def newUrls(
+      maybeFirst: Option[Int]
+  ): SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
     Query.allUrls(
       where = UrlWhereInput(
         lastCrawl = Some(DUMMY_LAST_CRAWL_DATE_TIME),
@@ -87,7 +126,7 @@ object ExtractorQuery {
         )
       ),
       skip = 0,
-      first = Some(first)
+      first = maybeFirst
     )(
       SimpleUrl.view
     )
