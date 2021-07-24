@@ -758,36 +758,5 @@ class AnalyzerSpec
         }
       }
     }
-
-    "running the analysis" should {
-      val validUrl = coverifiedUrl
-      val mockBrowser = new MockBrowser(Map(validUrl -> validUrlPageDoc))
-      val queryUrl: String => Try[JsoupDocument] =
-        (url: String) => Try(mockBrowser.get(url)).map(JsoupDocument)
-
-      "return Failure, when browser fails" in {
-        val profileConfig = getConfig(MockBrowser.dislikedUrl)
-        Analyzer.run(
-          MockBrowser.dislikedUrl,
-          coverifiedUrlId,
-          profileConfig,
-          queryUrl
-        ) match {
-          case Failure(exception: DislikeThatUrlException) =>
-            exception.msg shouldBe "I don't like that url."
-          case Failure(exception) =>
-            fail("Browser failed with wrong exception.", exception)
-          case Success(_) => fail("Browser was meant to fail, but succeeded.")
-        }
-      }
-
-      "return something, if browser does not fail and analysis does not fail" in {
-        Analyzer.run(validUrl, "coverified", getConfig(validUrl), queryUrl) match {
-          case Success(_) => succeed
-          case Failure(exception) =>
-            fail("Browser did not fail, but analysis failed.", exception)
-        }
-      }
-    }
   }
 }

@@ -14,7 +14,6 @@ import info.coverified.extractor.messages.SourceHandlerMessage.{
 }
 import info.coverified.extractor.messages.UrlHandlerMessage
 import info.coverified.extractor.messages.UrlHandlerMessage.HandleNewUrl
-import info.coverified.extractor.profile.ProfileConfig
 import scala.util.{Failure, Success}
 
 /**
@@ -23,11 +22,9 @@ import scala.util.{Failure, Success}
 class UrlHandler {
   def idle: Behaviors.Receive[UrlHandlerMessage] =
     Behaviors.receive[UrlHandlerMessage] {
-      case (context, HandleNewUrl(url, replyTo)) =>
+      case (context, HandleNewUrl(url, pageProfile, replyTo)) =>
         context.log.info("Start content extraction for new url '{}'.", url)
 
-        /* TODO: Get correct page profiles */
-        val pageProfile = ProfileConfig(ProfileConfig.Profile("", List.empty))
         Analyzer.run(url, pageProfile) match {
           case Success(rawEntryInformation) =>
             context.log.debug("Visiting of web site '{}' successful.", url)

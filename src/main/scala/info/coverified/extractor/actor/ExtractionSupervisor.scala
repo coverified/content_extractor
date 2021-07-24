@@ -8,6 +8,7 @@ package info.coverified.extractor.actor
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors._
+import com.typesafe.config.ConfigFactory
 import info.coverified.extractor.messages.SourceHandlerMessage.{
   InitSourceHandler,
   Run
@@ -21,10 +22,11 @@ import info.coverified.extractor.messages.SupervisorMessage.{
   SourceHandled,
   SourceHandlerInitialized
 }
+import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.GraphQLHelper
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
 import sttp.model.Uri
 
+import java.io.File
 import java.time.Duration
 
 object ExtractionSupervisor {
@@ -46,10 +48,14 @@ object ExtractionSupervisor {
         )
         ) =>
       context.log.info("Received a init message: {}.", msg)
+
+      /* Read page profile configs */
+      val hostToPageProfile = readPageProfileConfigs(profileDirectoryPath)
+
       /* Set up state data */
       val stateData = ExtractorStateData(
         apiUri,
-        profileDirectoryPath,
+        hostToPageProfile,
         reAnalysisInterval,
         authSecret,
         chunkSize,
@@ -67,25 +73,51 @@ object ExtractionSupervisor {
             sources.size
           )
 
-          val initializedSources = sources.map { source =>
-            context.log.debug(
-              "Spawning an actor for source '{}' ('{}').",
-              source.id,
-              source.name.getOrElse("")
-            )
-            val handler =
-              context.spawn(SourceHandler(), "SourceHandler_" + source.id)
-            handler ! InitSourceHandler(
-              apiUri,
-              profileDirectoryPath,
-              reAnalysisInterval,
-              authSecret,
-              chunkSize,
-              repeatDelay,
-              source,
-              context.self
-            )
-            source.id -> handler
+          val initializedSources = sources.flatMap { source =>
+            /* Prepare profile config for that source */
+            source.url match {
+              case Some(sourceUrl) =>
+                hostToPageProfile.find {
+                  case (hostUrl, _) => hostUrl.contains(sourceUrl)
+                } match {
+                  case Some(_ -> pageProfile) =>
+                    context.log.debug(
+                      "Spawning an actor for source '{}' ('{}').",
+                      source.id,
+                      source.name.getOrElse("")
+                    )
+                    val handler =
+                      context.spawn(
+                        SourceHandler(),
+                        "SourceHandler_" + source.id
+                      )
+                    handler ! InitSourceHandler(
+                      apiUri,
+                      pageProfile,
+                      reAnalysisInterval,
+                      authSecret,
+                      chunkSize,
+                      repeatDelay,
+                      source,
+                      context.self
+                    )
+                    Some(source.id -> handler)
+                  case None =>
+                    context.log.error(
+                      "Unable to determine page profile for source '{}' ('{}'). Cannot handle that source.",
+                      source.id,
+                      source.name.getOrElse("")
+                    )
+                    None
+                }
+              case None =>
+                context.log.error(
+                  "Cannot handle the source '{}' ('{}'), as it doesn't contain information about host url.",
+                  source.id,
+                  source.name.getOrElse("")
+                )
+                None
+            }
           }.toMap
           handleSourceResponses(stateData, initializedSources, Map.empty)
         case None =>
@@ -155,10 +187,31 @@ object ExtractionSupervisor {
 
   final case class ExtractorStateData(
       apiUri: Uri,
-      profileDirectoryPath: String,
+      hostNameToPageProfile: Map[String, ProfileConfig],
       reAnalysisInterval: Duration,
       authSecret: String,
       chunkSize: Int,
       repeatDelay: Duration
   )
+
+  /**
+    * Read all page profile configs from file
+    *
+    * @param cfgDirectoryPath Path, where to find the configs
+    * @return A Mapping from applicable source url to page profile
+    */
+  private def readPageProfileConfigs(
+      cfgDirectoryPath: String
+  ): Map[String, ProfileConfig] = {
+    val cfgDirectory = new File(cfgDirectoryPath)
+    if (cfgDirectory.exists() && cfgDirectory.isDirectory) {
+      cfgDirectory.listFiles
+        .filter(_.isFile)
+        .map(file => ProfileConfig(ConfigFactory.parseFile(file)))
+        .map(profileCfg => profileCfg.profile.hostname -> profileCfg)
+        .toMap
+    } else {
+      Map.empty[String, ProfileConfig]
+    }
+  }
 }

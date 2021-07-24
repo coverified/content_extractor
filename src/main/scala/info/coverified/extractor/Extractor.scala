@@ -63,7 +63,6 @@ import java.io.File
 import java.net.SocketTimeoutException
 import java.time.format.DateTimeFormatter
 import java.time.{Duration, ZoneId, ZonedDateTime}
-import scala.collection.immutable
 import scala.util.{Either, Failure, Success, Try}
 
 /**
@@ -890,6 +889,7 @@ object Extractor extends LazyLogging {
     * @param cfgDirectoryPath The path, where the files are located
     * @return A map from pages' url to their applicable config
     */
+  @deprecated("Use functionality in ExctractionSupervisor instead")
   def getAllConfigs(
       cfgDirectoryPath: String
   ): Map[String, ProfileConfig] = {

@@ -15,7 +15,6 @@ import info.coverified.extractor.messages.{
 }
 import info.coverified.extractor.messages.SourceHandlerMessage.{
   InitSourceHandler,
-  NewUrlHandledMessage,
   Run
 }
 import info.coverified.extractor.messages.SupervisorMessage.{
@@ -23,13 +22,13 @@ import info.coverified.extractor.messages.SupervisorMessage.{
   SourceHandlerInitialized
 }
 import info.coverified.extractor.messages.UrlHandlerMessage.HandleNewUrl
+import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.GraphQLHelper
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import sttp.model.Uri
 
 import java.time.Duration
-import java.util
 
 /**
   * An actor, that handles the extraction process per source
@@ -41,7 +40,7 @@ class SourceHandler {
           context,
           InitSourceHandler(
             apiUri,
-            profileDirectoryPath,
+            pageProfile,
             reAnalysisInterval,
             authSecret,
             chunkSize,
@@ -57,7 +56,7 @@ class SourceHandler {
         )
         val stateData = SourceHandlerStateData(
           apiUri,
-          profileDirectoryPath,
+          pageProfile,
           reAnalysisInterval,
           authSecret,
           chunkSize,
@@ -126,7 +125,11 @@ class SourceHandler {
             firstBatch.foreach { url =>
               url.name match {
                 case Some(actualUrl) =>
-                  urlWorkerProxy ! HandleNewUrl(actualUrl, context.self)
+                  urlWorkerProxy ! HandleNewUrl(
+                    actualUrl,
+                    stateData.pageProfile,
+                    context.self
+                  )
                 case None =>
                   context.log.error(
                     "The url entry with id '{}' doesn't contain a url to visit.",
@@ -175,7 +178,7 @@ class SourceHandler {
 
   final case class SourceHandlerStateData(
       apiUri: Uri,
-      profileDirectoryPath: String,
+      pageProfile: ProfileConfig,
       reAnalysisInterval: Duration,
       authSecret: String,
       chunkSize: Int,

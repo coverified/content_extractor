@@ -6,6 +6,7 @@
 package info.coverified.extractor.messages
 
 import akka.actor.typed.ActorRef
+import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
 import sttp.model.Uri
 
@@ -18,7 +19,7 @@ sealed trait SourceHandlerMessage
 object SourceHandlerMessage {
   final case class InitSourceHandler(
       apiUri: Uri,
-      profileDirectoryPath: String,
+      pageProfile: ProfileConfig,
       reAnalysisInterval: Duration,
       authSecret: String,
       chunkSize: Int,
