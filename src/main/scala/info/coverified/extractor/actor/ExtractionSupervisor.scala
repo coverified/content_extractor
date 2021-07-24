@@ -29,6 +29,7 @@ import info.coverified.graphql.GraphQLHelper
 import sttp.model.Uri
 
 import java.io.File
+import java.net.URL
 import java.time.Duration
 
 object ExtractionSupervisor {
@@ -78,7 +79,8 @@ object ExtractionSupervisor {
             source.url match {
               case Some(sourceUrl) =>
                 hostToPageProfile.find {
-                  case (hostUrl, _) => hostUrl.contains(sourceUrl)
+                  case (hostUrl, _) =>
+                    hostUrl.contains(new URL(sourceUrl).getHost)
                 } match {
                   case Some(_ -> pageProfile) =>
                     context.log.debug(

@@ -31,4 +31,6 @@ object MutatorMessage {
       replyTo: ActorRef[SourceHandlerMessage]
   ) extends MutatorMessage
 
+  final case object Terminate extends MutatorMessage
+
 }

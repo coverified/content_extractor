@@ -42,4 +42,6 @@ object SourceHandlerMessage {
 
   final case class ReScheduleUrl(url: String, id: String)
       extends SourceHandlerMessage
+
+  final case object MutationsCompleted extends SourceHandlerMessage
 }

@@ -13,6 +13,7 @@ import info.coverified.extractor.messages.MutatorMessage
 import info.coverified.extractor.messages.MutatorMessage.{
   CreateEntry,
   InitMutator,
+  Terminate,
   UpdateUrl
 }
 import info.coverified.graphql.GraphQLHelper
@@ -107,6 +108,9 @@ object Mutator {
         }
 
         Behaviors.same
+      case (ctx, Terminate) =>
+        ctx.log.info("Shutting down mutator!")
+        Behaviors.stopped
       case _ => Behaviors.unhandled
     }
 
