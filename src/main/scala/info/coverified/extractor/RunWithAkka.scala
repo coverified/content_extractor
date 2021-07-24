@@ -8,15 +8,13 @@ package info.coverified.extractor
 import akka.actor.typed.ActorSystem
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.actor.ExtractionSupervisor
-import info.coverified.extractor.actor.ExtractionSupervisor.{
-  InitSupervisorMessage,
-  SupervisorMessage
-}
 import info.coverified.extractor.config.Config
+import info.coverified.extractor.messages.SupervisorMessage
+import info.coverified.extractor.messages.SupervisorMessage.InitSupervisorMessage
 
 import scala.util.{Failure, Success}
 
-object Example extends LazyLogging {
+object RunWithAkka extends LazyLogging {
   def main(args: Array[String]): Unit = {
     logger.info("Starting extraction")
 
