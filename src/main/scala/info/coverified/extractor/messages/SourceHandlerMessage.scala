@@ -35,8 +35,12 @@ object SourceHandlerMessage {
   sealed trait NewUrlHandledMessage extends SourceHandlerMessage
   final case class NewUrlHandledSuccessfully(url: String)
       extends NewUrlHandledMessage
-  final case class NewUrlHandledWithFailure(url: String, failure: Throwable)
-      extends NewUrlHandledMessage
+  final case class NewUrlHandledWithFailure(
+      url: String,
+      urlId: String,
+      failure: Throwable
+  ) extends NewUrlHandledMessage
 
-  final case class ReScheduleUrl(url: String) extends SourceHandlerMessage
+  final case class ReScheduleUrl(url: String, id: String)
+      extends SourceHandlerMessage
 }

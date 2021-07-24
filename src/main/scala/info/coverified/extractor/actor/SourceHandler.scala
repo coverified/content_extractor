@@ -157,6 +157,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
                 case Some(actualUrl) =>
                   urlWorkerProxy ! HandleNewUrl(
                     actualUrl,
+                    url.id,
                     stateData.pageProfile,
                     context.self
                   )
@@ -203,7 +204,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       supervisor: ActorRef[SupervisorMessage]
   ): Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
-      case (context, NewUrlHandledWithFailure(url, error)) =>
+      case (context, NewUrlHandledWithFailure(url, urlId, error)) =>
         /* Remove the reporter from list of active ones */
         val remainingActiveUrls = urlToActivation.filterNot {
           case (remainingUrl, _) => remainingUrl == url
@@ -224,7 +225,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
               stateData.repeatDelay.toMillis / 1000
             )
             timer.startSingleTimer(
-              ReScheduleUrl(url),
+              ReScheduleUrl(url, urlId),
               FiniteDuration(stateData.repeatDelay.toMillis, "ms")
             )
           case _ =>
@@ -260,7 +261,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           remainingActiveUrls
         )
 
-      case (context, ReScheduleUrl(url)) =>
+      case (context, ReScheduleUrl(url, urlId)) =>
         context.log.debug(
           "I'm ask to reschedule the url '{}'. Check rate limit and if applicable, send out request to my worker pool.",
           url
@@ -270,6 +271,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           workerPoolProxy,
           supervisor,
           url,
+          urlId,
           urlToActivation,
           urlsToBeHandled,
           stateData
@@ -311,6 +313,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
             workerPoolProxy,
             supervisor,
             nextUrl.name.get,
+            nextUrl.id,
             urlToActivation,
             remainingUrls,
             stateData
@@ -358,6 +361,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
     * @param workerPoolProxy  Reference to the proxy for the worker pool
     * @param supervisor       Reference to the supervisor
     * @param targetUrl        The targeted url
+    * @param targetUrlId      Id of the targeted url in database
     * @param urlToActivation  Mapping from active url to it's activation time.
     * @param remainingUrls    List of remaining urls
     * @param stateData        Current state of the actor
@@ -368,6 +372,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       workerPoolProxy: ActorRef[UrlHandlerMessage],
       supervisor: ActorRef[SupervisorMessage],
       targetUrl: String,
+      targetUrlId: String,
       urlToActivation: Map[String, Long],
       remainingUrls: List[SimpleUrlView],
       stateData: SourceHandlerStateData
@@ -386,6 +391,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       val updateUrlToActivation = urlToActivation + (targetUrl -> currentInstant)
       workerPoolProxy ! HandleNewUrl(
         targetUrl,
+        targetUrlId,
         stateData.pageProfile,
         context.self
       )
@@ -404,7 +410,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         stateData.repeatDelay.toMillis / 1000
       )
       val waitTimeOut = FiniteDuration(stateData.repeatDelay.toMillis, "ms")
-      timer.startSingleTimer(ReScheduleUrl(targetUrl), waitTimeOut)
+      timer.startSingleTimer(ReScheduleUrl(targetUrl, targetUrlId), waitTimeOut)
       Behaviors.same
     }
   }

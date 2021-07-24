@@ -14,6 +14,7 @@ object UrlHandlerMessage {
       extends UrlHandlerMessage
   final case class HandleNewUrl(
       url: String,
+      urlId: String,
       pageProfile: ProfileConfig,
       replyTo: ActorRef[SourceHandlerMessage]
   ) extends UrlHandlerMessage

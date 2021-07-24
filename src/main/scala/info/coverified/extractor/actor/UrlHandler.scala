@@ -35,7 +35,7 @@ class UrlHandler {
       mutator: ActorRef[MutatorMessage]
   ): Behaviors.Receive[UrlHandlerMessage] =
     Behaviors.receive[UrlHandlerMessage] {
-      case (context, HandleNewUrl(url, pageProfile, replyTo)) =>
+      case (context, HandleNewUrl(url, urlId, pageProfile, replyTo)) =>
         context.log.info("Start content extraction for new url '{}'.", url)
 
         Analyzer.run(url, pageProfile) match {
@@ -48,7 +48,7 @@ class UrlHandler {
               "Error during visit of web site '{}'. Report to my source handler.",
               url
             )
-            replyTo ! NewUrlHandledWithFailure(url, exception)
+            replyTo ! NewUrlHandledWithFailure(url, urlId, exception)
             Behaviors.same
         }
       case _ => Behaviors.unhandled
