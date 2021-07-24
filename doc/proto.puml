@@ -1,0 +1,29 @@
+@startuml
+participant Supervisor
+collections SourceHandler
+collections UrlHandler
+participant WWW
+participant Mutator
+database API
+
+
+Supervisor -> SourceHandler: Init(...)
+SourceHandler -> Supervisor: InitComplete
+Supervisor -> SourceHandler: Run
+
+loop
+SourceHandler -> UrlHandler: HandleNewUrl(...)
+UrlHandler -> WWW: RequestHTMLContent
+WWW -> UrlHandler: HTMLContent
+
+UrlHandler -> Mutator: PerstistEntry(...)
+Mutator -> API: Mutation(...)
+API -> Mutator: Result(...)
+UrlHandler -> SourceHandler: HandledUrlSuccessful(...)
+UrlHandler -> SourceHandler: Option[HandleUrlFailed(...)]
+Mutator -> SourceHandler: Option[MutationFailed(...)]
+SourceHandler -> SourceHandler: ReSchedule(...)
+end loop
+
+SourceHandler -> Supervisor:RunComplete
+@enduml
