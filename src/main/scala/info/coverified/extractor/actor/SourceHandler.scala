@@ -6,8 +6,17 @@
 package info.coverified.extractor.actor
 
 import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
-import akka.actor.typed.scaladsl.{Behaviors, Routers}
-import info.coverified.extractor.actor.SourceHandler.peek
+import akka.actor.typed.scaladsl.{
+  ActorContext,
+  Behaviors,
+  Routers,
+  TimerScheduler
+}
+import info.coverified.extractor.actor.SourceHandler.{
+  SourceHandlerStateData,
+  nextUrl,
+  peek
+}
 import info.coverified.extractor.messages.{
   SourceHandlerMessage,
   SupervisorMessage,
@@ -15,6 +24,9 @@ import info.coverified.extractor.messages.{
 }
 import info.coverified.extractor.messages.SourceHandlerMessage.{
   InitSourceHandler,
+  NewUrlHandledSuccessfully,
+  NewUrlHandledWithFailure,
+  ReScheduleUrl,
   Run
 }
 import info.coverified.extractor.messages.SupervisorMessage.{
@@ -26,14 +38,17 @@ import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.GraphQLHelper
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
+import org.slf4j.Logger
 import sttp.model.Uri
 
 import java.time.Duration
+import scala.annotation.tailrec
+import scala.concurrent.duration.FiniteDuration
 
 /**
   * An actor, that handles the extraction process per source
   */
-class SourceHandler {
+class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
   def uninitialized: Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
       case (
@@ -122,7 +137,8 @@ class SourceHandler {
 
             val (firstBatch, remainingNewUrls) =
               peek(newUrls, stateData.chunkSize)
-            firstBatch.foreach { url =>
+            /* Activate workers for the first batch and register the starting times */
+            val urlActivationTimeStamps = firstBatch.flatMap { url =>
               url.name match {
                 case Some(actualUrl) =>
                   urlWorkerProxy ! HandleNewUrl(
@@ -130,15 +146,23 @@ class SourceHandler {
                     stateData.pageProfile,
                     context.self
                   )
+                  Some(System.currentTimeMillis())
                 case None =>
                   context.log.error(
                     "The url entry with id '{}' doesn't contain a url to visit.",
                     url.id
                   )
+                  None
               }
             }
 
-            handleNewUrls(stateData, remainingNewUrls, urlWorkerProxy, replyTo)
+            handleNewUrls(
+              stateData,
+              remainingNewUrls,
+              urlActivationTimeStamps,
+              urlWorkerProxy,
+              replyTo
+            )
           case None =>
             context.log.error(
               "Received malformed reply when requesting new urls."
@@ -152,29 +176,150 @@ class SourceHandler {
   /**
     * Behavior to steer the handling of new urls
     * @param stateData        Current state of the actor
-    * @param newUrls          List of new urls to be visited
+    * @param urlsToBeHandled  List of new urls to be visited
     * @param workerPoolProxy  Reference to the worker pool proxy
     * @param supervisor       Reference to the supervisor
     * @return The defined behavior
     */
   def handleNewUrls(
       stateData: SourceHandlerStateData,
-      newUrls: List[SimpleUrlView],
+      urlsToBeHandled: List[SimpleUrlView],
+      scrapeTimeStamps: List[Long],
       workerPoolProxy: ActorRef[UrlHandlerMessage],
       supervisor: ActorRef[SupervisorMessage]
   ): Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
-      case (context, newUrlReply) =>
-        context.log.debug("The new url has been handled.")
+      case (context, NewUrlHandledWithFailure(url, error)) =>
+        context.log
+          .debug("The new url '{}' has been handled unsuccessfully.", url)
         /* TODO:
-         *  1) Interpret, what has been sent
-         *  2) Trigger new runs
-         *  3) Re-Schedule missed trials
+         *  Figure out, what to do.
          */
         supervisor ! SourceHandled(stateData.source.id)
         Behaviors.stopped
+      case (context, NewUrlHandledSuccessfully(url)) =>
+        context.log.debug("The new url '{}' has been handled.", url)
+
+        /* Remove the finished url from list of to be handled urls */
+        val unhandledUrls = urlsToBeHandled.filterNot(_.name.contains(url))
+
+        if (unhandledUrls.nonEmpty) {
+          /* Trigger new runs */
+          val (maybeNextUrl, remainingUrls) =
+            nextUrl(unhandledUrls, context.log)
+          maybeNextUrl match {
+            case Some(nextUrl) =>
+              context.log.debug(
+                "Still {} urls remaining to be handled. Check, if rate limit allows for another issue.",
+                remainingUrls.size
+              )
+              maybeIssueNewHandling(
+                context,
+                workerPoolProxy,
+                supervisor,
+                nextUrl.name.get,
+                scrapeTimeStamps,
+                remainingUrls,
+                stateData
+              )
+            case None =>
+              context.log.info(
+                "All new urls of source '{}' ('{}') are handled. Shut down workers and myself.",
+                stateData.source.id,
+                stateData.source.name.getOrElse("")
+              )
+              context.stop(workerPoolProxy)
+              supervisor ! SourceHandled(stateData.source.id)
+              Behaviors.stopped
+          }
+        } else {
+          context.log.info(
+            "All new urls of source '{}' ('{}') are handled. Shut down workers and myself.",
+            stateData.source.id,
+            stateData.source.name.getOrElse("")
+          )
+          context.stop(workerPoolProxy)
+          supervisor ! SourceHandled(stateData.source.id)
+          Behaviors.stopped
+        }
+      case (context, ReScheduleUrl(url)) =>
+        context.log.debug(
+          "I'm ask to reschedule the url '{}'. Check rate limit and if applicable, send out request to my worker pool.",
+          url
+        )
+        maybeIssueNewHandling(
+          context,
+          workerPoolProxy,
+          supervisor,
+          url,
+          scrapeTimeStamps,
+          urlsToBeHandled,
+          stateData
+        )
       case _ => Behaviors.unhandled
     }
+
+  /**
+    * If possible (sticking to a rate limit), issue a new url handling and change to applicable state.
+    *
+    * @param context          Actor context, the actor is in
+    * @param workerPoolProxy  Reference to the proxy for the worker pool
+    * @param supervisor       Reference to the supervisor
+    * @param targetUrl        The targeted url
+    * @param scrapeTimeStamps A list of time stamps, where lastly scrapes have started.
+    * @param remainingUrls    List of remaining urls
+    * @param stateData        Current state of the actor
+    * @return Defined behavior
+    */
+  def maybeIssueNewHandling(
+      context: ActorContext[SourceHandlerMessage],
+      workerPoolProxy: ActorRef[UrlHandlerMessage],
+      supervisor: ActorRef[SupervisorMessage],
+      targetUrl: String,
+      scrapeTimeStamps: List[Long],
+      remainingUrls: List[SimpleUrlView],
+      stateData: SourceHandlerStateData
+  ): Behavior[SourceHandlerMessage] = {
+    /* Figure out, which issue dates are within the last allowed duration */
+    val currentInstant = System.currentTimeMillis()
+    val firstRelevantInstant = currentInstant - stateData.repeatDelay.toMillis
+    val relevantIssues = scrapeTimeStamps.filter(_ >= firstRelevantInstant)
+    if (relevantIssues.size < stateData.chunkSize) {
+      context.log.debug(
+        "Rate limit {}/{} Hz is not exceeded. Issue a new url handling.",
+        stateData.chunkSize,
+        stateData.repeatDelay.toMillis / 1000
+      )
+      val currentIssues = relevantIssues ++ List(currentInstant)
+      workerPoolProxy ! HandleNewUrl(
+        targetUrl,
+        stateData.pageProfile,
+        context.self
+      )
+      handleNewUrls(
+        stateData,
+        remainingUrls,
+        currentIssues,
+        workerPoolProxy,
+        supervisor
+      )
+    } else {
+      context.log.debug(
+        "Rate limit {}/{} Hz currently is exceeded. Wait {}s with a new issue of url handling.",
+        stateData.chunkSize,
+        stateData.repeatDelay.toMillis / 1000,
+        stateData.repeatDelay.toMillis / 1000
+      )
+      val waitTimeOut = FiniteDuration(stateData.repeatDelay.toMillis, "ms")
+      timer.startSingleTimer(ReScheduleUrl(targetUrl), waitTimeOut)
+      Behaviors.same
+    }
+  }
+}
+
+object SourceHandler {
+  def apply(): Behavior[SourceHandlerMessage] =
+    Behaviors.withTimers(timer => new SourceHandler(timer).uninitialized)
 
   final case class SourceHandlerStateData(
       apiUri: Uri,
@@ -186,14 +331,36 @@ class SourceHandler {
       source: SourceView,
       supervisor: ActorRef[SupervisorMessage]
   )
-}
-
-object SourceHandler {
-  def apply(): Behavior[SourceHandlerMessage] =
-    new SourceHandler().uninitialized
 
   def peek[A](list: List[A], first: Int): (List[A], List[A]) = {
     val peek = list.take(first)
     (peek, list.filterNot(peek.contains(_)))
+  }
+
+  /**
+    * Get the next url, as long as it has a name available
+    *
+    * @param urls   A view onto a url
+    * @param logger A logger to log logging stuff
+    * @return A tuple of a possibly apparent next entry and the remaining entries
+    */
+  @tailrec
+  def nextUrl(
+      urls: List[SimpleUrlView],
+      logger: Logger
+  ): (Option[SimpleUrlView], List[SimpleUrlView]) = {
+    val (peakUrls, remainingUrls) = peek(urls, 1)
+    peakUrls.headOption match {
+      case Some(peakUrl) if peakUrl.name.nonEmpty =>
+        (Some(peakUrl), remainingUrls)
+      case Some(peakUrl) =>
+        logger.error(
+          "The url entry with id '' does not contain an actual, visitable url. Cannot handle this.",
+          peakUrl.id
+        )
+        nextUrl(remainingUrls, logger)
+      case None =>
+        (None, remainingUrls)
+    }
   }
 }

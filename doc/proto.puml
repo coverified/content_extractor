@@ -19,8 +19,8 @@ WWW -> UrlHandler: HTMLContent
 UrlHandler -> Mutator: PerstistEntry(...)
 Mutator -> API: Mutation(...)
 API -> Mutator: Result(...)
-UrlHandler -> SourceHandler: HandledUrlSuccessful(...)
-UrlHandler -> SourceHandler: Option[HandleUrlFailed(...)]
+UrlHandler -> SourceHandler: NewUrlHandledSuccessfully(...)
+UrlHandler -> SourceHandler: //NewUrlHandledWithFailure()//
 Mutator -> SourceHandler: Option[MutationFailed(...)]
 SourceHandler -> SourceHandler: ReSchedule(...)
 end loop

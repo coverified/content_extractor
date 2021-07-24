@@ -8,7 +8,7 @@ package info.coverified.extractor.messages
 import akka.actor.typed.ActorRef
 import info.coverified.extractor.profile.ProfileConfig
 
-trait UrlHandlerMessage
+sealed trait UrlHandlerMessage
 object UrlHandlerMessage {
   final case class HandleNewUrl(
       url: String,

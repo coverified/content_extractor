@@ -36,4 +36,6 @@ object SourceHandlerMessage {
       extends NewUrlHandledMessage
   final case class NewUrlHandledWithFailure(url: String, failure: Throwable)
       extends NewUrlHandledMessage
+
+  final case class ReScheduleUrl(url: String) extends SourceHandlerMessage
 }
