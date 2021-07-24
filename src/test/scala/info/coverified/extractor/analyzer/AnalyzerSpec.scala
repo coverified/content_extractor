@@ -719,7 +719,6 @@ class AnalyzerSpec
 
         Analyzer invokePrivate analyze(
           coverifiedUrl + "/impressum/subpage",
-          coverifiedUrlId,
           validUrlPageDoc.toScraperDoc,
           profileConfig
         ) match {
@@ -748,7 +747,6 @@ class AnalyzerSpec
 
         Analyzer invokePrivate analyze(
           url,
-          urlId,
           validUrlPageDoc.toScraperDoc,
           profileConfig
         ) match {
