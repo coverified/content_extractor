@@ -139,7 +139,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
             val (firstBatch, remainingNewUrls) =
               peek(newUrls, stateData.chunkSize)
             /* Activate workers for the first batch and register the starting times */
-            val urlActivationTimeStamps = firstBatch.flatMap { url =>
+            val urlToActivation = firstBatch.flatMap { url =>
               url.name match {
                 case Some(actualUrl) =>
                   urlWorkerProxy ! HandleNewUrl(
@@ -147,7 +147,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
                     stateData.pageProfile,
                     context.self
                   )
-                  Some(System.currentTimeMillis())
+                  Some(actualUrl -> System.currentTimeMillis())
                 case None =>
                   context.log.error(
                     "The url entry with id '{}' doesn't contain a url to visit.",
@@ -155,12 +155,12 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
                   )
                   None
               }
-            }
+            }.toMap
 
             handleNewUrls(
               stateData,
               remainingNewUrls,
-              urlActivationTimeStamps,
+              urlToActivation,
               urlWorkerProxy,
               replyTo
             )
@@ -177,7 +177,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
   /**
     * Behavior to steer the handling of new urls
     * @param stateData        Current state of the actor
-    * @param urlsToBeHandled  List of new urls to be visited
+    * @param urlToActivation  Mapping from activated url to it's activation time
     * @param workerPoolProxy  Reference to the worker pool proxy
     * @param supervisor       Reference to the supervisor
     * @return The defined behavior
@@ -185,12 +185,17 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
   def handleNewUrls(
       stateData: SourceHandlerStateData,
       urlsToBeHandled: List[SimpleUrlView],
-      scrapeTimeStamps: List[Long],
+      urlToActivation: Map[String, Long],
       workerPoolProxy: ActorRef[UrlHandlerMessage],
       supervisor: ActorRef[SupervisorMessage]
   ): Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
       case (context, NewUrlHandledWithFailure(url, error)) =>
+        /* Remove the reporter from list of active ones */
+        val remainingActiveUrls = urlToActivation.filterNot {
+          case (remainingUrl, _) => remainingUrl == url
+        }
+
         error match {
           case httpException: HttpStatusException
               if httpException.getStatusCode == 404 =>
@@ -215,27 +220,31 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
               url
             )
         }
+
         maybeIssueNextUnhandledUrl(
           context,
           workerPoolProxy,
           supervisor,
           stateData,
           urlsToBeHandled,
-          scrapeTimeStamps
+          remainingActiveUrls
         )
-        Behaviors.same
       case (context, NewUrlHandledSuccessfully(url)) =>
-        context.log.debug("The new url '{}' has been handled.", url)
+        context.log
+          .debug("The new url '{}' has been handled successfully.", url)
 
-        /* Remove the finished url from list of to be handled urls */
-        val unhandledUrls = urlsToBeHandled.filterNot(_.name.contains(url))
+        /* Remove the reporter from list of active ones */
+        val remainingActiveUrls = urlToActivation.filterNot {
+          case (remainingUrl, _) => remainingUrl == url
+        }
+
         maybeIssueNextUnhandledUrl(
           context,
           workerPoolProxy,
           supervisor,
           stateData,
-          unhandledUrls,
-          scrapeTimeStamps
+          urlsToBeHandled,
+          remainingActiveUrls
         )
 
       case (context, ReScheduleUrl(url)) =>
@@ -248,7 +257,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           workerPoolProxy,
           supervisor,
           url,
-          scrapeTimeStamps,
+          urlToActivation,
           urlsToBeHandled,
           stateData
         )
@@ -263,7 +272,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
     * @param supervisor       Reference to the supervisor
     * @param stateData        Current state of the actor
     * @param unhandledUrls    List of remaining urls
-    * @param scrapeTimeStamps A list of time stamps, where lastly scrapes have started.
+    * @param urlToActivation  Mapping from active url to activation time
     * @return
     */
   def maybeIssueNextUnhandledUrl(
@@ -272,7 +281,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       supervisor: ActorRef[SupervisorMessage],
       stateData: SourceHandlerStateData,
       unhandledUrls: List[SimpleUrlView],
-      scrapeTimeStamps: List[Long]
+      urlToActivation: Map[String, Long]
   ): Behavior[SourceHandlerMessage] =
     if (unhandledUrls.nonEmpty) {
       /* Trigger new runs */
@@ -289,7 +298,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
             workerPoolProxy,
             supervisor,
             nextUrl.name.get,
-            scrapeTimeStamps,
+            urlToActivation,
             remainingUrls,
             stateData
           )
@@ -303,6 +312,21 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           supervisor ! SourceHandled(stateData.source.id)
           Behaviors.stopped
       }
+    } else if (urlToActivation.nonEmpty) {
+      context.log.info(
+        "No more unhandled urls for source '{}' ('{}'). Wait for the last {} active ones\n\t{}",
+        stateData.source.id,
+        stateData.source.name.getOrElse(""),
+        urlToActivation.size,
+        urlToActivation.keys.mkString("\n\t")
+      )
+      handleNewUrls(
+        stateData,
+        unhandledUrls,
+        urlToActivation,
+        workerPoolProxy,
+        supervisor
+      )
     } else {
       context.log.info(
         "All new urls of source '{}' ('{}') are handled. Shut down workers and myself.",
@@ -321,7 +345,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
     * @param workerPoolProxy  Reference to the proxy for the worker pool
     * @param supervisor       Reference to the supervisor
     * @param targetUrl        The targeted url
-    * @param scrapeTimeStamps A list of time stamps, where lastly scrapes have started.
+    * @param urlToActivation  Mapping from active url to it's activation time.
     * @param remainingUrls    List of remaining urls
     * @param stateData        Current state of the actor
     * @return Defined behavior
@@ -331,21 +355,22 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       workerPoolProxy: ActorRef[UrlHandlerMessage],
       supervisor: ActorRef[SupervisorMessage],
       targetUrl: String,
-      scrapeTimeStamps: List[Long],
+      urlToActivation: Map[String, Long],
       remainingUrls: List[SimpleUrlView],
       stateData: SourceHandlerStateData
   ): Behavior[SourceHandlerMessage] = {
     /* Figure out, which issue dates are within the last allowed duration */
     val currentInstant = System.currentTimeMillis()
     val firstRelevantInstant = currentInstant - stateData.repeatDelay.toMillis
-    val relevantIssues = scrapeTimeStamps.filter(_ >= firstRelevantInstant)
+    val relevantIssues =
+      urlToActivation.values.filter(_ >= firstRelevantInstant)
     if (relevantIssues.size < stateData.chunkSize) {
       context.log.debug(
         "Rate limit {}/{} Hz is not exceeded. Issue a new url handling.",
         stateData.chunkSize,
         stateData.repeatDelay.toMillis / 1000
       )
-      val currentIssues = relevantIssues ++ List(currentInstant)
+      val updateUrlToActivation = urlToActivation + (targetUrl -> currentInstant)
       workerPoolProxy ! HandleNewUrl(
         targetUrl,
         stateData.pageProfile,
@@ -354,7 +379,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       handleNewUrls(
         stateData,
         remainingUrls,
-        currentIssues,
+        updateUrlToActivation,
         workerPoolProxy,
         supervisor
       )
