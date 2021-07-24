@@ -9,11 +9,13 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors._
 import com.typesafe.config.ConfigFactory
+import info.coverified.extractor.messages.MutatorMessage.InitMutator
 import info.coverified.extractor.messages.SourceHandlerMessage.{
   InitSourceHandler,
   Run
 }
 import info.coverified.extractor.messages.{
+  MutatorMessage,
   SourceHandlerMessage,
   SupervisorMessage
 }
@@ -52,18 +54,20 @@ object ExtractionSupervisor {
       /* Read page profile configs */
       val hostToPageProfile = readPageProfileConfigs(profileDirectoryPath)
 
+      /* Start a mutator */
+      val mutator = context.spawn(Mutator(), "Mutator")
+      mutator ! InitMutator(apiUri, authSecret)
+
       /* Set up state data */
       val stateData = ExtractorStateData(
-        apiUri,
         hostToPageProfile,
         reAnalysisInterval,
-        authSecret,
         chunkSize,
         repeatDelay
       )
 
       /* Query all sources */
-      new GraphQLHelper(stateData.apiUri, stateData.authSecret).queryAllSources match {
+      new GraphQLHelper(apiUri, authSecret).queryAllSources match {
         case Some(emptySources) if emptySources.isEmpty =>
           context.log.info("There are no sources available. I'm done!")
           Behaviors.stopped
@@ -99,6 +103,7 @@ object ExtractionSupervisor {
                       chunkSize,
                       repeatDelay,
                       source,
+                      mutator,
                       context.self
                     )
                     Some(source.id -> handler)
@@ -186,10 +191,8 @@ object ExtractionSupervisor {
   }
 
   final case class ExtractorStateData(
-      apiUri: Uri,
       hostNameToPageProfile: Map[String, ProfileConfig],
       reAnalysisInterval: Duration,
-      authSecret: String,
       chunkSize: Int,
       repeatDelay: Duration
   )

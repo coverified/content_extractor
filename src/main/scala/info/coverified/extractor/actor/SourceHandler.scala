@@ -18,6 +18,7 @@ import info.coverified.extractor.actor.SourceHandler.{
   peek
 }
 import info.coverified.extractor.messages.{
+  MutatorMessage,
   SourceHandlerMessage,
   SupervisorMessage,
   UrlHandlerMessage
@@ -33,7 +34,10 @@ import info.coverified.extractor.messages.SupervisorMessage.{
   SourceHandled,
   SourceHandlerInitialized
 }
-import info.coverified.extractor.messages.UrlHandlerMessage.HandleNewUrl
+import info.coverified.extractor.messages.UrlHandlerMessage.{
+  HandleNewUrl,
+  InitUrlHandler
+}
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.GraphQLHelper
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
@@ -62,6 +66,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
             chunkSize,
             repeatDelay,
             source,
+            mutator,
             replyTo
           )
           ) =>
@@ -78,6 +83,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           chunkSize,
           repeatDelay,
           source,
+          mutator,
           replyTo
         )
         replyTo ! SourceHandlerInitialized(source.id, context.self)
@@ -130,11 +136,18 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
                   .onFailure(SupervisorStrategy.restart)
               }
               .withRoundRobinRouting()
+              .withBroadcastPredicate {
+                case _: InitUrlHandler => true
+                case _                 => false
+              }
             val urlWorkerProxy =
               context.spawn(
                 urlWorkerPool,
                 "UrlWorkerPool_" + stateData.source.id
               )
+
+            /* Broadcast reference to mutator to all workers */
+            urlWorkerProxy ! InitUrlHandler(stateData.mutator)
 
             val (firstBatch, remainingNewUrls) =
               peek(newUrls, stateData.chunkSize)
@@ -409,6 +422,7 @@ object SourceHandler {
       chunkSize: Int,
       repeatDelay: Duration,
       source: SourceView,
+      mutator: ActorRef[MutatorMessage],
       supervisor: ActorRef[SupervisorMessage]
   )
 

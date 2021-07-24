@@ -5,22 +5,35 @@
 
 package info.coverified.extractor.actor
 
-import akka.actor.typed.Behavior
+import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import info.coverified.extractor.analyzer.Analyzer
 import info.coverified.extractor.messages.SourceHandlerMessage.{
   NewUrlHandledSuccessfully,
   NewUrlHandledWithFailure
 }
-import info.coverified.extractor.messages.UrlHandlerMessage
-import info.coverified.extractor.messages.UrlHandlerMessage.HandleNewUrl
+import info.coverified.extractor.messages.{MutatorMessage, UrlHandlerMessage}
+import info.coverified.extractor.messages.UrlHandlerMessage.{
+  HandleNewUrl,
+  InitUrlHandler
+}
+
 import scala.util.{Failure, Success}
 
 /**
   * Extracting the content of a single url
   */
 class UrlHandler {
-  def idle: Behaviors.Receive[UrlHandlerMessage] =
+  def uninitialized: Behaviors.Receive[UrlHandlerMessage] =
+    Behaviors.receive[UrlHandlerMessage] {
+      case (_, InitUrlHandler(mutator)) =>
+        idle(mutator)
+      case _ => Behaviors.unhandled
+    }
+
+  def idle(
+      mutator: ActorRef[MutatorMessage]
+  ): Behaviors.Receive[UrlHandlerMessage] =
     Behaviors.receive[UrlHandlerMessage] {
       case (context, HandleNewUrl(url, pageProfile, replyTo)) =>
         context.log.info("Start content extraction for new url '{}'.", url)
@@ -43,5 +56,5 @@ class UrlHandler {
 }
 
 object UrlHandler {
-  def apply(): Behavior[UrlHandlerMessage] = new UrlHandler().idle
+  def apply(): Behavior[UrlHandlerMessage] = new UrlHandler().uninitialized
 }

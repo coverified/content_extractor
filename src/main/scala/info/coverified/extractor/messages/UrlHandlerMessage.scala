@@ -10,6 +10,8 @@ import info.coverified.extractor.profile.ProfileConfig
 
 sealed trait UrlHandlerMessage
 object UrlHandlerMessage {
+  final case class InitUrlHandler(mutator: ActorRef[MutatorMessage])
+      extends UrlHandlerMessage
   final case class HandleNewUrl(
       url: String,
       pageProfile: ProfileConfig,
