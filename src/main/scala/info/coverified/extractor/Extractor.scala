@@ -408,6 +408,7 @@ final case class Extractor private (
     * @param timeToNextCrawl   Duration, until the next analysis shall take place
     * @return A mutation or throw an exception
     */
+  @deprecated("Use equivalend method in Mutator")
   private def buildEntryConsideringExistingStuff(
       urlId: String,
       title: String,
@@ -980,6 +981,7 @@ object Extractor extends LazyLogging {
     * @param timeToNextCrawl Duration, until the next analysis shall take place
     * @return A mutation to post to data base
     */
+  @deprecated("Use equivalent method in Mutator")
   private def buildEntry(
       urlId: String,
       title: String,
@@ -1025,6 +1027,7 @@ object Extractor extends LazyLogging {
     * @param maybeConnectToAndCreateTags An optional tuple of relations to build
     * @return An optional model for setting up tag relations properly
     */
+  @deprecated("Use equivalent method in Mutator")
   private def buildTagRelationInput(
       maybeConnectToAndCreateTags: Option[
         (
@@ -1060,6 +1063,7 @@ object Extractor extends LazyLogging {
     * @param authSecret Authentication token to use
     * @return A tuple of model to describe connections or creations
     */
+  @deprecated("Use equivalent method in Mutator")
   def connectToOrCreateTag(
       tags: Seq[String],
       apiUrl: Uri,
@@ -1084,6 +1088,7 @@ object Extractor extends LazyLogging {
     * @param authSecret Authentication token to use
     * @return A list of applicable tags
     */
+  @deprecated("Use equivalent methdo in Mutator")
   def getExistingTags(apiUrl: Uri, authSecret: String): Seq[TagView[String]] =
     zio.Runtime.default
       .unsafeRun(
@@ -1108,6 +1113,7 @@ object Extractor extends LazyLogging {
     * @param existingTags Collection of yet existing tags
     * @return A mapping from web page defined tags to an optional model to connect to that tag
     */
+  @deprecated("Use equivalent methdo in Mutator")
   def mapTagToExistingTag(
       tags: Seq[String],
       existingTags: Seq[TagView[String]]
@@ -1131,6 +1137,7 @@ object Extractor extends LazyLogging {
     * @param tagToMatchingTag Mapping from web page defined tag to model for tag connection
     * @return A sequence of models to create tags
     */
+  @deprecated("Use equivalent method in Mutator")
   def createModelToCreateTag(
       tagToMatchingTag: Map[String, Option[TagWhereUniqueInput]]
   ): Seq[TagCreateInput] =
@@ -1245,6 +1252,7 @@ object Extractor extends LazyLogging {
     * @param timeToNextCrawl Duration, when the next crawl happens
     * @return An Option onto a String
     */
+  @deprecated("Use equivalent method in Mutator")
   def determineNextCrawl(timeToNextCrawl: Duration): Option[String] = {
     val nextCrawlDateTime =
       ZonedDateTime.now(ZoneId.of("UTC")).plus(timeToNextCrawl)

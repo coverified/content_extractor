@@ -49,6 +49,7 @@ class UrlHandler {
             sourceHandler ! NewUrlHandledSuccessfully(url)
             mutator ! CreateEntry(
               CreateEntryInformation(rawEntryInformation),
+              urlId,
               sourceHandler
             )
             mutator ! UpdateUrl(urlId, sourceHandler)

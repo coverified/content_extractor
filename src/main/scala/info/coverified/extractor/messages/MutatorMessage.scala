@@ -9,13 +9,19 @@ import akka.actor.typed.ActorRef
 import info.coverified.extractor.analyzer.EntryInformation.CreateEntryInformation
 import sttp.model.Uri
 
+import java.time.Duration
+
 sealed trait MutatorMessage
 object MutatorMessage {
-  final case class InitMutator(apiUri: Uri, authToken: String)
-      extends MutatorMessage
+  final case class InitMutator(
+      apiUri: Uri,
+      authToken: String,
+      reAnalysisInterval: Duration
+  ) extends MutatorMessage
 
   final case class CreateEntry(
       createEntryInformation: CreateEntryInformation,
+      urlId: String,
       replyTo: ActorRef[SourceHandlerMessage]
   ) extends MutatorMessage
   final case class UpdateUrl(
