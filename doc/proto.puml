@@ -22,7 +22,7 @@ API -> Mutator: Result(...)
 UrlHandler -> SourceHandler: NewUrlHandledSuccessfully(...)
 UrlHandler -> SourceHandler: //NewUrlHandledWithFailure()//
 Mutator -> SourceHandler: Option[MutationFailed(...)]
-SourceHandler -> SourceHandler: ReSchedule(...)
+SourceHandler -> SourceHandler: ReScheduleUrl(...)
 end loop
 
 SourceHandler -> Supervisor:RunComplete
