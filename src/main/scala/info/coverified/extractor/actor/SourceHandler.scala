@@ -38,6 +38,7 @@ import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.GraphQLHelper
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
+import org.jsoup.HttpStatusException
 import org.slf4j.Logger
 import sttp.model.Uri
 
@@ -190,58 +191,53 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
   ): Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
       case (context, NewUrlHandledWithFailure(url, error)) =>
-        context.log
-          .debug("The new url '{}' has been handled unsuccessfully.", url)
-        /* TODO:
-         *  Figure out, what to do.
-         */
-        supervisor ! SourceHandled(stateData.source.id)
-        Behaviors.stopped
+        error match {
+          case httpException: HttpStatusException
+              if httpException.getStatusCode == 404 =>
+            context.log.warn(
+              "The url '{}' doesn't exist (HTTP Status 404). Consider removing it.",
+              url
+            )
+          case httpException: HttpStatusException
+              if httpException.getStatusCode == 403 =>
+            context.log.warn(
+              "The url '{}' replied, that the rate limit is exceeded (HTTP Status 403). Consider adapting configuration, especially the rate limit. Will re-schedule the visit of this url in {} s.",
+              url,
+              stateData.repeatDelay.toMillis / 1000
+            )
+            timer.startSingleTimer(
+              ReScheduleUrl(url),
+              FiniteDuration(stateData.repeatDelay.toMillis, "ms")
+            )
+          case _ =>
+            context.log.error(
+              "Handling the url '{}' failed with unknown error. Skip it.",
+              url
+            )
+        }
+        maybeIssueNextUnhandledUrl(
+          context,
+          workerPoolProxy,
+          supervisor,
+          stateData,
+          urlsToBeHandled,
+          scrapeTimeStamps
+        )
+        Behaviors.same
       case (context, NewUrlHandledSuccessfully(url)) =>
         context.log.debug("The new url '{}' has been handled.", url)
 
         /* Remove the finished url from list of to be handled urls */
         val unhandledUrls = urlsToBeHandled.filterNot(_.name.contains(url))
+        maybeIssueNextUnhandledUrl(
+          context,
+          workerPoolProxy,
+          supervisor,
+          stateData,
+          unhandledUrls,
+          scrapeTimeStamps
+        )
 
-        if (unhandledUrls.nonEmpty) {
-          /* Trigger new runs */
-          val (maybeNextUrl, remainingUrls) =
-            nextUrl(unhandledUrls, context.log)
-          maybeNextUrl match {
-            case Some(nextUrl) =>
-              context.log.debug(
-                "Still {} urls remaining to be handled. Check, if rate limit allows for another issue.",
-                remainingUrls.size
-              )
-              maybeIssueNewHandling(
-                context,
-                workerPoolProxy,
-                supervisor,
-                nextUrl.name.get,
-                scrapeTimeStamps,
-                remainingUrls,
-                stateData
-              )
-            case None =>
-              context.log.info(
-                "All new urls of source '{}' ('{}') are handled. Shut down workers and myself.",
-                stateData.source.id,
-                stateData.source.name.getOrElse("")
-              )
-              context.stop(workerPoolProxy)
-              supervisor ! SourceHandled(stateData.source.id)
-              Behaviors.stopped
-          }
-        } else {
-          context.log.info(
-            "All new urls of source '{}' ('{}') are handled. Shut down workers and myself.",
-            stateData.source.id,
-            stateData.source.name.getOrElse("")
-          )
-          context.stop(workerPoolProxy)
-          supervisor ! SourceHandled(stateData.source.id)
-          Behaviors.stopped
-        }
       case (context, ReScheduleUrl(url)) =>
         context.log.debug(
           "I'm ask to reschedule the url '{}'. Check rate limit and if applicable, send out request to my worker pool.",
@@ -257,6 +253,65 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           stateData
         )
       case _ => Behaviors.unhandled
+    }
+
+  /**
+    * Check out the not yet handled urls and attempt to handle one if applicable
+    *
+    * @param context          Actor context, the actor is in
+    * @param workerPoolProxy  Reference to the proxy for the worker pool
+    * @param supervisor       Reference to the supervisor
+    * @param stateData        Current state of the actor
+    * @param unhandledUrls    List of remaining urls
+    * @param scrapeTimeStamps A list of time stamps, where lastly scrapes have started.
+    * @return
+    */
+  def maybeIssueNextUnhandledUrl(
+      context: ActorContext[SourceHandlerMessage],
+      workerPoolProxy: ActorRef[UrlHandlerMessage],
+      supervisor: ActorRef[SupervisorMessage],
+      stateData: SourceHandlerStateData,
+      unhandledUrls: List[SimpleUrlView],
+      scrapeTimeStamps: List[Long]
+  ): Behavior[SourceHandlerMessage] =
+    if (unhandledUrls.nonEmpty) {
+      /* Trigger new runs */
+      val (maybeNextUrl, remainingUrls) =
+        nextUrl(unhandledUrls, context.log)
+      maybeNextUrl match {
+        case Some(nextUrl) =>
+          context.log.debug(
+            "Still {} urls remaining to be handled. Check, if rate limit allows for another issue.",
+            remainingUrls.size
+          )
+          maybeIssueNewHandling(
+            context,
+            workerPoolProxy,
+            supervisor,
+            nextUrl.name.get,
+            scrapeTimeStamps,
+            remainingUrls,
+            stateData
+          )
+        case None =>
+          context.log.info(
+            "All new urls of source '{}' ('{}') are handled. Shut down workers and myself.",
+            stateData.source.id,
+            stateData.source.name.getOrElse("")
+          )
+          context.stop(workerPoolProxy)
+          supervisor ! SourceHandled(stateData.source.id)
+          Behaviors.stopped
+      }
+    } else {
+      context.log.info(
+        "All new urls of source '{}' ('{}') are handled. Shut down workers and myself.",
+        stateData.source.id,
+        stateData.source.name.getOrElse("")
+      )
+      context.stop(workerPoolProxy)
+      supervisor ! SourceHandled(stateData.source.id)
+      Behaviors.stopped
     }
 
   /**
