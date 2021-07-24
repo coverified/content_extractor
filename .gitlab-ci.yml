@@ -65,5 +65,7 @@ buildDockerImage:
 trigger-build-with-config:
     stage: trigger
     trigger: coverified/infrastructure
+    only:
+      - main
     variables:
         IMAGE_TO_BUILD: content_extractor
