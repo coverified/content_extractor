@@ -7,6 +7,7 @@ package info.coverified.extractor.actor
 
 import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
 import akka.actor.typed.scaladsl.{Behaviors, Routers}
+import info.coverified.extractor.actor.SourceHandler.peek
 import info.coverified.extractor.messages.{
   SourceHandlerMessage,
   SupervisorMessage,
@@ -28,6 +29,7 @@ import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import sttp.model.Uri
 
 import java.time.Duration
+import java.util
 
 /**
   * An actor, that handles the extraction process per source
@@ -81,7 +83,11 @@ class SourceHandler {
       case (context, Run(replyTo)) =>
         context.log.info("Got asked to start activity.")
 
-        context.log.info("Start to analyse new, not yet visited urls.")
+        context.log.info(
+          "Start to analyse new, not yet visited urls for source '{}' ('{}').",
+          stateData.source.id,
+          stateData.source.name
+        )
         /* Determine all new urls */
         new GraphQLHelper(stateData.apiUri, stateData.authSecret)
           .queryNewUrls(stateData.source.id) match {
@@ -114,8 +120,22 @@ class SourceHandler {
                 urlWorkerPool,
                 "UrlWorkerPool_" + stateData.source.id
               )
-            urlWorkerProxy ! HandleNewUrl("foo", context.self)
-            handleNewUrls(stateData, newUrls, urlWorkerProxy, replyTo)
+
+            val (firstBatch, remainingNewUrls) =
+              peek(newUrls, stateData.chunkSize)
+            firstBatch.foreach { url =>
+              url.name match {
+                case Some(actualUrl) =>
+                  urlWorkerProxy ! HandleNewUrl(actualUrl, context.self)
+                case None =>
+                  context.log.error(
+                    "The url entry with id '{}' doesn't contain a url to visit.",
+                    url.id
+                  )
+              }
+            }
+
+            handleNewUrls(stateData, remainingNewUrls, urlWorkerProxy, replyTo)
           case None =>
             context.log.error(
               "Received malformed reply when requesting new urls."
@@ -163,4 +183,9 @@ class SourceHandler {
 object SourceHandler {
   def apply(): Behavior[SourceHandlerMessage] =
     new SourceHandler().uninitialized
+
+  def peek[A](list: List[A], first: Int): (List[A], List[A]) = {
+    val peek = list.take(first)
+    (peek, list.filterNot(peek.contains(_)))
+  }
 }
