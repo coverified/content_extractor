@@ -11,8 +11,14 @@ import info.coverified.extractor.messages.{
   SourceHandlerMessage,
   SupervisorMessage
 }
-import info.coverified.extractor.messages.SourceHandlerMessage.InitSourceHandler
-import info.coverified.extractor.messages.SupervisorMessage.SourceHandled
+import info.coverified.extractor.messages.SourceHandlerMessage.{
+  InitSourceHandler,
+  Run
+}
+import info.coverified.extractor.messages.SupervisorMessage.{
+  SourceHandled,
+  SourceHandlerInitialized
+}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
 import sttp.model.Uri
 
@@ -52,8 +58,25 @@ class SourceHandler {
           source,
           replyTo
         )
+        replyTo ! SourceHandlerInitialized(source.id, context.self)
+        idle(stateData)
+      case _ => Behaviors.unhandled
+    }
+
+  /**
+    * Waiting for anything to do
+    *
+    * @param stateData Current state of the actor
+    * @return The defined behavior
+    */
+  def idle(
+      stateData: SourceHandlerStateData
+  ): Behaviors.Receive[SourceHandlerMessage] =
+    Behaviors.receive[SourceHandlerMessage] {
+      case (context, Run(replyTo)) =>
+        context.log.info("Got asked to start activity.")
         // TODO: Do something
-        replyTo ! SourceHandled(source.id)
+        replyTo ! SourceHandled(stateData.source.id)
         Behaviors.stopped
       case _ => Behaviors.unhandled
     }

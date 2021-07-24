@@ -26,4 +26,7 @@ object SourceHandlerMessage {
       source: SourceView,
       replyTo: ActorRef[SupervisorMessage]
   ) extends SourceHandlerMessage
+
+  final case class Run(replyTo: ActorRef[SupervisorMessage])
+      extends SourceHandlerMessage
 }

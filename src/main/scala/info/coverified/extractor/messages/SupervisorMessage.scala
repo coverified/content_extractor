@@ -5,6 +5,7 @@
 
 package info.coverified.extractor.messages
 
+import akka.actor.typed.ActorRef
 import info.coverified.extractor.config.Config
 import sttp.model.Uri
 
@@ -43,6 +44,11 @@ object SupervisorMessage {
         )
     }
   }
+
+  final case class SourceHandlerInitialized(
+      sourceId: String,
+      replyTo: ActorRef[SourceHandlerMessage]
+  ) extends SupervisorMessage
 
   /**
     * Message indicates, that a certain source has been treated

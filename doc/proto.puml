@@ -8,7 +8,7 @@ database API
 
 
 Supervisor -> SourceHandler: Init(...)
-SourceHandler -> Supervisor: InitComplete
+SourceHandler -> Supervisor: SourceHandlerInitialized(sourceId)
 Supervisor -> SourceHandler: Run
 
 loop
