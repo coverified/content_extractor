@@ -15,7 +15,7 @@ import info.coverified.extractor.messages.{
 }
 import info.coverified.extractor.messages.SourceHandlerMessage.{
   InitSourceHandler,
-  NewUrlHandled,
+  NewUrlHandledMessage,
   Run
 }
 import info.coverified.extractor.messages.SupervisorMessage.{
@@ -161,8 +161,13 @@ class SourceHandler {
       supervisor: ActorRef[SupervisorMessage]
   ): Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
-      case (context, NewUrlHandled(url)) =>
-        context.log.debug("The new url '{}' has been handled.", url)
+      case (context, newUrlReply) =>
+        context.log.debug("The new url has been handled.")
+        /* TODO:
+         *  1) Interpret, what has been sent
+         *  2) Trigger new runs
+         *  3) Re-Schedule missed trials
+         */
         supervisor ! SourceHandled(stateData.source.id)
         Behaviors.stopped
       case _ => Behaviors.unhandled

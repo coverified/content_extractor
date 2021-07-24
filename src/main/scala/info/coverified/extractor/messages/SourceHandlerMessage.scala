@@ -30,5 +30,9 @@ object SourceHandlerMessage {
   final case class Run(replyTo: ActorRef[SupervisorMessage])
       extends SourceHandlerMessage
 
-  final case class NewUrlHandled(url: String) extends SourceHandlerMessage
+  sealed trait NewUrlHandledMessage extends SourceHandlerMessage
+  final case class NewUrlHandledSuccessfully(url: String)
+      extends NewUrlHandledMessage
+  final case class NewUrlHandledWithFailure(url: String, failure: Throwable)
+      extends NewUrlHandledMessage
 }

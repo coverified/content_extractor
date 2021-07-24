@@ -7,20 +7,44 @@ package info.coverified.extractor.actor
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
-import info.coverified.extractor.messages.SourceHandlerMessage.NewUrlHandled
+import info.coverified.extractor.analyzer.Analyzer
+import info.coverified.extractor.messages.SourceHandlerMessage.{
+  NewUrlHandledSuccessfully,
+  NewUrlHandledWithFailure
+}
 import info.coverified.extractor.messages.UrlHandlerMessage
 import info.coverified.extractor.messages.UrlHandlerMessage.HandleNewUrl
+import info.coverified.extractor.profile.ProfileConfig
+import scala.util.{Failure, Success}
 
+/**
+  * Extracting the content of a single url
+  */
 class UrlHandler {
   def idle: Behaviors.Receive[UrlHandlerMessage] =
     Behaviors.receive[UrlHandlerMessage] {
       case (context, HandleNewUrl(url, replyTo)) =>
-        context.log.info("I got asked to handle a new url '{}'.", url)
-        replyTo ! NewUrlHandled(url)
-        Behaviors.stopped
+        context.log.info("Start content extraction for new url '{}'.", url)
+
+        /* TODO: Get correct page profiles */
+        val pageProfile = ProfileConfig(ProfileConfig.Profile("", List.empty))
+        Analyzer.run(url, pageProfile) match {
+          case Success(rawEntryInformation) =>
+            context.log.debug("Visiting of web site '{}' successful.", url)
+            replyTo ! NewUrlHandledSuccessfully(url)
+            Behaviors.same
+          case Failure(exception) =>
+            context.log.error(
+              "Error during visit of web site '{}'. Report to my source handler.",
+              url
+            )
+            replyTo ! NewUrlHandledWithFailure(url, exception)
+            Behaviors.same
+        }
       case _ => Behaviors.unhandled
     }
 }
+
 object UrlHandler {
   def apply(): Behavior[UrlHandlerMessage] = new UrlHandler().idle
 }

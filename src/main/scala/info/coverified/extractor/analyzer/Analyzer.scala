@@ -38,11 +38,9 @@ object Analyzer extends LazyLogging {
 
   def run(
       url: String,
-      urlId: String,
-      cfg: ProfileConfig,
-      queryUrl: String => Try[JsoupDocument] = u => Analyzer.queryUrl(u)
+      cfg: ProfileConfig
   ): Try[RawEntryInformation] =
-    queryUrl(url).flatMap(analyze(url, urlId, _, cfg))
+    Analyzer.buildPageDocument(url).flatMap(analyze(url, _, cfg))
 
   /**
     * Get the content of the web page to be reached with the current url
@@ -50,7 +48,7 @@ object Analyzer extends LazyLogging {
     * @param url Url location of the web page
     * @return The content, that can be scraped later
     */
-  def queryUrl(url: String): Try[JsoupDocument] = Try {
+  def buildPageDocument(url: String): Try[JsoupDocument] = Try {
     JsoupDocument(
       Jsoup
         .connect(url)
@@ -67,14 +65,12 @@ object Analyzer extends LazyLogging {
     * Analyze the given page document and extract information
     *
     * @param url           Url of page
-    * @param urlId         Identifier of the url entry in data base
     * @param pageDoc       Page document
     * @param profileConfig Applicable profile config for this page
     * @return A trial onto the needed information
     */
   private def analyze(
       url: String,
-      urlId: String,
       pageDoc: JsoupDocument,
       profileConfig: ProfileConfig
   ): Try[RawEntryInformation] =

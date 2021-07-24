@@ -965,7 +965,7 @@ object Extractor extends LazyLogging {
       urlId: String,
       cfg: ProfileConfig
   ): Try[RawEntryInformation] =
-    Analyzer.run(url, urlId, cfg)
+    Analyzer.run(url, cfg)
 
   /**
     * Build entry for extracted page information based on the different page types available.
