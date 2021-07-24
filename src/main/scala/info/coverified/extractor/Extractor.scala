@@ -690,7 +690,8 @@ final case class Extractor private (
               tags
               ) =>
             logger.debug(
-              "There is an entry existent for url '{}' and an update is needed."
+              "There is an entry existent for url '{}' and an update is needed.",
+              urlId
             )
             val contentHash = EntryInformation
               .contentHash(
