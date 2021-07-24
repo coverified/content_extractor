@@ -26,6 +26,8 @@ build4dockerImage:
     script:
         - ./gradlew shadowJar
         - ./gradlew buildDotEnv
+    only:
+      - main
     artifacts:
         reports:
             dotenv: dockerBuild.env
