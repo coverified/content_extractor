@@ -54,10 +54,6 @@ object ExtractionSupervisor {
       /* Read page profile configs */
       val hostToPageProfile = readPageProfileConfigs(profileDirectoryPath)
 
-      /* Start a mutator */
-      val mutator = context.spawn(Mutator(), "Mutator")
-      mutator ! InitMutator(apiUri, authSecret, reAnalysisInterval)
-
       /* Set up state data */
       val stateData = ExtractorStateData(
         hostToPageProfile,
@@ -103,7 +99,6 @@ object ExtractionSupervisor {
                       chunkSize,
                       repeatDelay,
                       source,
-                      mutator,
                       context.self
                     )
                     Some(source.id -> handler)

@@ -17,6 +17,7 @@ import info.coverified.extractor.actor.SourceHandler.{
   nextUrl,
   peek
 }
+import info.coverified.extractor.messages.MutatorMessage.InitMutator
 import info.coverified.extractor.messages.{
   MutatorMessage,
   SourceHandlerMessage,
@@ -66,7 +67,6 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
             chunkSize,
             repeatDelay,
             source,
-            mutator,
             replyTo
           )
           ) =>
@@ -75,6 +75,11 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           source.id,
           source.url
         )
+
+        /* Start a mutator */
+        val mutator = context.spawn(Mutator(), "Mutator")
+        mutator ! InitMutator(apiUri, authSecret, reAnalysisInterval)
+
         val stateData = SourceHandlerStateData(
           apiUri,
           pageProfile,
@@ -190,10 +195,11 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
 
   /**
     * Behavior to steer the handling of new urls
-    * @param stateData        Current state of the actor
-    * @param urlToActivation  Mapping from activated url to it's activation time
-    * @param workerPoolProxy  Reference to the worker pool proxy
-    * @param supervisor       Reference to the supervisor
+    *
+    * @param stateData       Current state of the actor
+    * @param urlToActivation Mapping from activated url to it's activation time
+    * @param workerPoolProxy Reference to the worker pool proxy
+    * @param supervisor      Reference to the supervisor
     * @return The defined behavior
     */
   def handleNewUrls(
@@ -282,12 +288,12 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
   /**
     * Check out the not yet handled urls and attempt to handle one if applicable
     *
-    * @param context          Actor context, the actor is in
-    * @param workerPoolProxy  Reference to the proxy for the worker pool
-    * @param supervisor       Reference to the supervisor
-    * @param stateData        Current state of the actor
-    * @param unhandledUrls    List of remaining urls
-    * @param urlToActivation  Mapping from active url to activation time
+    * @param context         Actor context, the actor is in
+    * @param workerPoolProxy Reference to the proxy for the worker pool
+    * @param supervisor      Reference to the supervisor
+    * @param stateData       Current state of the actor
+    * @param unhandledUrls   List of remaining urls
+    * @param urlToActivation Mapping from active url to activation time
     * @return
     */
   def maybeIssueNextUnhandledUrl(
@@ -357,14 +363,14 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
   /**
     * If possible (sticking to a rate limit), issue a new url handling and change to applicable state.
     *
-    * @param context          Actor context, the actor is in
-    * @param workerPoolProxy  Reference to the proxy for the worker pool
-    * @param supervisor       Reference to the supervisor
-    * @param targetUrl        The targeted url
-    * @param targetUrlId      Id of the targeted url in database
-    * @param urlToActivation  Mapping from active url to it's activation time.
-    * @param remainingUrls    List of remaining urls
-    * @param stateData        Current state of the actor
+    * @param context         Actor context, the actor is in
+    * @param workerPoolProxy Reference to the proxy for the worker pool
+    * @param supervisor      Reference to the supervisor
+    * @param targetUrl       The targeted url
+    * @param targetUrlId     Id of the targeted url in database
+    * @param urlToActivation Mapping from active url to it's activation time.
+    * @param remainingUrls   List of remaining urls
+    * @param stateData       Current state of the actor
     * @return Defined behavior
     */
   def maybeIssueNewHandling(
