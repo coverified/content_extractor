@@ -77,7 +77,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         context.log.info(
           "Initializing a source handler for source '{}' (to be found at '{}').",
           source.id,
-          source.url
+          source.url.getOrElse("no url found")
         )
 
         /* Start a mutator */
