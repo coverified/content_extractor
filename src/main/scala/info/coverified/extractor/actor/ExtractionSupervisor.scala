@@ -9,13 +9,11 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors._
 import com.typesafe.config.ConfigFactory
-import info.coverified.extractor.messages.MutatorMessage.InitMutator
 import info.coverified.extractor.messages.SourceHandlerMessage.{
   InitSourceHandler,
   Run
 }
 import info.coverified.extractor.messages.{
-  MutatorMessage,
   SourceHandlerMessage,
   SupervisorMessage
 }
@@ -26,7 +24,6 @@ import info.coverified.extractor.messages.SupervisorMessage.{
 }
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.GraphQLHelper
-import sttp.model.Uri
 
 import java.io.File
 import java.net.URL
@@ -126,7 +123,12 @@ object ExtractionSupervisor {
                 None
             }
           }.toMap
-          handleSourceResponses(stateData, initializedSources, Map.empty)
+
+          if (initializedSources.isEmpty) {
+            context.log.warn("No source handler has been started. Exit.")
+            Behaviors.stopped
+          } else
+            handleSourceResponses(stateData, initializedSources, Map.empty)
         case None =>
           context.log.warn(
             "Querying sources did not return a sensible reply. Shut down."
