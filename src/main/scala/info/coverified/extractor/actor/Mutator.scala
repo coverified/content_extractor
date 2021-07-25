@@ -156,7 +156,9 @@ object Mutator {
       mapTagToExistingTag(tags, existingTags)
 
     /* Build query to create new tags */
-    val createTags = createModelToCreateTag(tagToMatchingTag)
+    val createTags = createModelToCreateTag(
+      tagToMatchingTag.filter(_._2.isEmpty).keys.toSeq
+    )
 
     (tagToMatchingTag.values.flatten.toSeq, createTags)
   }
@@ -179,15 +181,11 @@ object Mutator {
     }.toMap
 
   private def createModelToCreateTag(
-      tagToMatchingTag: Map[String, Option[TagWhereUniqueInput]]
+      tags: Seq[String]
   ): Seq[TagCreateInput] =
-    tagToMatchingTag
-      .filter(_._2.isEmpty)
-      .map {
-        case (tag, _) =>
-          TagCreateInput(name = Some(tag), generated = Some(false))
-      }
-      .toSeq
+    tags.map { tag =>
+      TagCreateInput(name = Some(tag), generated = Some(false))
+    }
 
   private def buildEntry(
       urlId: String,
