@@ -81,7 +81,7 @@ buildDockerImageAkka:
 trigger-build-with-config:
     stage: trigger
     trigger: coverified/infrastructure
-    only:
-      - main
     variables:
         IMAGE_TO_BUILD: content_extractor
+        IMAGE_HASH: $CI_COMMIT_SHA
+        IMAGE_BRANCH: $CI_COMMIT_REF_NAME
