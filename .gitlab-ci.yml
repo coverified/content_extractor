@@ -67,7 +67,7 @@ release-image:
     - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME $CI_REGISTRY_IMAGE:latest
     - docker push --all-tags $CI_REGISTRY_IMAGE
   only:
-    main
+    - main
 
 trigger-build-with-config:
     stage: trigger
