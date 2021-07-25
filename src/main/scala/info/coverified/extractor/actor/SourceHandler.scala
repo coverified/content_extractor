@@ -81,7 +81,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         )
 
         /* Start a mutator */
-        val mutator = context.spawn(Mutator(), "Mutator")
+        val mutator = context.spawn(Mutator(), "Mutator_" + source.id)
         mutator ! InitMutator(apiUri, authSecret, reAnalysisInterval)
         context.watchWith(mutator, MutationsCompleted)
 
