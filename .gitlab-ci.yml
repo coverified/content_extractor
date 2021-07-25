@@ -2,6 +2,7 @@ stages:
     - build
     - test
     - containerize
+    - release
     - trigger
 
 variables:
@@ -54,34 +55,25 @@ buildDockerImage:
         - docker:dind
     script:
         - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-        - docker build --pull -t $CI_REGISTRY_IMAGE:latest --build-arg PROJECT_NAME --build-arg PROJECT_VERSION --build-arg MAIN_CLASS --build-arg PAGE_PROFILE_SOURCE_DIRECTORY --build-arg PAGE_PROFILE_PATH --build-arg SENTRY_RELEASE=$CI_COMMIT_SHA .
+        - docker build --pull -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME --build-arg PROJECT_NAME --build-arg PROJECT_VERSION --build-arg MAIN_CLASS --build-arg PAGE_PROFILE_SOURCE_DIRECTORY --build-arg PAGE_PROFILE_PATH --build-arg SENTRY_RELEASE=$CI_COMMIT_SHA .
         - docker push $CI_REGISTRY_IMAGE:latest
     needs:
         - build4dockerImage
-    only:
-        - main
     cache: {}
 
-buildDockerImageAkka:
-    stage: containerize
-    image: docker:latest
-    services:
-        - docker:dind
-    script:
-        - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-        - docker build --pull -t $CI_REGISTRY_IMAGE:akka --build-arg PROJECT_NAME --build-arg PROJECT_VERSION --build-arg MAIN_CLASS --build-arg PAGE_PROFILE_SOURCE_DIRECTORY --build-arg PAGE_PROFILE_PATH --build-arg SENTRY_RELEASE=$CI_COMMIT_SHA .
-        - docker push $CI_REGISTRY_IMAGE:akka
-    needs:
-        - build4dockerImage
-    only:
-        - akka
-    cache: {}
-
+release-image:
+  stage: release
+  script:
+    - docker pull $CI_REGISTRY_IMAGE/CI_COMMIT_REF_NAME
+    - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME $CI_REGISTRY_IMAGE:latest
+    - docker push --all-tags $CI_REGISTRY_IMAGE
+  only:
+    - main
 
 trigger-build-with-config:
     stage: trigger
     trigger: coverified/infrastructure
-    only:
-      - main
     variables:
         IMAGE_TO_BUILD: content_extractor
+        IMAGE_HASH: $CI_COMMIT_SHA
+        IMAGE_BRANCH: $CI_COMMIT_REF_NAME
