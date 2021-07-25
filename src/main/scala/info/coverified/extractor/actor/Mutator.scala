@@ -110,6 +110,7 @@ object Mutator {
         Behaviors.same
       case (ctx, Terminate) =>
         ctx.log.info("Shutting down mutator!")
+        helper.close()
         Behaviors.stopped
       case _ => Behaviors.unhandled
     }
