@@ -33,6 +33,7 @@ end loop
 
 SourceHandler --> UrlHandler: //terminates pool//
 SourceHandler -> Mutator: Terminate
+Mutator -> Mutator: Terminate\n//Wait until all//\n//tag requests//\n//are answered.//
 ...
 Mutator --> SourceHandler: //Death watch//
 

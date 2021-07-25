@@ -26,7 +26,6 @@ import info.coverified.graphql.GraphQLHelper
 import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   ArticleTag,
-  ArticleTagCreateInput,
   ArticleTagRelateToManyInput,
   ArticleTagWhereUniqueInput,
   EntryCreateInput,
@@ -41,6 +40,7 @@ import org.slf4j.Logger
 
 import java.time.{Duration, ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
+import scala.concurrent.duration.FiniteDuration
 
 /**
   * This actor takes care of facing all mutation to the GraphQL API
@@ -139,6 +139,12 @@ object Mutator {
         }
 
         Behaviors.same
+      case (ctx, Terminate) if stateData.awaitTagConsolidation.nonEmpty =>
+        ctx.log.debug(
+          "Received termination request, but still awaiting harmonized tags. Wait another second."
+        )
+        ctx.scheduleOnce(FiniteDuration.apply(1, "s"), ctx.self, Terminate)
+        Behaviors.same
       case (ctx, Terminate) =>
         ctx.log.info("Shutting down mutator!")
         stateData.helper.close()
@@ -195,49 +201,6 @@ object Mutator {
       /* TODO: Report to source handler */
     }
   }
-
-  @deprecated
-  def connectToOrCreateTag(
-      tags: Seq[String],
-      graphQHelper: GraphQLHelper
-  ): (Seq[ArticleTagWhereUniqueInput], Seq[ArticleTagCreateInput]) = {
-    val existingTags = graphQHelper.existingTags(tags)
-
-    /* Build connections to existing entries */
-    val tagToMatchingTag: Map[String, Option[ArticleTagWhereUniqueInput]] =
-      mapTagToExistingTag(tags, existingTags)
-
-    /* Build query to create new tags */
-    val createTags = createModelToCreateTag(
-      tagToMatchingTag.filter(_._2.isEmpty).keys.toSeq
-    )
-
-    (tagToMatchingTag.values.flatten.toSeq, createTags)
-  }
-
-  private def mapTagToExistingTag(
-      tags: Seq[String],
-      existingTags: Seq[ArticleTagView]
-  ): Map[String, Option[ArticleTagWhereUniqueInput]] =
-    tags.map { tag =>
-      tag -> existingTags
-        .find { existingTag =>
-          existingTag.name match {
-            case Some(name) => name == tag
-            case None       => false
-          }
-        }
-        .map { matchedTag =>
-          ArticleTagWhereUniqueInput(id = Some(matchedTag.id))
-        }
-    }.toMap
-
-  private def createModelToCreateTag(
-      tags: Seq[String]
-  ): Seq[ArticleTagCreateInput] =
-    tags.map { tag =>
-      ArticleTagCreateInput(name = Some(tag))
-    }
 
   private def buildEntry(
       urlId: String,
