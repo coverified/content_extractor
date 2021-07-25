@@ -52,15 +52,11 @@ object Mutator {
           InitMutator(apiUri, authToken, reAnalysisInterval, distinctTagHandler)
           ) =>
         val helper = new GraphQLHelper(apiUri, authToken)
-        idle(helper, reAnalysisInterval, distinctTagHandler)
+        idle(MutatorStateData(helper, reAnalysisInterval, distinctTagHandler))
       case _ => Behaviors.unhandled
     }
 
-  def idle(
-      helper: GraphQLHelper,
-      reAnalysisInterval: Duration,
-      distinctTagHandler: ActorRef[DistinctTagHandlerMessage]
-  ): Behaviors.Receive[MutatorMessage] =
+  def idle(stateData: MutatorStateData): Behaviors.Receive[MutatorMessage] =
     Behaviors.receive[MutatorMessage] {
       case (context, CreateEntry(createEntryInformation, urlId, replyTo)) =>
         context.log.debug(
@@ -68,7 +64,7 @@ object Mutator {
         )
         /* Check, if there isn't yet an entry with the same content */
         val contentHash = createEntryInformation.contentHash.toString
-        val disabled = !helper.entriesWithSameHash(contentHash)
+        val disabled = !stateData.helper.entriesWithSameHash(contentHash)
         if (disabled) {
           context.log.warn(
             s"There is / are already entries available with the same content hash code. Create an entry, but disable it."
@@ -86,12 +82,12 @@ object Mutator {
               tags,
               contentHash,
               disabled,
-              reAnalysisInterval,
-              helper
+              stateData.reAnalysisInterval,
+              stateData.helper
             )
         }
 
-        helper.saveEntry(mutation) match {
+        stateData.helper.saveEntry(mutation) match {
           case Some(_) =>
             context.log.debug("Entry successfully stored.")
           case None =>
@@ -104,7 +100,7 @@ object Mutator {
           urlId
         )
 
-        helper.updateUrl(urlId) match {
+        stateData.helper.updateUrl(urlId) match {
           case Some(id) =>
             context.log.debug(s"Updated url '$id'")
           case None =>
@@ -114,7 +110,7 @@ object Mutator {
         Behaviors.same
       case (ctx, Terminate) =>
         ctx.log.info("Shutting down mutator!")
-        helper.close()
+        stateData.helper.close()
         Behaviors.stopped
       case _ => Behaviors.unhandled
     }
@@ -264,4 +260,10 @@ object Mutator {
           )
       }
   }
+
+  final case class MutatorStateData(
+      helper: GraphQLHelper,
+      reAnalysisInterval: Duration,
+      distinctTagHandler: ActorRef[DistinctTagHandlerMessage]
+  )
 }
