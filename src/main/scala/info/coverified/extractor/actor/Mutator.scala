@@ -66,8 +66,13 @@ object Mutator {
             context.log.debug(
               "Request to create an entry received. Ask the distinct tag handler, to ensure a consistent state for this."
             )
-            stateData.distinctTagHandler ! ConsolidateArticleTags(articleTags)
-          // TODO: Register information, that need tag confirmation
+            val contentHash = createEntryInformation.contentHash
+            stateData.distinctTagHandler ! ConsolidateArticleTags(
+              contentHash,
+              articleTags
+            )
+            val updatedAwaitMap = stateData.awaitTagConsolidation + (contentHash -> createEntryInformation)
+            idle(stateData.copy(awaitTagConsolidation = updatedAwaitMap))
           case None =>
             context.log.debug(
               "Request to create an entry received. No need to harmonize tags. Create mutation."
@@ -80,8 +85,8 @@ object Mutator {
               stateData.helper,
               context.log
             )
+            Behaviors.same
         }
-        Behaviors.same
       case (context, UpdateUrl(urlId, replyTo)) =>
         context.log.debug(
           "Attempting to update the url with id '{}'.",
@@ -269,6 +274,7 @@ object Mutator {
   final case class MutatorStateData(
       helper: GraphQLHelper,
       reAnalysisInterval: Duration,
-      distinctTagHandler: ActorRef[DistinctTagHandlerMessage]
+      distinctTagHandler: ActorRef[DistinctTagHandlerMessage],
+      awaitTagConsolidation: Map[Long, CreateEntryInformation] = Map.empty
   )
 }

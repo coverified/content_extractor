@@ -32,7 +32,7 @@ object DistinctTagHandler {
       graphQLHelper: GraphQLHelper
   ): Behaviors.Receive[DistinctTagHandlerMessage] =
     Behaviors.receive[DistinctTagHandlerMessage] {
-      case (ctx, ConsolidateArticleTags(tags)) =>
+      case (ctx, ConsolidateArticleTags(contentHash, tags)) =>
         ctx.log.debug("Attempting to harmonize given tags.")
         // TODO: Add logic
         Behaviors.same
