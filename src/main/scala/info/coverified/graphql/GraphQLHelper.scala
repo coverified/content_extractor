@@ -92,12 +92,12 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
     */
   def existingTags(tags: Seq[String]): Seq[ArticleTagView] = {
     val contentFilter = tags.map { tag =>
-      ArticleTagWhereInput(name = Some(tag))
+      ArticleTagWhereInput(name_i = Some(tag))
     }
     queryWithHeader(
       Query.allArticleTags(
         where = ArticleTagWhereInput(
-          AND = Option.when(contentFilter.nonEmpty)(contentFilter.toList)
+          OR = Option.when(contentFilter.nonEmpty)(contentFilter.toList)
         ),
         skip = 0
       )(ArticleTag.view)

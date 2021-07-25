@@ -54,11 +54,17 @@ object DistinctTagHandler {
         /* Create tags and make the best of it. */
         graphQLHelper.saveArticleTags(tagsToCreate) match {
           case Some(newTagIds) =>
-            if (newTagIds.size != tagsToCreate.size)
+            if (newTagIds.size != tagsToCreate.size) {
               ctx.log.warn(
                 "Attempted to save {} new article tags and got {} back. Connect them anyway.",
                 tagsToCreate.size,
                 newTagIds.size
+              )
+            } else
+              ctx.log.debug(
+                "Created {} new article tags. Additionally connect to the {} existing ones.",
+                newTagIds.size,
+                existingTagIds.size
               )
 
             mutator ! ConnectToTags(contentHash, existingTagIds ++ newTagIds)
