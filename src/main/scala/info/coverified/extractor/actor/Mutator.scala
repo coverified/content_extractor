@@ -141,7 +141,8 @@ object Mutator {
         Behaviors.same
       case (ctx, Terminate) if stateData.awaitTagConsolidation.nonEmpty =>
         ctx.log.debug(
-          "Received termination request, but still awaiting harmonized tags. Wait another second."
+          "Received termination request, but still awaiting {} harmonized tags. Wait another second.",
+          stateData.awaitTagConsolidation.size
         )
         ctx.scheduleOnce(FiniteDuration.apply(1, "s"), ctx.self, Terminate)
         Behaviors.same
