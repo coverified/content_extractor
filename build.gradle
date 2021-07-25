@@ -11,7 +11,7 @@ plugins {
 }
 
 application {
-	mainClassName = 'info.coverified.extractor.Run'
+	mainClassName = 'info.coverified.extractor.RunWithAkka'
 }
 
 ext {
