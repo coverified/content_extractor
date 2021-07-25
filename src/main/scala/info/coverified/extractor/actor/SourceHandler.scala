@@ -369,11 +369,15 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       }
     } else if (urlToActivation.nonEmpty) {
       context.log.info(
-        "No more unhandled urls for source '{}' ('{}'). Wait for the last {} active ones\n\t{}",
+        "No more unhandled urls for source '{}' ('{}'). Wait for the last {} active ones{}",
         stateData.source.id,
         stateData.source.name.getOrElse(""),
         urlToActivation.size,
-        urlToActivation.keys.mkString("\n\t")
+        if (urlToActivation.size < 6) {
+          "\n\t" + urlToActivation.keys.mkString("\n\t")
+        } else {
+          ""
+        }
       )
       handleNewUrls(
         stateData,
