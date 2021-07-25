@@ -149,7 +149,7 @@ object Mutator {
       tags: Seq[String],
       graphQHelper: GraphQLHelper
   ): (Seq[TagWhereUniqueInput], Seq[TagCreateInput]) = {
-    val existingTags = graphQHelper.allExistingTags
+    val existingTags = graphQHelper.existingTags(tags)
 
     /* Build connections to existing entries */
     val tagToMatchingTag: Map[String, Option[TagWhereUniqueInput]] =

@@ -187,18 +187,13 @@ object ExtractorQuery {
     * @param contentHash Hash code of the content
     * @return A List of applicable entries
     */
-  def entriesWithGivenHash(
+  def countEntriesWithGivenHash(
       contentHash: String
-  ): SelectionBuilder[RootQuery, Option[
-    List[SimpleEntry.SimpleEntryView[String, TagView[String]]]
-  ]] =
-    Query.allEntries(
+  ): SelectionBuilder[RootQuery, Option[Int]] =
+    Query.entriesCount(
       where = EntryWhereInput(
         contentHash = Some(contentHash),
         disabled = Some(false)
-      ),
-      skip = 0
-    )(
-      SimpleEntry.view(Url.id, Tag.view(CoVerifiedClientSchema.Language.id))
+      )
     )
 }

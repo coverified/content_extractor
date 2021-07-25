@@ -385,13 +385,11 @@ final case class Extractor private (
     */
   private def queryEntriesWithSameHash(
       contentHash: String
-  ): RIO[Console with SttpClient, Option[
-    List[SimpleEntryView[String, TagView[String]]]
-  ]] =
+  ): RIO[Console with SttpClient, Option[Int]] =
     Connector
       .sendRequest(
         ExtractorQuery
-          .entriesWithGivenHash(contentHash)
+          .countEntriesWithGivenHash(contentHash)
           .toRequest(apiUrl)
           .header("x-coverified-internal-auth", authSecret)
       )
@@ -417,21 +415,16 @@ final case class Extractor private (
       date: Option[String],
       maybeTags: Option[List[String]],
       contentHash: String,
-      maybeApparentEntries: Option[
-        List[SimpleEntryView[String, TagView[String]]]
-      ],
+      maybeApparentEntries: Option[Int],
       timeToNextCrawl: Duration
   ): SelectionBuilder[RootMutation, Option[
     SimpleEntryView[SimpleUrlView, TagView[String]]
   ]] = {
     /* Check, if the model needs to be disabled */
-    val disable = maybeApparentEntries.forall(_.nonEmpty)
+    val disable = maybeApparentEntries.exists(_ > 0)
     if (disable) {
       logger.warn(
-        s"There is / are already entries available with the same content hash code. They belong to the " +
-          s"urls with the following ids. Create an entry, but disable it.\n\t${maybeApparentEntries
-            .map(_.map(_.url.getOrElse("Cannot get url id")).mkString("\n\t"))
-            .getOrElse("Unable to extract url ids.")}"
+        s"There is / are already entries available with the same content hash code. Create an entry, but disable it."
       )
     }
 

@@ -82,22 +82,30 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
   def entriesWithSameHash(contentHash: String): Boolean =
     queryWithHeader(
       ExtractorQuery
-        .entriesWithGivenHash(contentHash)
-    ).exists(_.nonEmpty)
+        .countEntriesWithGivenHash(contentHash)
+    ).exists(_ > 0)
 
   /**
     * Query all existing tags
     *
+    * @param tags List of tag names, that are of interest
     * @return All existing tags
     */
-  def allExistingTags: Seq[TagView[String]] =
+  def existingTags(tags: Seq[String]): Seq[TagView[String]] = {
+    val contentFilter = tags.map { tag =>
+      TagWhereInput(name = Some(tag))
+    }
     queryWithHeader(
       Query
         .allTags(
-          where = TagWhereInput(generated = Some(false)),
+          where = TagWhereInput(
+            generated = Some(false),
+            AND = Option.when(contentFilter.nonEmpty)(contentFilter.toList)
+          ),
           skip = 0
         )(Tag.view(CoVerifiedClientSchema.Language.id))
     ).getOrElse(List.empty)
+  }
 
   /**
     * Save the entry to data base

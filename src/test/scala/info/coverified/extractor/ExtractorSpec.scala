@@ -166,22 +166,7 @@ class ExtractorSpec
         defineStub("""
                      |{
                      |  "data": {
-                     |    "allEntries": [
-                     |      {
-                     |        "id": "ckr7fgk9d0798fdo8sas1v1us",
-                     |        "name": "",
-                     |        "hasBeenTagged": false,
-                     |        "url": {
-                     |          "id": "ckr7fdbuw0218fdo803zdc1hy"
-                     |        },
-                     |        "tags": [],
-                     |        "language": null,
-                     |        "content": "",
-                     |        "summary": "",
-                     |        "date": null,
-                     |        "disabled": false
-                     |      }
-                     |    ]
+                     |    "entriesCount": 0
                      |  }
                      |}
                      |""".stripMargin)
@@ -197,7 +182,7 @@ class ExtractorSpec
             postRequestedFor(urlEqualTo("/api/graphql"))
               .withRequestBody(
                 new EqualToPattern(
-                  """{"query":"query{allEntries(where:{contentHash:\"your_content_hash_here\",disabled:false},orderBy:[],skip:0){id name content summary url{id} date disabled tags(where:{},orderBy:[],skip:0){id name language{id} highlighted generated}}}","variables":{}}"""
+                  """{"query":"query{entriesCount(where:{contentHash:\"your_content_hash_here\",disabled:false})}","variables":{}}"""
                 )
               )
           )
@@ -244,20 +229,7 @@ class ExtractorSpec
                         |""".stripMargin)
 
         noException shouldBe thrownBy {
-          val maybeExistingEntries = Some(
-            List(
-              SimpleEntryView(
-                id = "ckr7fgk9d0798fdo8sas1v1us",
-                name = None,
-                content = None,
-                summary = None,
-                url = None,
-                date = None,
-                disabled = Some(false),
-                tags = None
-              )
-            )
-          )
+          val maybeExistingEntries = Some(1)
           val mutation = extractor invokePrivate buildEntryConsideringExistingStuff(
             "urlId",
             "The title",
@@ -328,8 +300,7 @@ class ExtractorSpec
                      |""".stripMargin)
 
         noException shouldBe thrownBy {
-          val maybeExistingEntries =
-            Some(List.empty[SimpleEntryView[String, TagView[String]]])
+          val maybeExistingEntries = Some(0)
           val mutation = extractor invokePrivate buildEntryConsideringExistingStuff(
             "urlId",
             "The title",
