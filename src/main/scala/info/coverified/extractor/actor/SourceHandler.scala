@@ -71,6 +71,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
             chunkSize,
             repeatDelay,
             source,
+            distinctTagHandler,
             replyTo
           )
           ) =>
@@ -82,7 +83,12 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
 
         /* Start a mutator */
         val mutator = context.spawn(Mutator(), "Mutator_" + source.id)
-        mutator ! InitMutator(apiUri, authSecret, reAnalysisInterval)
+        mutator ! InitMutator(
+          apiUri,
+          authSecret,
+          reAnalysisInterval,
+          distinctTagHandler
+        )
         context.watchWith(mutator, MutationsCompleted)
 
         val stateData = SourceHandlerStateData(

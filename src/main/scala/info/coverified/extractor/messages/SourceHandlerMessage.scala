@@ -25,6 +25,7 @@ object SourceHandlerMessage {
       chunkSize: Int,
       repeatDelay: Duration,
       source: SourceView,
+      distinctTagHandler: ActorRef[DistinctTagHandlerMessage],
       replyTo: ActorRef[SupervisorMessage]
   ) extends SourceHandlerMessage
 

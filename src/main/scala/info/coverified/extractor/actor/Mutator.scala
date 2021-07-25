@@ -5,11 +5,15 @@
 
 package info.coverified.extractor.actor
 
+import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.Behaviors
 import caliban.client.Operations.RootMutation
 import caliban.client.SelectionBuilder
 import info.coverified.extractor.analyzer.EntryInformation.CreateEntryInformation
-import info.coverified.extractor.messages.MutatorMessage
+import info.coverified.extractor.messages.{
+  DistinctTagHandlerMessage,
+  MutatorMessage
+}
 import info.coverified.extractor.messages.MutatorMessage.{
   CreateEntry,
   InitMutator,
@@ -43,15 +47,19 @@ object Mutator {
 
   def uninitialized: Behaviors.Receive[MutatorMessage] =
     Behaviors.receive[MutatorMessage] {
-      case (_, InitMutator(apiUri, authToken, reAnalysisInterval)) =>
+      case (
+          _,
+          InitMutator(apiUri, authToken, reAnalysisInterval, distinctTagHandler)
+          ) =>
         val helper = new GraphQLHelper(apiUri, authToken)
-        idle(helper, reAnalysisInterval)
+        idle(helper, reAnalysisInterval, distinctTagHandler)
       case _ => Behaviors.unhandled
     }
 
   def idle(
       helper: GraphQLHelper,
-      reAnalysisInterval: Duration
+      reAnalysisInterval: Duration,
+      distinctTagHandler: ActorRef[DistinctTagHandlerMessage]
   ): Behaviors.Receive[MutatorMessage] =
     Behaviors.receive[MutatorMessage] {
       case (context, CreateEntry(createEntryInformation, urlId, replyTo)) =>

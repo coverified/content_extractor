@@ -78,7 +78,6 @@ object ExtractionSupervisor {
             context.spawn(DistinctTagHandler(), "DistinctTagHandler")
           distinctTagHandler ! InitializeDistinctTagHandler(apiUri, authSecret)
           context.watchWith(distinctTagHandler, DistinctTagHandlerTerminated)
-          // TODO: Forward to mutators
 
           val initializedSources = sources.flatMap { source =>
             /* Prepare profile config for that source */
@@ -112,6 +111,7 @@ object ExtractionSupervisor {
                       chunkSize,
                       repeatDelay,
                       source,
+                      distinctTagHandler,
                       context.self
                     )
                     Some(source.id -> handler)
