@@ -8,8 +8,11 @@ package info.coverified.graphql
 import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.SelectionBuilder
 import com.typesafe.scalalogging.LazyLogging
+import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  ArticleTag,
+  ArticleTagWhereInput,
   Mutation,
   Query,
   Source,
@@ -91,19 +94,17 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
     * @param tags List of tag names, that are of interest
     * @return All existing tags
     */
-  def existingTags(tags: Seq[String]): Seq[TagView[String]] = {
+  def existingTags(tags: Seq[String]): Seq[ArticleTagView] = {
     val contentFilter = tags.map { tag =>
-      TagWhereInput(name = Some(tag))
+      ArticleTagWhereInput(name = Some(tag))
     }
     queryWithHeader(
-      Query
-        .allTags(
-          where = TagWhereInput(
-            generated = Some(false),
-            AND = Option.when(contentFilter.nonEmpty)(contentFilter.toList)
-          ),
-          skip = 0
-        )(Tag.view(CoVerifiedClientSchema.Language.id))
+      Query.allArticleTags(
+        where = ArticleTagWhereInput(
+          AND = Option.when(contentFilter.nonEmpty)(contentFilter.toList)
+        ),
+        skip = 0
+      )(ArticleTag.view)
     ).getOrElse(List.empty)
   }
 
@@ -115,9 +116,9 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
     */
   def saveEntry(
       entryMutation: SelectionBuilder[RootMutation, Option[
-        SimpleEntryView[SimpleUrlView, TagView[String]]
+        SimpleEntryView[SimpleUrlView, TagView]
       ]]
-  ): Option[SimpleEntryView[SimpleUrlView, TagView[String]]] =
+  ): Option[SimpleEntryView[SimpleUrlView, TagView]] =
     sendMutationWithHeader(entryMutation)
 
   def updateUrl(urlId: String) =

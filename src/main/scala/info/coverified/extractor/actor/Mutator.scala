@@ -17,23 +17,20 @@ import info.coverified.extractor.messages.MutatorMessage.{
   UpdateUrl
 }
 import info.coverified.graphql.GraphQLHelper
+import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  ArticleTagCreateInput,
+  ArticleTagRelateToManyInput,
+  ArticleTagWhereUniqueInput,
   EntryCreateInput,
   Mutation,
   Tag,
-  TagCreateInput,
-  TagRelateToManyInput,
-  TagWhereUniqueInput,
   UrlRelateToOneInput,
   UrlWhereUniqueInput
 }
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
-import info.coverified.graphql.schema.{
-  CoVerifiedClientSchema,
-  SimpleEntry,
-  SimpleUrl
-}
+import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 
 import java.time.{Duration, ZoneId, ZonedDateTime}
@@ -127,7 +124,7 @@ object Mutator {
       timeToNextCrawl: Duration,
       graphQlHelper: GraphQLHelper
   ): SelectionBuilder[RootMutation, Option[
-    SimpleEntryView[SimpleUrlView, TagView[String]]
+    SimpleEntryView[SimpleUrlView, TagView]
   ]] = {
     /* Figure out, which tags need to be written */
     val maybeConnectToAndCreateTags =
@@ -149,11 +146,11 @@ object Mutator {
   def connectToOrCreateTag(
       tags: Seq[String],
       graphQHelper: GraphQLHelper
-  ): (Seq[TagWhereUniqueInput], Seq[TagCreateInput]) = {
+  ): (Seq[ArticleTagWhereUniqueInput], Seq[ArticleTagCreateInput]) = {
     val existingTags = graphQHelper.existingTags(tags)
 
     /* Build connections to existing entries */
-    val tagToMatchingTag: Map[String, Option[TagWhereUniqueInput]] =
+    val tagToMatchingTag: Map[String, Option[ArticleTagWhereUniqueInput]] =
       mapTagToExistingTag(tags, existingTags)
 
     /* Build query to create new tags */
@@ -166,8 +163,8 @@ object Mutator {
 
   private def mapTagToExistingTag(
       tags: Seq[String],
-      existingTags: Seq[TagView[String]]
-  ): Map[String, Option[TagWhereUniqueInput]] =
+      existingTags: Seq[ArticleTagView]
+  ): Map[String, Option[ArticleTagWhereUniqueInput]] =
     tags.map { tag =>
       tag -> existingTags
         .find { existingTag =>
@@ -177,15 +174,15 @@ object Mutator {
           }
         }
         .map { matchedTag =>
-          TagWhereUniqueInput(id = Some(matchedTag.id))
+          ArticleTagWhereUniqueInput(id = Some(matchedTag.id))
         }
     }.toMap
 
   private def createModelToCreateTag(
       tags: Seq[String]
-  ): Seq[TagCreateInput] =
+  ): Seq[ArticleTagCreateInput] =
     tags.map { tag =>
-      TagCreateInput(name = Some(tag), generated = Some(false))
+      ArticleTagCreateInput(name = Some(tag))
     }
 
   private def buildEntry(
@@ -198,10 +195,10 @@ object Mutator {
       timeToNextCrawl: Duration,
       disabled: Boolean = false,
       maybeConnectToAndCreateTags: Option[
-        (Seq[TagWhereUniqueInput], Seq[TagCreateInput])
+        (Seq[ArticleTagWhereUniqueInput], Seq[ArticleTagCreateInput])
       ]
   ): SelectionBuilder[RootMutation, Option[
-    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView, TagView[String]]
+    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView, TagView]
   ]] =
     Mutation.createEntry(
       Some(
@@ -218,12 +215,12 @@ object Mutator {
           contentHash = Some(contentHash),
           disabled = Some(disabled),
           nextCrawl = determineNextCrawl(timeToNextCrawl),
-          tags = buildTagRelationInput(maybeConnectToAndCreateTags)
+          articleTags = buildTagRelationInput(maybeConnectToAndCreateTags)
         )
       )
     )(
       SimpleEntry
-        .view(SimpleUrl.view, Tag.view(CoVerifiedClientSchema.Language.id))
+        .view(SimpleUrl.view, Tag.view)
     )
 
   private def determineNextCrawl(timeToNextCrawl: Duration): Option[String] = {
@@ -239,12 +236,9 @@ object Mutator {
 
   private def buildTagRelationInput(
       maybeConnectToAndCreateTags: Option[
-        (
-            Seq[CoVerifiedClientSchema.TagWhereUniqueInput],
-            Seq[CoVerifiedClientSchema.TagCreateInput]
-        )
+        (Seq[ArticleTagWhereUniqueInput], Seq[ArticleTagCreateInput])
       ]
-  ): Option[TagRelateToManyInput] = maybeConnectToAndCreateTags.flatMap {
+  ): Option[ArticleTagRelateToManyInput] = maybeConnectToAndCreateTags.flatMap {
     case (connectRelation, createRelation) =>
       val maybeConnectRelation = Option.when(connectRelation.nonEmpty)(
         connectRelation.map(Some(_)).toList
@@ -256,7 +250,7 @@ object Mutator {
         case (None, None) => None
         case (create, connect) =>
           Some(
-            TagRelateToManyInput(
+            ArticleTagRelateToManyInput(
               create = create,
               connect = connect
             )

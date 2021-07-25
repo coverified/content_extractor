@@ -174,12 +174,12 @@ object ExtractorQuery {
     * @return An equivalent [[SelectionBuilder]]
     */
   def existingEntry(urlId: String): SelectionBuilder[RootQuery, Option[
-    List[SimpleEntry.SimpleEntryView[String, TagView[String]]]
+    List[SimpleEntry.SimpleEntryView[String, TagView]]
   ]] =
     Query.allEntries(
       where = EntryWhereInput(url = Some(UrlWhereInput(id = Some(urlId)))),
       skip = 0
-    )(SimpleEntry.view(Url.id, Tag.view(CoVerifiedClientSchema.Language.id)))
+    )(SimpleEntry.view(Url.id, Tag.view))
 
   /**
     * Query all entries with the given hash code
