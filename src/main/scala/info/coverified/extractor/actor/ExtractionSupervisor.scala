@@ -61,7 +61,10 @@ object ExtractionSupervisor {
       )
 
       /* Query all sources */
-      new GraphQLHelper(apiUri, authSecret).queryAllSources match {
+      val graphQLHelper = new GraphQLHelper(apiUri, authSecret)
+      val maybeSources = graphQLHelper.queryAllSources
+      graphQLHelper.close()
+      maybeSources match {
         case Some(emptySources) if emptySources.isEmpty =>
           context.log.info("There are no sources available. I'm done!")
           Behaviors.stopped
@@ -189,12 +192,6 @@ object ExtractionSupervisor {
         context.log.info(
           "All sources have reported to have finished. Good night! zzz"
         )
-        val activeChildren = context.children
-        if (activeChildren.nonEmpty)
-          context.log.debug(
-            "Currently active children:\n\t{}",
-            activeChildren.mkString("\n\t")
-          )
         Behaviors.stopped
       }
     case _ => Behaviors.unhandled

@@ -120,8 +120,11 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           stateData.source.name
         )
         /* Determine all new urls */
-        new GraphQLHelper(stateData.apiUri, stateData.authSecret)
-          .queryNewUrls(stateData.source.id) match {
+        val graphQLHelper =
+          new GraphQLHelper(stateData.apiUri, stateData.authSecret)
+        val maybeUrls = graphQLHelper.queryNewUrls(stateData.source.id)
+        graphQLHelper.close()
+        maybeUrls match {
           case Some(newUrls) if newUrls.isEmpty =>
             context.log.info("Found no new urls.")
             // TODO Change over to handling existing urls
