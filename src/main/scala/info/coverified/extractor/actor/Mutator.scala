@@ -70,7 +70,8 @@ object Mutator {
             val contentHash = createEntryInformation.contentHash
             stateData.distinctTagHandler ! ConsolidateArticleTags(
               contentHash,
-              articleTags
+              articleTags,
+              context.self
             )
             val updatedAwaitMap = stateData.awaitTagConsolidation + (contentHash -> (createEntryInformation, urlId))
             idle(stateData.copy(awaitTagConsolidation = updatedAwaitMap))
@@ -195,6 +196,7 @@ object Mutator {
     }
   }
 
+  @deprecated
   def connectToOrCreateTag(
       tags: Seq[String],
       graphQHelper: GraphQLHelper
@@ -312,7 +314,7 @@ object Mutator {
       helper: GraphQLHelper,
       reAnalysisInterval: Duration,
       distinctTagHandler: ActorRef[DistinctTagHandlerMessage],
-      awaitTagConsolidation: Map[Long, (CreateEntryInformation, String)] =
+      awaitTagConsolidation: Map[Int, (CreateEntryInformation, String)] =
         Map.empty
   )
 }

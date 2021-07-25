@@ -11,7 +11,9 @@ import com.typesafe.scalalogging.LazyLogging
 import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   ArticleTag,
+  ArticleTagCreateInput,
   ArticleTagWhereInput,
+  ArticleTagsCreateInput,
   Mutation,
   Query,
   Source,
@@ -114,6 +116,36 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
       ]]
   ): Option[SimpleEntryView[SimpleUrlView, ArticleTagView]] =
     sendMutationWithHeader(entryMutation)
+
+  /**
+    * Builds and sends mutation to save new article tags
+    *
+    * @param tags Tags to save
+    * @return An optional list of matching ids
+    */
+  def saveArticleTags(tags: List[String]): Option[List[String]] =
+    Option
+      .when(tags.nonEmpty)(tags)
+      .flatMap { apparentTags =>
+        /* If the list of tags is non empty, build and send mutations */
+        val inputModels = apparentTags.map { tag =>
+          Some(
+            ArticleTagsCreateInput(
+              data = Some(ArticleTagCreateInput(name = Some(tag)))
+            )
+          )
+        }
+        val mutation =
+          Mutation.createArticleTags(data = Some(inputModels))(ArticleTag.id)
+        sendMutationWithHeader(mutation).map { maybeIds =>
+          maybeIds.filter(_.nonEmpty).map(_.get)
+        }
+      }
+      .flatMap {
+        /* If the list of ids is empty, make it a None */
+        maybeIds =>
+          Option.when(maybeIds.nonEmpty)(maybeIds)
+      }
 
   def updateUrl(urlId: String): Option[String] =
     sendMutationWithHeader(
