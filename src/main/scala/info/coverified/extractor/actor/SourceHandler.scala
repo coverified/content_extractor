@@ -125,6 +125,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           case Some(newUrls) if newUrls.isEmpty =>
             context.log.info("Found no new urls.")
             // TODO Change over to handling existing urls
+            stateData.mutator ! Terminate
             shutdown(stateData)
           case Some(newUrls) =>
             context.log.info(
@@ -352,6 +353,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
             stateData.source.name.getOrElse("")
           )
           context.stop(workerPoolProxy)
+          stateData.mutator ! Terminate
           shutdown(stateData)
       }
     } else if (urlToActivation.nonEmpty) {
@@ -376,6 +378,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         stateData.source.name.getOrElse("")
       )
       context.stop(workerPoolProxy)
+      stateData.mutator ! Terminate
       shutdown(stateData)
     }
 
