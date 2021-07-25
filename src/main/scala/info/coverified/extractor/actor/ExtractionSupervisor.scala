@@ -78,9 +78,14 @@ object ExtractionSupervisor {
             /* Prepare profile config for that source */
             source.url match {
               case Some(sourceUrl) =>
+                val sourceWithProtocol =
+                  if (!sourceUrl.startsWith("http"))
+                    "https://" + sourceUrl
+                  else
+                    sourceUrl
                 hostToPageProfile.find {
                   case (hostUrl, _) =>
-                    hostUrl.contains(new URL(sourceUrl).getHost)
+                    hostUrl.contains(new URL(sourceWithProtocol).getHost)
                 } match {
                   case Some(_ -> pageProfile) =>
                     context.log.debug(
