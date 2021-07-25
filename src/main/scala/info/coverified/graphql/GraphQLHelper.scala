@@ -191,7 +191,7 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
       .foldM(
         failure => {
           logger
-            .error("Error during execution of query '{}'.", mutation, failure)
+            .error("Error during execution of mutation '{}'.", mutation, failure)
           ZIO.succeed(None)
         },
         success =>
