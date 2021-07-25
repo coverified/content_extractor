@@ -1,3 +1,5 @@
+import com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer
+
 plugins {
 	id 'groovy' // groovy support
 	id 'java' // java support
@@ -99,5 +101,12 @@ dependencies {
 
 	implementation "com.typesafe.akka:akka-stream_${scalaVersion}"
 	testImplementation "com.typesafe.akka:akka-actor-testkit-typed_${scalaVersion}"
-
 }
+
+shadowJar {
+	transform(AppendingTransformer) {
+		resource = 'reference.conf'
+	}
+	with jar
+}
+
