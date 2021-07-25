@@ -34,4 +34,7 @@ object MutatorMessage {
 
   final case object Terminate extends MutatorMessage
 
+  final case class ConnectToTags(contentHash: Long, tagIds: List[String])
+      extends MutatorMessage
+
 }

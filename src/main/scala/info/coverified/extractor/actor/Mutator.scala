@@ -16,6 +16,7 @@ import info.coverified.extractor.messages.{
   MutatorMessage
 }
 import info.coverified.extractor.messages.MutatorMessage.{
+  ConnectToTags,
   CreateEntry,
   InitMutator,
   Terminate,
@@ -71,7 +72,7 @@ object Mutator {
               contentHash,
               articleTags
             )
-            val updatedAwaitMap = stateData.awaitTagConsolidation + (contentHash -> createEntryInformation)
+            val updatedAwaitMap = stateData.awaitTagConsolidation + (contentHash -> (createEntryInformation, urlId))
             idle(stateData.copy(awaitTagConsolidation = updatedAwaitMap))
           case None =>
             context.log.debug(
@@ -84,6 +85,42 @@ object Mutator {
               stateData.reAnalysisInterval,
               stateData.helper,
               context.log
+            )
+            Behaviors.same
+        }
+
+      case (context, ConnectToTags(contentHash, tagIds)) =>
+        context.log.debug(
+          "Received information, to which tags the content with hash code '{}' shall be connected.",
+          contentHash
+        )
+        stateData.awaitTagConsolidation.get(contentHash) match {
+          case Some((cei, urlId)) =>
+            context.log.debug(
+              "Actually create the mutation for entry '{}'.",
+              contentHash
+            )
+            val connectTo = tagIds.map { tagId =>
+              ArticleTagWhereUniqueInput(id = Some(tagId))
+            }
+            issueMutation(
+              cei,
+              Some(connectTo),
+              urlId,
+              stateData.reAnalysisInterval,
+              stateData.helper,
+              context.log
+            )
+
+            /* Update state information */
+            val updatedAwaitingMap = stateData.awaitTagConsolidation.filterNot {
+              case (key, _) => key == contentHash
+            }
+            idle(stateData.copy(awaitTagConsolidation = updatedAwaitingMap))
+          case None =>
+            context.log.warn(
+              "I received tag connection information for content '{}', but I don't know that one.",
+              contentHash
             )
             Behaviors.same
         }
@@ -275,6 +312,7 @@ object Mutator {
       helper: GraphQLHelper,
       reAnalysisInterval: Duration,
       distinctTagHandler: ActorRef[DistinctTagHandlerMessage],
-      awaitTagConsolidation: Map[Long, CreateEntryInformation] = Map.empty
+      awaitTagConsolidation: Map[Long, (CreateEntryInformation, String)] =
+        Map.empty
   )
 }
