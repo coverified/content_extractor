@@ -7,6 +7,7 @@ package info.coverified.graphql
 
 import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.SelectionBuilder
+import com.typesafe.scalalogging.LazyLogging
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Mutation,
@@ -24,13 +25,25 @@ import info.coverified.graphql.schema.{
   SimpleEntry,
   SimpleUrl
 }
+import org.asynchttpclient.DefaultAsyncHttpClient
+import sttp.capabilities.zio.ZioStreams
+import sttp.client3.SttpBackend
 import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
 import sttp.model.Uri
+import zio.{Task, ZIO}
 
 import java.time.format.DateTimeFormatter
 import java.time.{ZoneId, ZonedDateTime}
 
-class GraphQLHelper(private val apiUri: Uri, private val authSecret: String) {
+class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
+    extends LazyLogging {
+  private val runtime = zio.Runtime.default
+  private val client = new DefaultAsyncHttpClient()
+  private val backend: SttpBackend[Task, ZioStreams] =
+    AsyncHttpClientZioBackend.usingClient(
+      runtime,
+      client
+    )
 
   /**
     * Queries all available sources
@@ -125,15 +138,32 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String) {
     * @return The result of the query
     */
   private def queryWithHeader[R](
-      selectionBuilder: SelectionBuilder[RootQuery, R]
-  ): R = zio.Runtime.default.unsafeRun {
-    Connector
-      .sendRequest(
-        selectionBuilder
-          .toRequest(apiUri)
-          .header("x-coverified-internal-auth", authSecret)
+      selectionBuilder: SelectionBuilder[RootQuery, Option[R]]
+  ): Option[R] = runtime.unsafeRun {
+    selectionBuilder
+      .toRequest(apiUri)
+      .header("x-coverified-internal-auth", authSecret)
+      .send(backend)
+      .foldM(
+        failure => {
+          logger.error(
+            "Error during execution of query '{}'.",
+            selectionBuilder,
+            failure
+          )
+          ZIO.succeed(None)
+        },
+        success =>
+          ZIO.succeed {
+            success.body match {
+              case Left(error) =>
+                logger.error("API returned an error.", error)
+                None
+              case Right(result) =>
+                result
+            }
+          }
       )
-      .provideCustomLayer(AsyncHttpClientZioBackend.layer())
   }
 
   /**
@@ -144,14 +174,28 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String) {
     * @return The result of the mutation
     */
   private def sendMutationWithHeader[R](
-      mutation: SelectionBuilder[RootMutation, R]
-  ): R = zio.Runtime.default.unsafeRun {
-    Connector
-      .sendRequest(
-        mutation
-          .toRequest(apiUri)
-          .header("x-coverified-internal-auth", authSecret)
+      mutation: SelectionBuilder[RootMutation, Option[R]]
+  ): Option[R] = runtime.unsafeRun {
+    mutation
+      .toRequest(apiUri)
+      .header("x-coverified-internal-auth", authSecret)
+      .send(backend)
+      .foldM(
+        failure => {
+          logger
+            .error("Error during execution of query '{}'.", mutation, failure)
+          ZIO.succeed(None)
+        },
+        success =>
+          ZIO.succeed {
+            success.body match {
+              case Left(error) =>
+                logger.error("API returned an error.", error)
+                None
+              case Right(result) =>
+                result
+            }
+          }
       )
-      .provideCustomLayer(AsyncHttpClientZioBackend.layer())
   }
 }
