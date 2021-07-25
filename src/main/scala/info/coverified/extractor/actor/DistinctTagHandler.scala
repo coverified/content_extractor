@@ -69,10 +69,16 @@ object DistinctTagHandler {
 
             mutator ! ConnectToTags(contentHash, existingTagIds ++ newTagIds)
           case None =>
-            ctx.log.debug(
-              "Saving new entries failed. Only connect to {} yet existing ones.",
-              existingTags.size
-            )
+            if (tagsToCreate.nonEmpty)
+              ctx.log.warn(
+                "Saving new article tags failed. Only connect to {} yet existing ones.",
+                existingTags.size
+              )
+            else
+              ctx.log.debug(
+                "No need to create new article tag. Connect to {} yet existing ones.",
+                existingTags.size
+              )
             mutator ! ConnectToTags(contentHash, existingTagIds)
         }
 
