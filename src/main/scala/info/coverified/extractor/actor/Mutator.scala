@@ -10,6 +10,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import caliban.client.Operations.RootMutation
 import caliban.client.SelectionBuilder
 import info.coverified.extractor.analyzer.EntryInformation.CreateEntryInformation
+import info.coverified.extractor.messages.DistinctTagHandlerMessage.ConsolidateArticleTags
 import info.coverified.extractor.messages.{
   DistinctTagHandlerMessage,
   MutatorMessage
@@ -35,6 +36,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
+import org.slf4j.Logger
 
 import java.time.{Duration, ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
@@ -59,39 +61,25 @@ object Mutator {
   def idle(stateData: MutatorStateData): Behaviors.Receive[MutatorMessage] =
     Behaviors.receive[MutatorMessage] {
       case (context, CreateEntry(createEntryInformation, urlId, replyTo)) =>
-        context.log.debug(
-          "Attempting to create a new entry. Check if there is one with same content."
-        )
-        /* Check, if there isn't yet an entry with the same content */
-        val contentHash = createEntryInformation.contentHash.toString
-        val disabled = !stateData.helper.entriesWithSameHash(contentHash)
-        if (disabled) {
-          context.log.warn(
-            s"There is / are already entries available with the same content hash code. Create an entry, but disable it."
-          )
-        }
-
-        val mutation = createEntryInformation match {
-          case CreateEntryInformation(title, summary, content, date, tags) =>
-            buildEntryConsideringExistingStuff(
-              urlId,
-              title,
-              summary,
-              content,
-              date,
-              tags,
-              contentHash,
-              disabled,
-              stateData.reAnalysisInterval,
-              stateData.helper
+        createEntryInformation.tags match {
+          case Some(articleTags) =>
+            context.log.debug(
+              "Request to create an entry received. Ask the distinct tag handler, to ensure a consistent state for this."
             )
-        }
-
-        stateData.helper.saveEntry(mutation) match {
-          case Some(_) =>
-            context.log.debug("Entry successfully stored.")
+            stateData.distinctTagHandler ! ConsolidateArticleTags(articleTags)
+          // TODO: Register information, that need tag confirmation
           case None =>
-          /* TODO: Report to source handler */
+            context.log.debug(
+              "Request to create an entry received. No need to harmonize tags. Create mutation."
+            )
+            issueMutation(
+              createEntryInformation,
+              None,
+              urlId,
+              stateData.reAnalysisInterval,
+              stateData.helper,
+              context.log
+            )
         }
         Behaviors.same
       case (context, UpdateUrl(urlId, replyTo)) =>
@@ -115,35 +103,54 @@ object Mutator {
       case _ => Behaviors.unhandled
     }
 
-  private def buildEntryConsideringExistingStuff(
+  /**
+    * Finally builds the mutation and sends it to GraphQL-API
+    *
+    * @param createEntryInformation     Raw information to create entry from
+    * @param maybeConnectToArticleTags  Optional model to connect to several tags
+    * @param urlId                      Id of the url, the article does belong to
+    * @param reAnalysisInterval         Interval, when the next analysis shall be made
+    * @param graphQLHelper              Helper to connect to GraphQL
+    * @param logger                     Logging instance
+    */
+  private def issueMutation(
+      createEntryInformation: CreateEntryInformation,
+      maybeConnectToArticleTags: Option[Seq[ArticleTagWhereUniqueInput]],
       urlId: String,
-      title: String,
-      summary: Option[String],
-      content: Option[String],
-      date: Option[String],
-      maybeTags: Option[List[String]],
-      contentHash: String,
-      disabled: Boolean,
-      timeToNextCrawl: Duration,
-      graphQlHelper: GraphQLHelper
-  ): SelectionBuilder[RootMutation, Option[
-    SimpleEntryView[SimpleUrlView, ArticleTagView]
-  ]] = {
-    /* Figure out, which tags need to be written */
-    val maybeConnectToAndCreateTags =
-      maybeTags.map(connectToOrCreateTag(_, graphQlHelper))
+      reAnalysisInterval: Duration,
+      graphQLHelper: GraphQLHelper,
+      logger: Logger
+  ): Unit = {
+    /* Check, if there isn't yet an entry with the same content */
+    val contentHash = createEntryInformation.contentHash.toString
+    val disabled = !graphQLHelper.entriesWithSameHash(contentHash)
+    if (disabled) {
+      logger.warn(
+        s"There is / are already entries available with the same content hash code. Create an entry, but disable it."
+      )
+    }
 
-    buildEntry(
-      urlId,
-      title,
-      summary,
-      content,
-      date,
-      contentHash,
-      timeToNextCrawl,
-      disabled,
-      maybeConnectToAndCreateTags
-    )
+    val mutation = createEntryInformation match {
+      case CreateEntryInformation(title, summary, content, date, _) =>
+        buildEntry(
+          urlId,
+          title,
+          summary,
+          content,
+          date,
+          contentHash,
+          reAnalysisInterval,
+          disabled,
+          maybeConnectToArticleTags
+        )
+    }
+
+    graphQLHelper.saveEntry(mutation) match {
+      case Some(_) =>
+        logger.debug("Entry successfully stored.")
+      case None =>
+      /* TODO: Report to source handler */
+    }
   }
 
   def connectToOrCreateTag(
@@ -197,9 +204,7 @@ object Mutator {
       contentHash: String,
       timeToNextCrawl: Duration,
       disabled: Boolean = false,
-      maybeConnectToAndCreateTags: Option[
-        (Seq[ArticleTagWhereUniqueInput], Seq[ArticleTagCreateInput])
-      ]
+      maybeConnectToArticleTags: Option[Seq[ArticleTagWhereUniqueInput]]
   ): SelectionBuilder[RootMutation, Option[
     SimpleEntryView[SimpleUrlView, ArticleTagView]
   ]] =
@@ -218,7 +223,7 @@ object Mutator {
           contentHash = Some(contentHash),
           disabled = Some(disabled),
           nextCrawl = determineNextCrawl(timeToNextCrawl),
-          articleTags = buildTagRelationInput(maybeConnectToAndCreateTags)
+          articleTags = buildTagRelationInput(maybeConnectToArticleTags)
         )
       )
     )(
@@ -237,29 +242,29 @@ object Mutator {
     )
   }
 
+  /**
+    * Build a model to connect to related article tags
+    * TODO: Check!!
+    *
+    * @param maybeConnectToArticleTags Optional list of models, that describe single tags to connect to
+    * @return Optional model to describe necessary connections to article tags
+    */
   private def buildTagRelationInput(
-      maybeConnectToAndCreateTags: Option[
-        (Seq[ArticleTagWhereUniqueInput], Seq[ArticleTagCreateInput])
-      ]
-  ): Option[ArticleTagRelateToManyInput] = maybeConnectToAndCreateTags.flatMap {
-    case (connectRelation, createRelation) =>
-      val maybeConnectRelation = Option.when(connectRelation.nonEmpty)(
-        connectRelation.map(Some(_)).toList
-      )
-      val maybeCreateRelation =
-        Option.when(createRelation.nonEmpty)(createRelation.map(Some(_)).toList)
-
-      (maybeCreateRelation, maybeConnectRelation) match {
-        case (None, None) => None
-        case (create, connect) =>
-          Some(
-            ArticleTagRelateToManyInput(
-              create = create,
-              connect = connect
-            )
-          )
+      maybeConnectToArticleTags: Option[Seq[ArticleTagWhereUniqueInput]]
+  ): Option[ArticleTagRelateToManyInput] =
+    maybeConnectToArticleTags
+      .flatMap { connectRelations =>
+        Option.when(connectRelations.nonEmpty) {
+          /* If there are models to point to single tags and the list ist not empty... */
+          connectRelations.map(Some(_)).toList
+        }
       }
-  }
+      .map { connectToRelation =>
+        /* Build an model to connect to all of these models */
+        ArticleTagRelateToManyInput(
+          connect = Some(connectToRelation)
+        )
+      }
 
   final case class MutatorStateData(
       helper: GraphQLHelper,
