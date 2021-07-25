@@ -9,15 +9,21 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors._
 import com.typesafe.config.ConfigFactory
+import info.coverified.extractor.messages.DistinctTagHandlerMessage.{
+  InitializeDistinctTagHandler,
+  Terminate
+}
 import info.coverified.extractor.messages.SourceHandlerMessage.{
   InitSourceHandler,
   Run
 }
 import info.coverified.extractor.messages.{
+  DistinctTagHandlerMessage,
   SourceHandlerMessage,
   SupervisorMessage
 }
 import info.coverified.extractor.messages.SupervisorMessage.{
+  DistinctTagHandlerTerminated,
   InitSupervisor,
   SourceHandled,
   SourceHandlerInitialized
@@ -52,14 +58,6 @@ object ExtractionSupervisor {
       /* Read page profile configs */
       val hostToPageProfile = readPageProfileConfigs(profileDirectoryPath)
 
-      /* Set up state data */
-      val stateData = ExtractorStateData(
-        hostToPageProfile,
-        reAnalysisInterval,
-        chunkSize,
-        repeatDelay
-      )
-
       /* Query all sources */
       val graphQLHelper = new GraphQLHelper(apiUri, authSecret)
       val maybeSources = graphQLHelper.queryAllSources
@@ -73,6 +71,14 @@ object ExtractionSupervisor {
             "Received {} sources. Spawn an actor for each of them.",
             sources.size
           )
+
+          /* Set up one tag consolidator, that takes care of concurrency management when creating new tag relations */
+          context.log.debug("Spawning a distinct tag handler.")
+          val distinctTagHandler =
+            context.spawn(DistinctTagHandler(), "DistinctTagHandler")
+          distinctTagHandler ! InitializeDistinctTagHandler(apiUri, authSecret)
+          context.watchWith(distinctTagHandler, DistinctTagHandlerTerminated)
+          // TODO: Forward to mutators
 
           val initializedSources = sources.flatMap { source =>
             /* Prepare profile config for that source */
@@ -130,8 +136,16 @@ object ExtractionSupervisor {
           if (initializedSources.isEmpty) {
             context.log.warn("No source handler has been started. Exit.")
             Behaviors.stopped
-          } else
+          } else {
+            val stateData = ExtractorStateData(
+              hostToPageProfile,
+              reAnalysisInterval,
+              chunkSize,
+              repeatDelay,
+              distinctTagHandler
+            )
             handleSourceResponses(stateData, initializedSources, Map.empty)
+          }
         case None =>
           context.log.warn(
             "Querying sources did not return a sensible reply. Shut down."
@@ -190,18 +204,35 @@ object ExtractionSupervisor {
         handleSourceResponses(stateData, initializedSources, stillActiveSources)
       } else {
         context.log.info(
-          "All sources have reported to have finished. Good night! zzz"
+          "All sources have reported to have finished. Shut down the distinct tag handler."
         )
-        Behaviors.stopped
+        stateData.distinctTagHandler ! Terminate
+        awaitTagHandlerTermination
       }
     case _ => Behaviors.unhandled
   }
+
+  def awaitTagHandlerTermination: Receive[SupervisorMessage] =
+    Behaviors.receive[SupervisorMessage] {
+      case (ctx, DistinctTagHandlerTerminated) =>
+        ctx.log.info(
+          "Distinct tag handler has terminated. Shut down guardian actor."
+        )
+        Behaviors.stopped
+      case (ctx, unknown) =>
+        ctx.log.warn(
+          "Received unexpected message while waiting for tag handler termination.\n\t{}",
+          unknown
+        )
+        Behaviors.same
+    }
 
   final case class ExtractorStateData(
       hostNameToPageProfile: Map[String, ProfileConfig],
       reAnalysisInterval: Duration,
       chunkSize: Int,
-      repeatDelay: Duration
+      repeatDelay: Duration,
+      distinctTagHandler: ActorRef[DistinctTagHandlerMessage]
   )
 
   /**

@@ -11,12 +11,16 @@ Supervisor -> SourceHandler: Init(...)
 SourceHandler -> Supervisor: SourceHandlerInitialized(sourceId)
 Supervisor -> SourceHandler: Run
 
+SourceHandler -> DistinctTagHandler: Init(...)
+
 loop
 SourceHandler -> UrlHandler: HandleNewUrl(...)
 UrlHandler -> WWW: RequestHTMLContent
 WWW -> UrlHandler: HTMLContent
 
 UrlHandler -> Mutator: CreateEntry(...)
+Mutator -> DistinctTagHandler: ConsolidateArticleTags(...)
+DistinctTagHandler -> Mutator: ConnectToArticleTags(...)
 Mutator -> API: Mutation(...)
 API -> Mutator: Result(...)
 UrlHandler -> SourceHandler: NewUrlHandledSuccessfully(...)
@@ -33,4 +37,9 @@ SourceHandler -> Mutator: Terminate
 Mutator --> SourceHandler: //Death watch//
 
 SourceHandler -> Supervisor:SourceHandled(...)
+
+== All sources are handled ==
+Supervisor -> DistinctTagHandler: Terminate
+DistinctTagHandler --> Supervisor: //Death watch//
+
 @enduml

@@ -56,4 +56,6 @@ object SupervisorMessage {
     * @param sourceId Identifier of the source
     */
   final case class SourceHandled(sourceId: String) extends SupervisorMessage
+
+  object DistinctTagHandlerTerminated extends SupervisorMessage
 }
