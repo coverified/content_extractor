@@ -78,7 +78,7 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
     * @param contentHash The content hash to check against
     * @return True, if there is one
     */
-  def entriesWithSameHash(contentHash: String): Boolean =
+  def existsEntryWithSameHash(contentHash: String): Boolean =
     queryWithHeader(
       ExtractorQuery
         .countEntriesWithGivenHash(contentHash)

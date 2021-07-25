@@ -172,7 +172,7 @@ object Mutator {
   ): Unit = {
     /* Check, if there isn't yet an entry with the same content */
     val contentHash = createEntryInformation.contentHash.toString
-    val disabled = !graphQLHelper.entriesWithSameHash(contentHash)
+    val disabled = graphQLHelper.existsEntryWithSameHash(contentHash)
     if (disabled) {
       logger.warn(
         s"There is / are already entries available with the same content hash code. Create an entry, but disable it."
