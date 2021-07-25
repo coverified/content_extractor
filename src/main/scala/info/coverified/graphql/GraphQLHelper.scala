@@ -9,7 +9,6 @@ import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.SelectionBuilder
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   ArticleTag,
   ArticleTagWhereInput,
@@ -17,17 +16,12 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Query,
   Source,
   SourceWhereInput,
-  Tag,
-  TagWhereInput,
+  Url,
   UrlUpdateInput
 }
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
-import info.coverified.graphql.schema.{
-  CoVerifiedClientSchema,
-  SimpleEntry,
-  SimpleUrl
-}
+import info.coverified.graphql.schema.SimpleUrl
 import org.asynchttpclient.DefaultAsyncHttpClient
 import sttp.capabilities.zio.ZioStreams
 import sttp.client3.SttpBackend
@@ -116,12 +110,12 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
     */
   def saveEntry(
       entryMutation: SelectionBuilder[RootMutation, Option[
-        SimpleEntryView[SimpleUrlView, TagView]
+        SimpleEntryView[SimpleUrlView, ArticleTagView]
       ]]
-  ): Option[SimpleEntryView[SimpleUrlView, TagView]] =
+  ): Option[SimpleEntryView[SimpleUrlView, ArticleTagView]] =
     sendMutationWithHeader(entryMutation)
 
-  def updateUrl(urlId: String) =
+  def updateUrl(urlId: String): Option[String] =
     sendMutationWithHeader(
       Mutation.updateUrl(
         urlId,
@@ -136,7 +130,7 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
             )
           )
         )
-      )(SimpleUrl.view)
+      )(Url.id)
     )
 
   /**

@@ -7,8 +7,10 @@ package info.coverified.graphql
 
 import caliban.client.Operations.RootQuery
 import caliban.client.SelectionBuilder
+import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  ArticleTag,
   EntryWhereInput,
   Query,
   SourceWhereInput,
@@ -174,12 +176,12 @@ object ExtractorQuery {
     * @return An equivalent [[SelectionBuilder]]
     */
   def existingEntry(urlId: String): SelectionBuilder[RootQuery, Option[
-    List[SimpleEntry.SimpleEntryView[String, TagView]]
+    List[SimpleEntry.SimpleEntryView[String, ArticleTagView]]
   ]] =
     Query.allEntries(
       where = EntryWhereInput(url = Some(UrlWhereInput(id = Some(urlId)))),
       skip = 0
-    )(SimpleEntry.view(Url.id, Tag.view))
+    )(SimpleEntry.view(Url.id, ArticleTag.view))
 
   /**
     * Query all entries with the given hash code

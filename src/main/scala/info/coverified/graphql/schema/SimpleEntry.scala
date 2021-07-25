@@ -7,9 +7,9 @@ package info.coverified.graphql.schema
 
 import caliban.client.SelectionBuilder
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  ArticleTag,
+  ArticleTagWhereInput,
   Entry,
-  Tag,
-  TagWhereInput,
   Url
 }
 
@@ -22,17 +22,17 @@ object SimpleEntry {
       url: Option[UrlSelection],
       date: Option[String],
       disabled: Option[Boolean],
-      tags: Option[List[TagSelection]]
+      articleTags: Option[List[TagSelection]]
   )
 
   def view[UrlSelection, TagSelection](
       urlSelection: SelectionBuilder[Url, UrlSelection],
-      tagSelection: SelectionBuilder[Tag, TagSelection]
+      tagSelection: SelectionBuilder[ArticleTag, TagSelection]
   ): SelectionBuilder[Entry, SimpleEntryView[UrlSelection, TagSelection]] =
     (Entry.id ~ Entry.name ~ Entry.content ~ Entry.summary ~ Entry.url(
       urlSelection
-    ) ~ Entry.date ~ Entry.disabled ~ Entry.tags(
-      where = TagWhereInput(),
+    ) ~ Entry.date ~ Entry.disabled ~ Entry.articleTags(
+      where = ArticleTagWhereInput(),
       skip = 0
     )(tagSelection)).mapN {
       (
@@ -43,8 +43,17 @@ object SimpleEntry {
           url: Option[UrlSelection],
           date: Option[String],
           disabled: Option[Boolean],
-          tags: Option[List[TagSelection]]
+          articleTags: Option[List[TagSelection]]
       ) =>
-        SimpleEntryView(id, name, content, summary, url, date, disabled, tags)
+        SimpleEntryView(
+          id,
+          name,
+          content,
+          summary,
+          url,
+          date,
+          disabled,
+          articleTags
+        )
     }
 }

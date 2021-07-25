@@ -18,14 +18,13 @@ import info.coverified.extractor.messages.MutatorMessage.{
 }
 import info.coverified.graphql.GraphQLHelper
 import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
-import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  ArticleTag,
   ArticleTagCreateInput,
   ArticleTagRelateToManyInput,
   ArticleTagWhereUniqueInput,
   EntryCreateInput,
   Mutation,
-  Tag,
   UrlRelateToOneInput,
   UrlWhereUniqueInput
 }
@@ -98,8 +97,8 @@ object Mutator {
         )
 
         helper.updateUrl(urlId) match {
-          case Some(_) =>
-            context.log.debug(s"Updated url '$urlId'")
+          case Some(id) =>
+            context.log.debug(s"Updated url '$id'")
           case None =>
           // todo report to source handler
         }
@@ -124,7 +123,7 @@ object Mutator {
       timeToNextCrawl: Duration,
       graphQlHelper: GraphQLHelper
   ): SelectionBuilder[RootMutation, Option[
-    SimpleEntryView[SimpleUrlView, TagView]
+    SimpleEntryView[SimpleUrlView, ArticleTagView]
   ]] = {
     /* Figure out, which tags need to be written */
     val maybeConnectToAndCreateTags =
@@ -198,7 +197,7 @@ object Mutator {
         (Seq[ArticleTagWhereUniqueInput], Seq[ArticleTagCreateInput])
       ]
   ): SelectionBuilder[RootMutation, Option[
-    SimpleEntry.SimpleEntryView[SimpleUrl.SimpleUrlView, TagView]
+    SimpleEntryView[SimpleUrlView, ArticleTagView]
   ]] =
     Mutation.createEntry(
       Some(
@@ -220,7 +219,7 @@ object Mutator {
       )
     )(
       SimpleEntry
-        .view(SimpleUrl.view, Tag.view)
+        .view(SimpleUrl.view, ArticleTag.view)
     )
 
   private def determineNextCrawl(timeToNextCrawl: Duration): Option[String] = {

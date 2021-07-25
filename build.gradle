@@ -49,7 +49,7 @@ repositories {
 
 dependencies {
 	// coverified dependencies
-	implementation 'com.github.coverified:graphQLConnector:403f80da72'
+	implementation 'com.github.coverified:graphQLConnector:b9e2889dad'
 
 	// cmd args parser //
 	implementation "com.github.scopt:scopt_$scalaVersion:4.0.0"
