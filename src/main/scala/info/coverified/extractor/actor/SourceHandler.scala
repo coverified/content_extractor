@@ -259,10 +259,12 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
               ReScheduleUrl(url, urlId),
               FiniteDuration(stateData.repeatDelay.toMillis, "ms")
             )
-          case _ =>
+          case unknown =>
             context.log.error(
-              "Handling the url '{}' failed with unknown error. Skip it.",
-              url
+              "Handling the url '{}' failed with unknown error. Skip it.\n\tError: {} - \"{}\"",
+              url,
+              unknown.getClass.getSimpleName,
+              unknown.getMessage
             )
         }
 

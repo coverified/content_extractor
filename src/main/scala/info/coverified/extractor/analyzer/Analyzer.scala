@@ -254,8 +254,9 @@ object Analyzer extends LazyLogging {
         Some(dateTimeString)
       case Failure(exception) =>
         logger.error(
-          "Extraction of date time information failed due to the following reason. Leave this information out.",
-          exception
+          "Extraction of date time information failed due to the following reason. Leave this information out.\n\tError: {} - \"{}\"",
+          exception.getClass.getSimpleName,
+          exception.getMessage
         )
         None
     }

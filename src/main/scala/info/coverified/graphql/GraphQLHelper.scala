@@ -156,9 +156,10 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
       .foldM(
         failure => {
           logger.error(
-            "Error during execution of query '{}'.",
-            selectionBuilder,
-            failure
+            "Error during execution of query.\n\tQuery: {}\n\tError: {} - \"{}\"",
+            selectionBuilder.toRequest(apiUri).toString,
+            failure.getClass.getSimpleName,
+            failure.getMessage
           )
           ZIO.succeed(None)
         },
@@ -166,7 +167,12 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
           ZIO.succeed {
             success.body match {
               case Left(error) =>
-                logger.error("API returned an error.", error)
+                logger.error(
+                  "API returned an error.\n\tQuery: {}\n\tError: {} - \"{}\".",
+                  selectionBuilder.toRequest(apiUri).toString,
+                  error.getClass.getSimpleName,
+                  error.getMessage()
+                )
                 None
               case Right(result) =>
                 result
@@ -191,19 +197,24 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
       .send(backend)
       .foldM(
         failure => {
-          logger
-            .error(
-              "Error during execution of mutation '{}'.",
-              mutation,
-              failure
-            )
+          logger.error(
+            "Error during execution of query.\n\tQuery: {}\n\tError: {} - \"{}\".",
+            mutation.toRequest(apiUri).toString,
+            failure.getClass.getSimpleName,
+            failure.getMessage
+          )
           ZIO.succeed(None)
         },
         success =>
           ZIO.succeed {
             success.body match {
               case Left(error) =>
-                logger.error("API returned an error.", error)
+                logger.error(
+                  "API returned an error.\n\tMutation: {}\n\tError: {} - \"{}\".",
+                  mutation.toRequest(apiUri).toString,
+                  error.getClass.getSimpleName,
+                  error.getMessage()
+                )
                 None
               case Right(result) =>
                 result

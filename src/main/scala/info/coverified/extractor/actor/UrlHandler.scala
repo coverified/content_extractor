@@ -41,7 +41,7 @@ class UrlHandler {
   ): Behaviors.Receive[UrlHandlerMessage] =
     Behaviors.receive[UrlHandlerMessage] {
       case (context, HandleNewUrl(url, urlId, pageProfile, sourceHandler)) =>
-        context.log.info("Start content extraction for new url '{}'.", url)
+        context.log.debug("Start content extraction for new url '{}'.", url)
 
         Analyzer.run(url, pageProfile) match {
           case Success(rawEntryInformation) =>
