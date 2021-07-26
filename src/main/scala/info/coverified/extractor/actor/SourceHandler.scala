@@ -113,27 +113,52 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
   ): Behaviors.Receive[SourceHandlerMessage] = Behaviors.receive {
     case (ctx, MutatorInitialized) =>
       ctx.log.info(
-        "Mutator for source '{}' ('{}') successfully initialized. Start worker pool.",
+        "Mutator for source '{}' ('{}') successfully initialized. Start worker pool of {} workers.",
         stateData.source.id,
-        stateData.source.name.getOrElse("")
+        stateData.source.name.getOrElse(""),
+        stateData.chunkSize
       )
-      // TODO: Init worker pool
+
+      /* Set up a pool of workers to handle url */
+      val urlWorkerPool = Routers
+        .pool(poolSize = stateData.chunkSize) {
+          Behaviors
+            .supervise(UrlHandler())
+            .onFailure(SupervisorStrategy.restart)
+        }
+        .withRoundRobinRouting()
+        .withBroadcastPredicate {
+          case _: InitUrlHandler => true
+          case _                 => false
+        }
+      val urlWorkerProxy =
+        ctx.spawn(
+          urlWorkerPool,
+          "UrlWorkerPool_" + stateData.source.id
+        )
+
+      /* Broadcast reference to mutator to all workers */
+      urlWorkerProxy ! InitUrlHandler(stateData.mutator)
+
+      /* Report completion of initialization */
       stateData.supervisor ! SourceHandlerInitialized(
         stateData.source.id,
         ctx.self
       )
-      idle(stateData)
+      idle(stateData, urlWorkerProxy)
     case _ => Behaviors.unhandled
   }
 
   /**
     * Waiting for anything to do
     *
-    * @param stateData Current state of the actor
+    * @param stateData        Current state of the actor
+    * @param workerPoolProxy  Proxy actor for worker pool
     * @return The defined behavior
     */
   def idle(
-      stateData: SourceHandlerStateData
+      stateData: SourceHandlerStateData,
+      workerPoolProxy: ActorRef[UrlHandlerMessage]
   ): Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
       case (context, Run(replyTo)) =>
@@ -162,38 +187,13 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
               stateData.source.id,
               stateData.source.name.getOrElse("")
             )
-            /* Set up a pool of workers to handle url */
-            context.log.debug(
-              "Starting an url worker pool of {} workers.",
-              stateData.chunkSize
-            )
-            val urlWorkerPool = Routers
-              .pool(poolSize = stateData.chunkSize) {
-                Behaviors
-                  .supervise(UrlHandler())
-                  .onFailure(SupervisorStrategy.restart)
-              }
-              .withRoundRobinRouting()
-              .withBroadcastPredicate {
-                case _: InitUrlHandler => true
-                case _                 => false
-              }
-            val urlWorkerProxy =
-              context.spawn(
-                urlWorkerPool,
-                "UrlWorkerPool_" + stateData.source.id
-              )
-
-            /* Broadcast reference to mutator to all workers */
-            urlWorkerProxy ! InitUrlHandler(stateData.mutator)
-
             val (firstBatch, remainingNewUrls) =
               peek(newUrls, stateData.chunkSize)
             /* Activate workers for the first batch and register the starting times */
             val urlToActivation = firstBatch.flatMap { url =>
               url.name match {
                 case Some(actualUrl) =>
-                  urlWorkerProxy ! HandleNewUrl(
+                  workerPoolProxy ! HandleNewUrl(
                     actualUrl,
                     url.id,
                     stateData.pageProfile,
@@ -213,7 +213,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
               stateData,
               remainingNewUrls,
               urlToActivation,
-              urlWorkerProxy,
+              workerPoolProxy,
               replyTo
             )
           case None =>

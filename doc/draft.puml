@@ -16,8 +16,8 @@ DistinctTagHandler -> Supervisor: DistinctTagHandlerInitialized
 Supervisor -> SourceHandler: Init(...)
 SourceHandler -> Mutator: Init(...)
 Mutator -> SourceHandler: MutatorInitialized
-SourceHandler -[#green]-> UrlHandler: //Start pool//
-SourceHandler -[#green]> UrlHandler: Init(...) //- Broadcast//
+SourceHandler --> UrlHandler: //Start pool//
+SourceHandler -> UrlHandler: Init(...) //- Broadcast//
 SourceHandler -> Supervisor: SourceHandlerInitialized(sourceId)
 
 == Handling new urls ==
@@ -97,13 +97,14 @@ SourceHandler -[#green]> Supervisor: ExistingUrlsHandled(...)
 
 == Shutdown ==
 
+Supervisor -[#green]> SourceHandler: Terminate(...)
 SourceHandler --> UrlHandler: //terminates pool//
 SourceHandler -> Mutator: Terminate
 Mutator -> Mutator: Terminate\n//Wait until all//\n//tag requests//\n//are answered.//
 ...
 Mutator --> SourceHandler: //Death watch//
 
-SourceHandler -> Supervisor:SourceHandled(...)
+SourceHandler -[#green]> Supervisor:Terminated(...)
 
 rnote over Supervisor
     All sources are handled
