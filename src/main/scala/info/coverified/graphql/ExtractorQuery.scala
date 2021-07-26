@@ -66,6 +66,7 @@ object ExtractorQuery {
     ".m4r"
   )
 
+  @deprecated("Use equivalent method in GraphQLHelper")
   private def excludeCommonFiles: List[UrlWhereInput] =
     commonFileEndings.map(
       ending => UrlWhereInput(name_not_contains_i = Some(ending))
@@ -77,6 +78,7 @@ object ExtractorQuery {
     * @param first Amount of urls to query
     * @return An equivalent [[SelectionBuilder]]
     */
+  @deprecated("Use equivalent method in GraphQLHelper")
   def newUrls(
       first: Int
   ): SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
@@ -87,6 +89,7 @@ object ExtractorQuery {
     *
     * @return A selection build to query all not yet visited urls
     */
+  @deprecated("Use equivalent method in GraphQLHelper")
   def newUrls
       : SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
     newUrls(None)
@@ -97,6 +100,7 @@ object ExtractorQuery {
     * @param sourceId Id of the source, the url shall belong to
     * @return A selection build to query all not yet visited urls, that belong to a source
     */
+  @deprecated("Use equivalent method in GraphQLHelper")
   def newUrls(
       sourceId: String
   ): SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
@@ -115,6 +119,7 @@ object ExtractorQuery {
       SimpleUrl.view
     )
 
+  @deprecated("Use equivalent method in GraphQLHelper")
   private def newUrls(
       maybeFirst: Option[Int]
   ): SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =

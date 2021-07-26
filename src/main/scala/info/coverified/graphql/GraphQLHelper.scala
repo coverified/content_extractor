@@ -8,6 +8,7 @@ package info.coverified.graphql
 import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.SelectionBuilder
 import com.typesafe.scalalogging.LazyLogging
+import info.coverified.graphql.GraphQLHelper.{isNewUrl, tagFilter}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   ArticleTag,
@@ -19,7 +20,8 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   Source,
   SourceWhereInput,
   Url,
-  UrlUpdateInput
+  UrlUpdateInput,
+  UrlWhereInput
 }
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
@@ -34,8 +36,11 @@ import zio.{Task, ZIO}
 import java.time.format.DateTimeFormatter
 import java.time.{ZoneId, ZonedDateTime}
 
-class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
-    extends LazyLogging {
+class GraphQLHelper(
+    private val apiUri: Uri,
+    private val authSecret: String,
+    private val batchSize: Int = 100
+) extends LazyLogging {
   private val runtime = zio.Runtime.default
   private val client = new DefaultAsyncHttpClient()
   private val backend: SttpBackend[Task, ZioStreams] =
@@ -45,23 +50,42 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
     )
 
   /**
-    * Queries all available sources
+    * Queries all available sources in batches.
     *
     * @return An optional lists of views onto sources
     */
   def queryAllSources: Option[List[Source.SourceView]] =
-    queryWithHeader(
-      Query.allSources(where = SourceWhereInput(), skip = 0)(Source.view)
-    )
+    countAllSources.flatMap { amountOfSources =>
+      val results =
+        neededBatches(amountOfSources).flatMap(queryAllSources).flatten
+      Option.when(results.nonEmpty)(results.toList)
+    }
+
+  private def neededBatches(amount: Int): Seq[Int] =
+    0 to math.ceil(amount.toDouble / batchSize).toInt
 
   /**
-    * Query the given amount of not yet visited urls
+    * Count all available sources
     *
-    * @param amount The amount of urls to  query
-    * @return An option onto a list of new urls
+    * @return Amount of sources - possibly...
     */
-  def queryNewUrls(amount: Int): Option[List[SimpleUrl.SimpleUrlView]] =
-    queryWithHeader(ExtractorQuery.newUrls(amount))
+  private def countAllSources: Option[Int] =
+    queryWithHeader(Query.sourcesCount(where = SourceWhereInput()))
+
+  /**
+    * Query the batch given by count.
+    *
+    * @param count The count of batch to get
+    * @return Optional list of view onto sources
+    */
+  private def queryAllSources(count: Int): Option[List[Source.SourceView]] =
+    queryWithHeader(
+      Query.allSources(
+        where = SourceWhereInput(),
+        first = Some(batchSize),
+        skip = count * batchSize
+      )(Source.view)
+    )
 
   /**
     * Query all not yet visited urls
@@ -70,7 +94,39 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
     * @return An option onto a list of new urls
     */
   def queryNewUrls(sourceId: String): Option[List[SimpleUrl.SimpleUrlView]] =
-    queryWithHeader(ExtractorQuery.newUrls(sourceId))
+    countNewUrls(sourceId).map { amountOfUrls =>
+      neededBatches(amountOfUrls)
+        .flatMap(batchCount => queryNewUrls(sourceId, batchCount))
+        .flatten
+        .toList
+    }
+
+  /**
+    * Count the amount of urls for a given source
+    *
+    * @param sourceId The given source
+    * @return Optional amount of available new urls
+    */
+  private def countNewUrls(sourceId: String): Option[Int] = queryWithHeader {
+    Query.urlsCount(where = isNewUrl(sourceId))
+  }
+
+  /**
+    * Query the batch given by count.
+    *
+    * @param count The count of batch to get
+    * @return Optional list of view onto new urls of a source
+    */
+  private def queryNewUrls(
+      sourceId: String,
+      count: Int
+  ): Option[List[SimpleUrlView]] = queryWithHeader {
+    Query.allUrls(
+      where = isNewUrl(sourceId),
+      first = Some(batchSize),
+      skip = count * batchSize
+    )(SimpleUrl.view)
+  }
 
   /**
     * Check, if there is a entry with same content hash already available
@@ -85,24 +141,49 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
     ).exists(_ > 0)
 
   /**
+    * Query all existing, matching tags
+    *
+    * @param tags The tags
+    * @return Possibly a result list
+    */
+  def matchingTags(tags: List[String]): Option[List[ArticleTagView]] = {
+    val filter = tagFilter(tags)
+    countExistingTags(filter).map { amountOfMatchingTags =>
+      neededBatches(amountOfMatchingTags)
+        .flatMap(existingTags(filter, _))
+        .flatten
+        .toList
+    }
+  }
+
+  /**
+    * Count the amount of existing tags
+    *
+    * @param tagFilter Filter to identify the tags
+    * @return Option onto tag count
+    */
+  private def countExistingTags(tagFilter: ArticleTagWhereInput): Option[Int] =
+    queryWithHeader {
+      Query.articleTagsCount(where = tagFilter)
+    }
+
+  /**
     * Query all existing tags
     *
-    * @param tags List of tag names, that are of interest
+    * @param tagFilter List of filter statements
+    * @param count     Batch count
     * @return All existing tags
     */
-  def existingTags(tags: Seq[String]): Seq[ArticleTagView] = {
-    val contentFilter = tags.map { tag =>
-      ArticleTagWhereInput(name_i = Some(tag))
-    }
-    queryWithHeader(
-      Query.allArticleTags(
-        where = ArticleTagWhereInput(
-          OR = Option.when(contentFilter.nonEmpty)(contentFilter.toList)
-        ),
-        skip = 0
-      )(ArticleTag.view)
-    ).getOrElse(List.empty)
-  }
+  private def existingTags(
+      tagFilter: ArticleTagWhereInput,
+      count: Int
+  ): Option[List[ArticleTagView]] = queryWithHeader(
+    Query.allArticleTags(
+      where = tagFilter,
+      first = Some(batchSize),
+      skip = count * batchSize
+    )(ArticleTag.view)
+  )
 
   /**
     * Save the entry to data base
@@ -123,29 +204,41 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
     * @param tags Tags to save
     * @return An optional list of matching ids
     */
-  def saveArticleTags(tags: List[String]): Option[List[String]] =
-    Option
-      .when(tags.nonEmpty)(tags)
-      .flatMap { apparentTags =>
-        /* If the list of tags is non empty, build and send mutations */
-        val inputModels = apparentTags.map { tag =>
-          Some(
-            ArticleTagsCreateInput(
-              data = Some(ArticleTagCreateInput(name = Some(tag)))
-            )
-          )
-        }
-        val mutation =
-          Mutation.createArticleTags(data = Some(inputModels))(ArticleTag.id)
-        sendMutationWithHeader(mutation).map { maybeIds =>
-          maybeIds.filter(_.nonEmpty).map(_.get)
-        }
+  def saveArticleTags(tags: List[String]): List[String] =
+    tags
+      .sliding(batchSize)
+      .flatMap { tagBatch =>
+        saveArticleTagBatch(tagBatch).getOrElse(List.empty)
+      }
+      .toList
+
+  /**
+    * Saves a batch of mutations for article tags
+    *
+    * @param tags Tag input
+    * @return Optional list of results
+    */
+  private def saveArticleTagBatch(tags: List[String]): Option[List[String]] = {
+    /* If the list of tags is non empty, build and send mutations */
+    val inputModels = tags.map { tag =>
+      Some(
+        ArticleTagsCreateInput(
+          data = Some(ArticleTagCreateInput(name = Some(tag)))
+        )
+      )
+    }
+    val mutation =
+      Mutation.createArticleTags(data = Some(inputModels))(ArticleTag.id)
+    sendMutationWithHeader(mutation)
+      .map { maybeIds =>
+        maybeIds.filter(_.nonEmpty).map(_.get)
       }
       .flatMap {
         /* If the list of ids is empty, make it a None */
         maybeIds =>
           Option.when(maybeIds.nonEmpty)(maybeIds)
       }
+  }
 
   def updateUrl(urlId: String): Option[String] =
     sendMutationWithHeader(
@@ -252,5 +345,79 @@ class GraphQLHelper(private val apiUri: Uri, private val authSecret: String)
   def close(): Unit = {
     backend.close()
     client.close()
+  }
+}
+
+object GraphQLHelper {
+  private val DUMMY_LAST_CRAWL_DATE_TIME: String = "1970-01-01T00:00:00.000Z"
+
+  private val commonFileEndings = List(
+    /* Documents */
+    ".epub",
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsm",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    ".odt",
+    ".ods",
+    ".zip",
+    ".ics",
+    ".rss",
+    ".rtf",
+    /* Images */
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".svg",
+    ".gif",
+    ".bmp",
+    ".eps",
+    /* Audio / Video */
+    ".wav",
+    ".mp4",
+    ".mp3",
+    ".swf",
+    /* Other stuff */
+    ".srt",
+    ".m4r"
+  )
+
+  private def excludeCommonFiles: List[UrlWhereInput] =
+    commonFileEndings.map(
+      ending => UrlWhereInput(name_not_contains_i = Some(ending))
+    )
+
+  /**
+    * Set up condition for new urls of a given source
+    *
+    * @param sourceId The given source
+    * @return The url restriction model
+    */
+  def isNewUrl(sourceId: String): UrlWhereInput = UrlWhereInput(
+    lastCrawl = Some(DUMMY_LAST_CRAWL_DATE_TIME),
+    AND = Some(
+      excludeCommonFiles ++ List(
+        UrlWhereInput(source = Some(SourceWhereInput(id = Some(sourceId))))
+      )
+    )
+  )
+
+  /**
+    * Build a filter to search for given tags
+    *
+    * @param tags The tags to search for
+    * @return An equivalent filter
+    */
+  def tagFilter(tags: List[String]): ArticleTagWhereInput = {
+    val singleFilters = tags.map { tag =>
+      ArticleTagWhereInput(name_i = Some(tag))
+    }
+    ArticleTagWhereInput(
+      OR = Option.when(singleFilters.nonEmpty)(singleFilters)
+    )
   }
 }

@@ -40,7 +40,8 @@ object DistinctTagHandler {
       case (ctx, ConsolidateArticleTags(contentHash, tags, mutator)) =>
         ctx.log.debug("Attempting to harmonize given tags.")
         /* Check the existing tags */
-        val existingTags = graphQLHelper.existingTags(tags)
+        val existingTags =
+          graphQLHelper.matchingTags(tags).getOrElse(List.empty)
         val existingTagIds = existingTags.map(_.id)
         ctx.log.debug("Found {} yet existing article tags.", existingTags.size)
 
@@ -52,35 +53,20 @@ object DistinctTagHandler {
         }
 
         /* Create tags and make the best of it. */
-        graphQLHelper.saveArticleTags(tagsToCreate) match {
-          case Some(newTagIds) =>
-            if (newTagIds.size != tagsToCreate.size) {
-              ctx.log.warn(
-                "Attempted to save {} new article tags and got {} back. Connect them anyway.",
-                tagsToCreate.size,
-                newTagIds.size
-              )
-            } else
-              ctx.log.debug(
-                "Created {} new article tags. Additionally connect to the {} existing ones.",
-                newTagIds.size,
-                existingTagIds.size
-              )
-
-            mutator ! ConnectToTags(contentHash, existingTagIds ++ newTagIds)
-          case None =>
-            if (tagsToCreate.nonEmpty)
-              ctx.log.warn(
-                "Saving new article tags failed. Only connect to {} yet existing ones.",
-                existingTags.size
-              )
-            else
-              ctx.log.debug(
-                "No need to create new article tag. Connect to {} yet existing ones.",
-                existingTags.size
-              )
-            mutator ! ConnectToTags(contentHash, existingTagIds)
-        }
+        val newTagIds = graphQLHelper.saveArticleTags(tagsToCreate)
+        if (newTagIds.size != tagsToCreate.size) {
+          ctx.log.warn(
+            "Attempted to save {} new article tags and got {} back. Connect them anyway.",
+            tagsToCreate.size,
+            newTagIds.size
+          )
+        } else
+          ctx.log.debug(
+            "Created {} new article tags. Additionally connect to the {} existing ones.",
+            newTagIds.size,
+            existingTagIds.size
+          )
+        mutator ! ConnectToTags(contentHash, existingTagIds ++ newTagIds)
 
         /* No need to change here */
         Behaviors.same
