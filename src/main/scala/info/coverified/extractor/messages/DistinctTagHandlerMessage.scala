@@ -10,8 +10,11 @@ import sttp.model.Uri
 
 sealed trait DistinctTagHandlerMessage
 object DistinctTagHandlerMessage {
-  final case class InitializeDistinctTagHandler(apiUri: Uri, authSecret: String)
-      extends DistinctTagHandlerMessage
+  final case class InitializeDistinctTagHandler(
+      apiUri: Uri,
+      authSecret: String,
+      replyTo: ActorRef[SupervisorMessage]
+  ) extends DistinctTagHandlerMessage
   final case class ConsolidateArticleTags(
       contentHash: Int,
       tags: List[String],

@@ -6,12 +6,12 @@ participant WWW
 collections Mutator
 database API
 
-
 == Initialization ==
 Supervisor -[#blue]> API: //Get sources//
 API -[#blue]> Supervisor
+rnote over Supervisor: //If no sources://\n//Terminate//
 Supervisor -> DistinctTagHandler: Init(...)
-' TODO: Report Back from DistinctTagHandler
+DistinctTagHandler -> Supervisor: DistinctTagHandlerInitialized
 
 Supervisor -> SourceHandler: Init(...)
 SourceHandler -> Mutator: Init(...)

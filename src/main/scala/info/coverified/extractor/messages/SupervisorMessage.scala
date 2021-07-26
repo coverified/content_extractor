@@ -45,6 +45,7 @@ object SupervisorMessage {
     }
   }
 
+  case object DistinctTagHandlerInitialized extends SupervisorMessage
   final case class SourceHandlerInitialized(
       sourceId: String,
       replyTo: ActorRef[SourceHandlerMessage]

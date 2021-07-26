@@ -11,7 +11,7 @@ Supervisor -[#blue]> API: //Get sources//
 API -[#blue]> Supervisor
 rnote over Supervisor: //If no sources://\n//Terminate//
 Supervisor -> DistinctTagHandler: Init(...)
-DistinctTagHandler -[#green]> Supervisor: DistinctTagHandlerInitialized
+DistinctTagHandler -> Supervisor: DistinctTagHandlerInitialized
 
 Supervisor -> SourceHandler: Init(...)
 SourceHandler -> Mutator: Init(...)

@@ -13,6 +13,7 @@ import info.coverified.extractor.messages.DistinctTagHandlerMessage.{
   Terminate
 }
 import info.coverified.extractor.messages.MutatorMessage.ConnectToTags
+import info.coverified.extractor.messages.SupervisorMessage.DistinctTagHandlerInitialized
 import info.coverified.graphql.GraphQLHelper
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   ArticleTagCreateInput,
@@ -26,10 +27,15 @@ object DistinctTagHandler {
   def apply(): Behaviors.Receive[DistinctTagHandlerMessage] = uninitialized
 
   def uninitialized: Behaviors.Receive[DistinctTagHandlerMessage] =
-    Behaviors.receive[DistinctTagHandlerMessage] {
-      case (ctx, InitializeDistinctTagHandler(apiUri, authSecret)) =>
+    Behaviors.receive {
+      case (
+          ctx,
+          InitializeDistinctTagHandler(apiUri, authSecret, supervisor)
+          ) =>
         ctx.log.info("Initializing tag harmonizer.")
-        idle(new GraphQLHelper(apiUri, authSecret))
+        val graphQLHelper = new GraphQLHelper(apiUri, authSecret)
+        supervisor ! DistinctTagHandlerInitialized
+        idle(graphQLHelper)
       case _ => Behaviors.unhandled
     }
 
