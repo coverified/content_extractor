@@ -18,7 +18,8 @@ object MutatorMessage {
       apiUri: Uri,
       authToken: String,
       reAnalysisInterval: Duration,
-      distinctTagHandler: ActorRef[DistinctTagHandlerMessage]
+      distinctTagHandler: ActorRef[DistinctTagHandlerMessage],
+      replyTo: ActorRef[SourceHandlerMessage]
   ) extends MutatorMessage
 
   final case class CreateEntry(

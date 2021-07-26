@@ -22,6 +22,7 @@ import info.coverified.extractor.messages.MutatorMessage.{
   Terminate,
   UpdateUrl
 }
+import info.coverified.extractor.messages.SourceHandlerMessage.MutatorInitialized
 import info.coverified.graphql.GraphQLHelper
 import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
@@ -52,9 +53,16 @@ object Mutator {
     Behaviors.receive[MutatorMessage] {
       case (
           _,
-          InitMutator(apiUri, authToken, reAnalysisInterval, distinctTagHandler)
+          InitMutator(
+            apiUri,
+            authToken,
+            reAnalysisInterval,
+            distinctTagHandler,
+            sourceHandler
+          )
           ) =>
         val helper = new GraphQLHelper(apiUri, authToken)
+        sourceHandler ! MutatorInitialized
         idle(MutatorStateData(helper, reAnalysisInterval, distinctTagHandler))
       case _ => Behaviors.unhandled
     }

@@ -30,6 +30,7 @@ import info.coverified.extractor.messages.{
 import info.coverified.extractor.messages.SourceHandlerMessage.{
   InitSourceHandler,
   MutationsCompleted,
+  MutatorInitialized,
   NewUrlHandledSuccessfully,
   NewUrlHandledWithFailure,
   ReScheduleUrl,
@@ -87,7 +88,8 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           apiUri,
           authSecret,
           reAnalysisInterval,
-          distinctTagHandler
+          distinctTagHandler,
+          context.self
         )
         context.watchWith(mutator, MutationsCompleted)
 
@@ -102,10 +104,27 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           mutator,
           replyTo
         )
-        replyTo ! SourceHandlerInitialized(source.id, context.self)
-        idle(stateData)
+        initializing(stateData)
       case _ => Behaviors.unhandled
     }
+
+  def initializing(
+      stateData: SourceHandlerStateData
+  ): Behaviors.Receive[SourceHandlerMessage] = Behaviors.receive {
+    case (ctx, MutatorInitialized) =>
+      ctx.log.info(
+        "Mutator for source '{}' ('{}') successfully initialized. Start worker pool.",
+        stateData.source.id,
+        stateData.source.name.getOrElse("")
+      )
+      // TODO: Init worker pool
+      stateData.supervisor ! SourceHandlerInitialized(
+        stateData.source.id,
+        ctx.self
+      )
+      idle(stateData)
+    case _ => Behaviors.unhandled
+  }
 
   /**
     * Waiting for anything to do

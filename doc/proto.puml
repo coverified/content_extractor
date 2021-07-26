@@ -15,7 +15,7 @@ DistinctTagHandler -> Supervisor: DistinctTagHandlerInitialized
 
 Supervisor -> SourceHandler: Init(...)
 SourceHandler -> Mutator: Init(...)
-' TODO: Mutator reports back
+Mutator -> SourceHandler: MutatorInitialized
 SourceHandler -> Supervisor: SourceHandlerInitialized(sourceId)
 
 == Handling new urls ==

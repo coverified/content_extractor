@@ -15,10 +15,9 @@ DistinctTagHandler -> Supervisor: DistinctTagHandlerInitialized
 
 Supervisor -> SourceHandler: Init(...)
 SourceHandler -> Mutator: Init(...)
-Mutator -[#green]> SourceHandler: MutatorInitialized
+Mutator -> SourceHandler: MutatorInitialized
 SourceHandler -[#green]-> UrlHandler: //Start pool//
 SourceHandler -[#green]> UrlHandler: Init(...) //- Broadcast//
-UrlHandler -[#green]> SourceHandler: UrlHandlerInitialized
 SourceHandler -> Supervisor: SourceHandlerInitialized(sourceId)
 
 == Handling new urls ==

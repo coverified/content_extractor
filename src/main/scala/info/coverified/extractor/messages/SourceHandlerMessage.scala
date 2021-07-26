@@ -29,6 +29,8 @@ object SourceHandlerMessage {
       replyTo: ActorRef[SupervisorMessage]
   ) extends SourceHandlerMessage
 
+  object MutatorInitialized extends SourceHandlerMessage
+
   final case class Run(replyTo: ActorRef[SupervisorMessage])
       extends SourceHandlerMessage
 
