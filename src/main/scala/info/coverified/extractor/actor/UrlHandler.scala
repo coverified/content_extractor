@@ -46,21 +46,21 @@ class UrlHandler {
         Analyzer.run(url, pageProfile) match {
           case Success(rawEntryInformation) =>
             context.log.debug("Visiting of web site '{}' successful.", url)
-            sourceHandler ! NewUrlHandledSuccessfully(url)
             mutator ! CreateEntry(
               CreateEntryInformation(rawEntryInformation),
               urlId,
               sourceHandler
             )
             mutator ! UpdateUrl(urlId, sourceHandler)
+            sourceHandler ! NewUrlHandledSuccessfully(url)
             Behaviors.same
           case Failure(exception) =>
             context.log.error(
               "Error during visit of web site '{}'. Report to my source handler.",
               url
             )
-            sourceHandler ! NewUrlHandledWithFailure(url, urlId, exception)
             mutator ! UpdateUrl(urlId, sourceHandler)
+            sourceHandler ! NewUrlHandledWithFailure(url, urlId, exception)
             Behaviors.same
         }
       case _ => Behaviors.unhandled

@@ -3,15 +3,29 @@ participant Supervisor
 collections SourceHandler
 collections UrlHandler
 participant WWW
-participant Mutator
+collections Mutator
 database API
 
 
-Supervisor -> SourceHandler: Init(...)
-SourceHandler -> Supervisor: SourceHandlerInitialized(sourceId)
-Supervisor -> SourceHandler: Run
+== Initialization ==
+Supervisor -[#blue]> API: //Get sources//
+API -[#blue]> Supervisor
+Supervisor -> DistinctTagHandler: Init(...)
+' TODO: Report Back from DistinctTagHandler
 
-SourceHandler -> DistinctTagHandler: Init(...)
+Supervisor -> SourceHandler: Init(...)
+SourceHandler -> Mutator: Init(...)
+' TODO: Mutator reports back
+SourceHandler -> Supervisor: SourceHandlerInitialized(sourceId)
+
+== Handling new urls ==
+Supervisor -> SourceHandler: Run(...)
+SourceHandler -[#blue]> API: //Get new urls//
+' TODO: Report back, if there are no new urls to handle
+API -[#blue]> SourceHandler
+SourceHandler --> UrlHandler: //Start pool//
+SourceHandler -> UrlHandler: Init(...) //- Broadcast//
+' TODO: Report back from url handlers
 
 loop
 SourceHandler -> UrlHandler: HandleNewUrl(...)
@@ -20,16 +34,26 @@ WWW -> UrlHandler: HTMLContent
 
 UrlHandler -> Mutator: CreateEntry(...)
 Mutator -> DistinctTagHandler: ConsolidateArticleTags(...)
+DistinctTagHandler -[#blue]> API: //Get matching tags//
+API -[#blue]> DistinctTagHandler
 DistinctTagHandler -> Mutator: ConnectToArticleTags(...)
-Mutator -> API: Mutation(...)
-API -> Mutator: Result(...)
-UrlHandler -> SourceHandler: NewUrlHandledSuccessfully(...)
-UrlHandler -> SourceHandler: //NewUrlHandledWithFailure()//
+Mutator -[#blue]> API: //Save entry//
+API -[#blue]> Mutator
+' TODO: Feed back about handled entry
+UrlHandler -> Mutator: UpdateUrl(...)
+Mutator -[#blue]> API: //Update url//
+API -[#blue]> Mutator
+' TODO: Feed back about handled url
+UrlHandler -> SourceHandler: NewUrlHandledSuccessfully(...)\n//NewUrlHandledWithFailure(...)//
 
-SourceHandler -> SourceHandler: Option[ReScheduleUrl(...)]
+SourceHandler -> SourceHandler: //If rate limit exceeded://\nReScheduleUrl(...)
 end loop
 
-== All new urls are handled ==
+rnote over SourceHandler
+    All urls are handled
+endrnote
+
+== Shutdown ==
 
 SourceHandler --> UrlHandler: //terminates pool//
 SourceHandler -> Mutator: Terminate
@@ -39,7 +63,9 @@ Mutator --> SourceHandler: //Death watch//
 
 SourceHandler -> Supervisor:SourceHandled(...)
 
-== All sources are handled ==
+rnote over Supervisor
+    All sources are handled
+endrnote
 Supervisor -> DistinctTagHandler: Terminate
 DistinctTagHandler --> Supervisor: //Death watch//
 

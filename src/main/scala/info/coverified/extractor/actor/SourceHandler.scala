@@ -210,18 +210,15 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
   private def shutdown(
       stateData: SourceHandlerStateData
   ): Behaviors.Receive[SourceHandlerMessage] = Behaviors.receive {
-    case (ctx, msg) =>
-      msg match {
-        case MutationsCompleted =>
-          ctx.log.info(s"Mutator terminated! Shutting down SourceHandler ...")
-          stateData.supervisor ! SourceHandled(stateData.source.id)
-          Behaviors.stopped
-        case invalid =>
-          ctx.log.error(
-            s"Invalid message received during shutdown process: '$invalid"
-          )
-          Behaviors.same
-      }
+    case (ctx, MutationsCompleted) =>
+      ctx.log.info(s"Mutator terminated! Shutting down SourceHandler ...")
+      stateData.supervisor ! SourceHandled(stateData.source.id)
+      Behaviors.stopped
+    case (ctx, invalid) =>
+      ctx.log.error(
+        s"Invalid message received during shutdown process: '$invalid"
+      )
+      Behaviors.same
   }
 
   /**
@@ -257,7 +254,8 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           case httpException: HttpStatusException
               if httpException.getStatusCode == 403 =>
             context.log.warn(
-              "The url '{}' replied, that the rate limit is exceeded (HTTP Status 403). Consider adapting configuration, especially the rate limit. Will re-schedule the visit of this url in {} s.",
+              "The url '{}' replied, that the rate limit is exceeded (HTTP Status 403). Consider adapting " +
+                "configuration, especially the rate limit. Will re-schedule the visit of this url in {} s.",
               url,
               stateData.repeatDelay.toMillis / 1000
             )
