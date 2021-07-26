@@ -36,8 +36,6 @@ object Analyzer extends LazyLogging {
   private val ISO_DATE_TIME_PATTERN = "yyyy-MM-dd'T'HH:mm:ssXXX"
   private val TARGET_TIME_ZONE = ZoneId.of("UTC")
 
-  private val TAG_SPLIT_REGEX = "[,;|]"
-
   def run(
       url: String,
       cfg: ProfileConfig
@@ -163,15 +161,6 @@ object Analyzer extends LazyLogging {
         selectors.date.flatMap(extractDate(pageDoc, _, url)),
         selectors.tags
           .flatMap(pageDoc >?> texts(_))
-          .map {
-            /* Split tags at common delimiters */
-            results =>
-              results.flatMap { result =>
-                result
-                  .split(TAG_SPLIT_REGEX)
-                  .map("^ +| +$".r.replaceAllIn(_, ""))
-              }
-          }
           .flatMap(tags => Option.when(tags.nonEmpty)(tags.toList))
       )
     } match {
