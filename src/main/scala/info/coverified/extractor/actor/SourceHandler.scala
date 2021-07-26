@@ -5,7 +5,7 @@
 
 package info.coverified.extractor.actor
 
-import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy, Terminated}
+import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
 import akka.actor.typed.scaladsl.{
   ActorContext,
   Behaviors,
@@ -28,17 +28,18 @@ import info.coverified.extractor.messages.{
   UrlHandlerMessage
 }
 import info.coverified.extractor.messages.SourceHandlerMessage.{
+  HandleNewUrls,
   InitSourceHandler,
   MutationsCompleted,
   MutatorInitialized,
   NewUrlHandledSuccessfully,
   NewUrlHandledWithFailure,
-  ReScheduleUrl,
-  HandleNewUrls
+  ReScheduleUrl
 }
 import info.coverified.extractor.messages.SupervisorMessage.{
   NewUrlsHandled,
-  SourceHandlerInitialized
+  SourceHandlerInitialized,
+  SourceHandlerTerminated
 }
 import info.coverified.extractor.messages.UrlHandlerMessage.{
   HandleNewUrl,
@@ -162,8 +163,6 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
   ): Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
       case (context, HandleNewUrls(replyTo)) =>
-        context.log.info("Got asked to start activity.")
-
         context.log.info(
           "Start to analyse new, not yet visited urls for source '{}' ('{}').",
           stateData.source.id,
@@ -176,10 +175,15 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         graphQLHelper.close()
         maybeUrls match {
           case Some(newUrls) if newUrls.isEmpty =>
-            context.log.info("Found no new urls.")
-            // TODO Change over to handling existing urls
-            stateData.mutator ! Terminate
-            shutdown(stateData)
+            context.log.info(
+              "Found no new urls. Report back to supervisor, that all new urls are handled."
+            )
+            stateData.supervisor ! NewUrlsHandled(
+              stateData.source.id,
+              context.self
+            )
+            /* Stay in idle and wait for termination message */
+            Behaviors.same
           case Some(newUrls) =>
             context.log.info(
               "Found {} not yet visited urls for source '{}' ('{}')",
@@ -220,9 +224,20 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
             context.log.error(
               "Received malformed reply when requesting new urls."
             )
-            stateData.mutator ! Terminate
-            shutdown(stateData)
+            stateData.supervisor ! NewUrlsHandled(
+              stateData.source.id,
+              context.self
+            )
+            Behaviors.same
         }
+      case (ctx, SourceHandlerMessage.Terminate) =>
+        ctx.log.info(
+          "Termination requested for source handler '{}'. Shut down mutator and worker pool.",
+          stateData.source.id
+        )
+        ctx.stop(workerPoolProxy)
+        stateData.mutator ! Terminate
+        shutdown(stateData)
       case _ => Behaviors.unhandled
     }
 
@@ -230,8 +245,12 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       stateData: SourceHandlerStateData
   ): Behaviors.Receive[SourceHandlerMessage] = Behaviors.receive {
     case (ctx, MutationsCompleted) =>
-      ctx.log.info(s"Mutator terminated! Shutting down SourceHandler ...")
-      stateData.supervisor ! NewUrlsHandled(stateData.source.id)
+      ctx.log.info(
+        s"Mutator terminated! Shutting down SourceHandler for '{}' ('{}').",
+        stateData.source.id,
+        stateData.source.name.getOrElse("")
+      )
+      stateData.supervisor ! SourceHandlerTerminated(stateData.source.id)
       Behaviors.stopped
     case (ctx, invalid) =>
       ctx.log.error(
@@ -376,13 +395,16 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           )
         case None =>
           context.log.info(
-            "All new urls of source '{}' ('{}') are handled. Shut down workers and myself.",
+            "All new urls of source '{}' ('{}') are handled. Report to supervisor.",
             stateData.source.id,
             stateData.source.name.getOrElse("")
           )
-          context.stop(workerPoolProxy)
-          stateData.mutator ! Terminate
-          shutdown(stateData)
+          stateData.supervisor ! NewUrlsHandled(
+            stateData.source.id,
+            context.self
+          )
+          /* Change to idle and wait for termination message */
+          idle(stateData, workerPoolProxy)
       }
     } else if (urlToActivation.nonEmpty) {
       context.log.info(
@@ -405,13 +427,13 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       )
     } else {
       context.log.info(
-        "All new urls of source '{}' ('{}') are handled. Shut down workers and myself.",
+        "All new urls of source '{}' ('{}') are handled. Report to supervisor.",
         stateData.source.id,
         stateData.source.name.getOrElse("")
       )
-      context.stop(workerPoolProxy)
-      stateData.mutator ! Terminate
-      shutdown(stateData)
+      stateData.supervisor ! NewUrlsHandled(stateData.source.id, context.self)
+      /* Change to idle and wait for termination message */
+      idle(stateData, workerPoolProxy)
     }
 
   /**

@@ -56,7 +56,13 @@ object SupervisorMessage {
     *
     * @param sourceId Identifier of the source
     */
-  final case class NewUrlsHandled(sourceId: String) extends SupervisorMessage
+  final case class NewUrlsHandled(
+      sourceId: String,
+      replyTo: ActorRef[SourceHandlerMessage]
+  ) extends SupervisorMessage
+
+  final case class SourceHandlerTerminated(sourceId: String)
+      extends SupervisorMessage
 
   object DistinctTagHandlerTerminated extends SupervisorMessage
 }

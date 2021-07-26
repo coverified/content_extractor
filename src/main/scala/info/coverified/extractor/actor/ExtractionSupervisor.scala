@@ -14,8 +14,8 @@ import info.coverified.extractor.messages.DistinctTagHandlerMessage.{
   Terminate
 }
 import info.coverified.extractor.messages.SourceHandlerMessage.{
-  InitSourceHandler,
-  HandleNewUrls
+  HandleNewUrls,
+  InitSourceHandler
 }
 import info.coverified.extractor.messages.{
   DistinctTagHandlerMessage,
@@ -27,7 +27,8 @@ import info.coverified.extractor.messages.SupervisorMessage.{
   DistinctTagHandlerTerminated,
   InitSupervisor,
   NewUrlsHandled,
-  SourceHandlerInitialized
+  SourceHandlerInitialized,
+  SourceHandlerTerminated
 }
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.GraphQLHelper
@@ -200,20 +201,28 @@ object ExtractionSupervisor {
       initializedSources: Map[String, ActorRef[SourceHandlerMessage]],
       activeSources: Map[String, ActorRef[SourceHandlerMessage]]
   ): Receive[SupervisorMessage] = Behaviors.receive[SupervisorMessage] {
-    case (context, NewUrlsHandled(sourceId)) =>
-      context.log
-        .debug("Handler for source '{}' reported to have finished.", sourceId)
+    case (ctx, NewUrlsHandled(sourceId, sourceHandler)) =>
+      ctx.log.info(
+        "All new urls of source '{}' are handled. Initiate shut down.",
+        sourceId
+      )
+      // TODO: Implement actual routine!
+      sourceHandler ! SourceHandlerMessage.Terminate
+      Behaviors.same
+    case (ctx, SourceHandlerTerminated(sourceId)) =>
+      ctx.log
+        .debug("Handler for source '{}' reported to have terminated.", sourceId)
       val stillActiveSources = activeSources.filterNot {
         case (key, _) => key == sourceId
       }
       if (stillActiveSources.nonEmpty) {
-        context.log.debug(
-          "Still waiting for the following sources to terminate:\n\t{}",
+        ctx.log.debug(
+          "Still active sources:\n\t{}",
           stillActiveSources.mkString("\n\t")
         )
         handleSourceResponses(stateData, initializedSources, stillActiveSources)
       } else {
-        context.log.info(
+        ctx.log.info(
           "All sources have reported to have finished. Shut down the distinct tag handler."
         )
         stateData.distinctTagHandler ! Terminate

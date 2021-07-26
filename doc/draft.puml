@@ -24,7 +24,7 @@ SourceHandler -> Supervisor: SourceHandlerInitialized(sourceId)
 Supervisor -> SourceHandler: HandleNewUrls(...)
 SourceHandler -[#blue]> API: //Get new urls//
 API -[#blue]> SourceHandler
-SourceHandler -[#green]> Supervisor: //If no urls://\nNewUrlsHandled(...)
+SourceHandler -> Supervisor: //If no urls://\nNewUrlsHandled(...)
 
 loop
 SourceHandler -> UrlHandler: HandleNewUrl(...)
@@ -97,14 +97,14 @@ SourceHandler -[#green]> Supervisor: ExistingUrlsHandled(...)
 
 == Shutdown ==
 
-Supervisor -[#green]> SourceHandler: Terminate(...)
+Supervisor -> SourceHandler: Terminate
 SourceHandler --> UrlHandler: //terminates pool//
 SourceHandler -> Mutator: Terminate
 Mutator -> Mutator: Terminate\n//Wait until all//\n//tag requests//\n//are answered.//
 ...
 Mutator --> SourceHandler: //Death watch//
 
-SourceHandler -[#green]> Supervisor:Terminated(...)
+SourceHandler -> Supervisor:SourceHandlerTerminated(...)
 
 rnote over Supervisor
     All sources are handled

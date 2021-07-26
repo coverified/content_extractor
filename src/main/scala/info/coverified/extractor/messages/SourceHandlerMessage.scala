@@ -50,4 +50,6 @@ object SourceHandlerMessage {
       extends SourceHandlerMessage
 
   final case object MutationsCompleted extends SourceHandlerMessage
+
+  object Terminate extends SourceHandlerMessage
 }
