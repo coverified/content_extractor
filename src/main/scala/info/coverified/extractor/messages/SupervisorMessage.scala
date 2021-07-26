@@ -52,11 +52,11 @@ object SupervisorMessage {
   ) extends SupervisorMessage
 
   /**
-    * Message indicates, that a certain source has been treated
+    * Report back, that the new urls have been handled
     *
     * @param sourceId Identifier of the source
     */
-  final case class SourceHandled(sourceId: String) extends SupervisorMessage
+  final case class NewUrlsHandled(sourceId: String) extends SupervisorMessage
 
   object DistinctTagHandlerTerminated extends SupervisorMessage
 }

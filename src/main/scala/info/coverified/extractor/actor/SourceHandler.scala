@@ -34,10 +34,10 @@ import info.coverified.extractor.messages.SourceHandlerMessage.{
   NewUrlHandledSuccessfully,
   NewUrlHandledWithFailure,
   ReScheduleUrl,
-  Run
+  HandleNewUrls
 }
 import info.coverified.extractor.messages.SupervisorMessage.{
-  SourceHandled,
+  NewUrlsHandled,
   SourceHandlerInitialized
 }
 import info.coverified.extractor.messages.UrlHandlerMessage.{
@@ -161,7 +161,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       workerPoolProxy: ActorRef[UrlHandlerMessage]
   ): Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
-      case (context, Run(replyTo)) =>
+      case (context, HandleNewUrls(replyTo)) =>
         context.log.info("Got asked to start activity.")
 
         context.log.info(
@@ -231,7 +231,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
   ): Behaviors.Receive[SourceHandlerMessage] = Behaviors.receive {
     case (ctx, MutationsCompleted) =>
       ctx.log.info(s"Mutator terminated! Shutting down SourceHandler ...")
-      stateData.supervisor ! SourceHandled(stateData.source.id)
+      stateData.supervisor ! NewUrlsHandled(stateData.source.id)
       Behaviors.stopped
     case (ctx, invalid) =>
       ctx.log.error(

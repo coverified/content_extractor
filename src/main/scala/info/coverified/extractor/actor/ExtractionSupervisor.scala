@@ -15,7 +15,7 @@ import info.coverified.extractor.messages.DistinctTagHandlerMessage.{
 }
 import info.coverified.extractor.messages.SourceHandlerMessage.{
   InitSourceHandler,
-  Run
+  HandleNewUrls
 }
 import info.coverified.extractor.messages.{
   DistinctTagHandlerMessage,
@@ -26,7 +26,7 @@ import info.coverified.extractor.messages.SupervisorMessage.{
   DistinctTagHandlerInitialized,
   DistinctTagHandlerTerminated,
   InitSupervisor,
-  SourceHandled,
+  NewUrlsHandled,
   SourceHandlerInitialized
 }
 import info.coverified.extractor.profile.ProfileConfig
@@ -163,7 +163,7 @@ object ExtractionSupervisor {
         )
       } else {
         ctx.log.debug("All source handlers initialized. Trigger them to start!")
-        newActiveSource.values.foreach(_ ! Run(ctx.self))
+        newActiveSource.values.foreach(_ ! HandleNewUrls(ctx.self))
 
         val stateData = ExtractorStateData(
           initStateData.reAnalysisInterval,
@@ -200,7 +200,7 @@ object ExtractionSupervisor {
       initializedSources: Map[String, ActorRef[SourceHandlerMessage]],
       activeSources: Map[String, ActorRef[SourceHandlerMessage]]
   ): Receive[SupervisorMessage] = Behaviors.receive[SupervisorMessage] {
-    case (context, SourceHandled(sourceId)) =>
+    case (context, NewUrlsHandled(sourceId)) =>
       context.log
         .debug("Handler for source '{}' reported to have finished.", sourceId)
       val stillActiveSources = activeSources.filterNot {

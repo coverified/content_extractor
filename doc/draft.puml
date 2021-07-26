@@ -21,7 +21,7 @@ SourceHandler -> UrlHandler: Init(...) //- Broadcast//
 SourceHandler -> Supervisor: SourceHandlerInitialized(sourceId)
 
 == Handling new urls ==
-Supervisor -[#green]> SourceHandler: HandleNewUrls(...)
+Supervisor -> SourceHandler: HandleNewUrls(...)
 SourceHandler -[#blue]> API: //Get new urls//
 API -[#blue]> SourceHandler
 SourceHandler -[#green]> Supervisor: //If no urls://\nNewUrlsHandled(...)
@@ -53,7 +53,7 @@ rnote over SourceHandler
     All urls are handled
 endrnote
 
-SourceHandler -[#green]> Supervisor: NewUrlsHandled(...)
+SourceHandler -> Supervisor: NewUrlsHandled(...)
 
 == Handle existing urls ==
 

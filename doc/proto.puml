@@ -2,7 +2,7 @@
 participant Supervisor
 collections SourceHandler
 collections UrlHandler
-participant WWW
+database WWW
 collections Mutator
 database API
 
@@ -21,7 +21,7 @@ SourceHandler -> UrlHandler: Init(...) //- Broadcast//
 SourceHandler -> Supervisor: SourceHandlerInitialized(sourceId)
 
 == Handling new urls ==
-Supervisor -> SourceHandler: Run(...)
+Supervisor -> SourceHandler: HandleNewUrls(...)
 SourceHandler -[#blue]> API: //Get new urls//
 ' TODO: Report back, if there are no new urls to handle
 API -[#blue]> SourceHandler
@@ -31,8 +31,8 @@ SourceHandler -> UrlHandler: Init(...) //- Broadcast//
 
 loop
 SourceHandler -> UrlHandler: HandleNewUrl(...)
-UrlHandler -> WWW: RequestHTMLContent
-WWW -> UrlHandler: HTMLContent
+UrlHandler -[#blue]> WWW: RequestHTMLContent
+WWW -[#blue]> UrlHandler: HTMLContent
 
 UrlHandler -> Mutator: CreateEntry(...)
 Mutator -> DistinctTagHandler: ConsolidateArticleTags(...)
@@ -63,7 +63,7 @@ Mutator -> Mutator: Terminate\n//Wait until all//\n//tag requests//\n//are answe
 ...
 Mutator --> SourceHandler: //Death watch//
 
-SourceHandler -> Supervisor:SourceHandled(...)
+SourceHandler -> Supervisor:NewUrlsHandled(...)
 
 rnote over Supervisor
     All sources are handled

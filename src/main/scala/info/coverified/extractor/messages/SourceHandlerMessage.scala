@@ -31,9 +31,12 @@ object SourceHandlerMessage {
 
   object MutatorInitialized extends SourceHandlerMessage
 
-  final case class Run(replyTo: ActorRef[SupervisorMessage])
+  final case class HandleNewUrls(replyTo: ActorRef[SupervisorMessage])
       extends SourceHandlerMessage
 
+  /**
+    * Get report about _single_ handled urls from [[UrlHandlerMessage]]
+    */
   sealed trait NewUrlHandledMessage extends SourceHandlerMessage
   final case class NewUrlHandledSuccessfully(url: String)
       extends NewUrlHandledMessage
