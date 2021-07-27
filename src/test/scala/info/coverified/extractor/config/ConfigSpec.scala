@@ -6,69 +6,58 @@
 package info.coverified.extractor.config
 
 import info.coverified.extractor.ArgsParser.Args
-import info.coverified.extractor.exceptions.ConfigException
 import info.coverified.test.scalatest.UnitSpec
 import org.scalatest.Inside.inside
 import sttp.client3.UriContext
 
-import java.time.Duration
+import java.time.{Duration, ZoneId}
 import scala.util.{Failure, Success}
 
 class ConfigSpec extends UnitSpec {
   "A content extractor configuration" when {
     "parsed from CLI arguments" should {
-      "fail on missing entries" in {
-        val maliciousArgs = Table(
-          "args",
-          Args(None, None, None, None),
-          Args(Some("foo"), None, None, None),
-          Args(None, Some("bar"), None, None),
-          Args(None, None, Some(42), None),
-          Args(None, None, None, Some("baz"))
-        )
-
-        forAll(maliciousArgs) { args =>
-          Config.fromArgs(args) match {
-            case Failure(ConfigException(msg, _)) =>
-              msg shouldBe "Cannot build config from args, as some parameter is missing."
-            case Failure(exception) =>
-              fail(s"Parsing failed with wrong exception '$exception'.")
-            case Success(value) =>
-              fail(s"Parsing delivered '$value', although it was meant to fail")
-          }
-        }
-      }
-
       "deliver proper config on proper input" in {
         inside(
           Config
             .fromArgs(
               Args(
-                Some("foo"),
-                Some("bar"),
-                Some(48),
-                Some("secret"),
-                Some(1000),
-                Some(900)
+                "https://www.coverified.info",
+                "authSecret",
+                "in/some/directory",
+                Some(36),
+                Some(200),
+                Some(20),
+                Some("userAgent"),
+                Some(90),
+                Some("yyyy"),
+                Some("Europe/Berlin")
               )
             )
         ) {
           case Success(
               Config(
+                userAgent,
+                browseTimeout,
+                targetDateTimePattern,
+                targetTimeZone,
                 apiUri,
+                authSecret,
                 profileDirectoryPath,
                 reAnalysisInterval,
-                authSecret,
-                chunkSize,
+                workerPoolSize,
                 repeatDelay
               )
               ) =>
-            apiUri shouldBe uri"foo"
-            profileDirectoryPath shouldBe "bar"
-            reAnalysisInterval shouldBe Duration.ofHours(48L)
-            authSecret shouldBe "secret"
-            chunkSize shouldBe 1000
-            repeatDelay shouldBe Duration.ofSeconds(900)
+            userAgent shouldBe "userAgent"
+            browseTimeout shouldBe Duration.ofSeconds(90L)
+            targetDateTimePattern shouldBe "yyyy"
+            targetTimeZone shouldBe ZoneId.of("Europe/Berlin")
+            apiUri shouldBe uri"https://www.coverified.info"
+            authSecret shouldBe "authSecret"
+            profileDirectoryPath shouldBe "in/some/directory"
+            reAnalysisInterval shouldBe Duration.ofHours(36L)
+            workerPoolSize shouldBe 200
+            repeatDelay shouldBe Duration.ofSeconds(20L)
           case Failure(exception) =>
             fail(
               s"Parsing was meant to pass, but failed with exception '$exception'."
@@ -82,22 +71,30 @@ class ConfigSpec extends UnitSpec {
         inside(Config.fromEnv()) {
           case Success(
               Config(
+                userAgent,
+                browseTimeout,
+                targetDateTimePattern,
+                targetTimeZone,
                 apiUri,
+                authSecret,
                 profileDirectoryPath,
                 reAnalysisInterval,
-                authSecret,
-                chunkSize,
+                workerPoolSize,
                 repeatDelay
               )
               ) =>
             /* The values expected here, have to placed within the environment during the build CI-stage.
              * Cf. .gitlab-ci.yml file in root directory */
+            userAgent shouldBe "userAgent"
+            browseTimeout shouldBe Duration.ofSeconds(90L)
+            targetDateTimePattern shouldBe "yyyy"
+            targetTimeZone shouldBe ZoneId.of("Europe/Berlin")
             apiUri shouldBe uri"https://www.coverified.info"
+            authSecret shouldBe "authSecret"
             profileDirectoryPath shouldBe "in/some/directory"
-            reAnalysisInterval shouldBe Duration.ofHours(48L)
-            authSecret shouldBe "thisIsSecret"
-            chunkSize shouldBe 1000
-            repeatDelay shouldBe Duration.ofSeconds(900)
+            reAnalysisInterval shouldBe Duration.ofHours(36L)
+            workerPoolSize shouldBe 200
+            repeatDelay shouldBe Duration.ofSeconds(20L)
           case Failure(exception) =>
             fail(
               "Parsing config from environment variables was meant to succeed, but failed.",
