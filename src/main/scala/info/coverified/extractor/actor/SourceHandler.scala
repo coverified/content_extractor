@@ -54,7 +54,6 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import org.jsoup.HttpStatusException
 import org.slf4j.Logger
-import sttp.model.Uri
 
 import java.time.{Duration, ZoneId}
 import scala.annotation.tailrec
@@ -188,9 +187,20 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         )
         /* Determine all new urls */
         stateData.graphQLHelper.queryNewUrls(stateData.source.id) match {
+          case None =>
+            context.log.error(
+              "Received malformed reply when requesting new urls."
+            )
+            stateData.supervisor ! NewUrlsHandled(
+              stateData.source.id,
+              context.self
+            )
+            Behaviors.same
           case Some(newUrls) if newUrls.isEmpty =>
             context.log.info(
-              "Found no new urls. Report back to supervisor, that all new urls are handled."
+              "Found no new urls for source '{}' ({}). Report back to supervisor, that all new urls are handled.",
+              stateData.source.name.getOrElse(""),
+              stateData.source.id
             )
             stateData.supervisor ! NewUrlsHandled(
               stateData.source.id,
@@ -200,7 +210,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
             Behaviors.same
           case Some(newUrls) =>
             context.log.info(
-              "Found {} not yet visited urls for source '{}' ('{}')",
+              "Found {} not yet visited urls for source '{}' ({}).",
               newUrls.size,
               stateData.source.id,
               stateData.source.name.getOrElse("")
@@ -234,15 +244,6 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
               workerPoolProxy,
               replyTo
             )
-          case None =>
-            context.log.error(
-              "Received malformed reply when requesting new urls."
-            )
-            stateData.supervisor ! NewUrlsHandled(
-              stateData.source.id,
-              context.self
-            )
-            Behaviors.same
         }
       case (ctx, HandleExistingUrls(replyTo)) =>
         ctx.log.info(
@@ -250,9 +251,80 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           stateData.source.name.getOrElse(""),
           stateData.source.id
         )
-        // TODO: Implement routine
-        replyTo ! ExistingUrlsHandled(stateData.source.id, ctx.self)
-        Behaviors.same
+
+        /* Get relevant information from API */
+        stateData.graphQLHelper.queryExistingUrls(
+          stateData.source.id,
+          stateData.reAnalysisInterval
+        ) match {
+          case None =>
+            ctx.log.error(
+              "Received empty reply from API when requesting urls for re-analysis in source '{}' ({}). Report, that all urls to be re-analyzed are handled.",
+              stateData.source.name.getOrElse(""),
+              stateData.source.id
+            )
+            stateData.supervisor ! ExistingUrlsHandled(
+              stateData.source.id,
+              ctx.self
+            )
+            Behaviors.same
+          case Some(relevantUrls) if relevantUrls.isEmpty =>
+            ctx.log.info(
+              "No existing urls to handle for source '{}' ({}). Report back to supervisor, that all urls to be re-analysed are handled.",
+              stateData.source.name.getOrElse(""),
+              stateData.source.id
+            )
+            stateData.supervisor ! ExistingUrlsHandled(
+              stateData.source.id,
+              ctx.self
+            )
+            Behaviors.same
+          case Some(relevantUrls) =>
+            ctx.log.debug(
+              "Found {} urls to be re-analyzed for source '{}' ({}). Query matching entries.",
+              relevantUrls.size,
+              stateData.source.id,
+              stateData.source.name.getOrElse("")
+            )
+
+            val urlIds = relevantUrls.map(_.id)
+            stateData.graphQLHelper.queryMatchingEntries(urlIds) match {
+              case Some(matchingEntries) =>
+                ctx.log.info(
+                  "Found {} urls to be re-analyzed for source '{}' ({}). {} of them already have an entry available.",
+                  relevantUrls.size,
+                  stateData.source.id,
+                  stateData.source.name.getOrElse(""),
+                  matchingEntries.size
+                )
+
+                /* "Zip" urls and entries and sort them accordingly. */
+                val urlToEntry = relevantUrls.map { url =>
+                  /* Try to find a matching entry for this url */
+                  url -> matchingEntries.find { entry =>
+                    /* Entry matches, if the related url has the queried id */
+                    entry.url.exists(_.id == url.id)
+                  }
+                }
+
+                /* TODO: Handle accordingly */
+                replyTo ! ExistingUrlsHandled(stateData.source.id, ctx.self)
+                Behaviors.same
+              case None =>
+                ctx.log.error(
+                  "Received empty reply from API when requesting matching entries for yet visited urls in source " +
+                    "'{}' ({}). Report, that all urls to be re-analyzed are handled.",
+                  stateData.source.name.getOrElse(""),
+                  stateData.source.id
+                )
+                stateData.supervisor ! ExistingUrlsHandled(
+                  stateData.source.id,
+                  ctx.self
+                )
+                Behaviors.same
+            }
+        }
+
       case (ctx, SourceHandlerMessage.Terminate) =>
         ctx.log.info(
           "Termination requested for source handler '{}'. Shut down mutator and worker pool.",

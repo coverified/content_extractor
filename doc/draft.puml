@@ -57,10 +57,10 @@ SourceHandler -> Supervisor: NewUrlsHandled(...)
 
 == Handle existing urls ==
 
-Supervisor -[#green]> SourceHandler: HandleExistingUrls(...)
+Supervisor -> SourceHandler: HandleExistingUrls(...)
 SourceHandler -[#blue]> API: //Get existing urls//
 API -[#blue]> SourceHandler: //Get existing urls//
-SourceHandler -[#green]> Supervisor: //If no existing urls://\nExistingUrlsHandled(...)
+SourceHandler -> Supervisor: //If no existing urls://\nExistingUrlsHandled(...)
 SourceHandler -[#blue]> API: //Get matching entries//
 API -[#blue]> SourceHandler: //Get matching entries//
 
@@ -93,7 +93,7 @@ rnote over SourceHandler
     All existing urls handled
 endrnote
 
-SourceHandler -[#green]> Supervisor: ExistingUrlsHandled(...)
+SourceHandler -> Supervisor: ExistingUrlsHandled(...)
 
 == Shutdown ==
 
@@ -107,7 +107,7 @@ Mutator --> SourceHandler: //Death watch//
 SourceHandler -> Supervisor:SourceHandlerTerminated(...)
 
 rnote over Supervisor
-    All sources are handled
+    All sources have terminated
 endrnote
 Supervisor -> DistinctTagHandler: Terminate
 DistinctTagHandler --> Supervisor: //Death watch//

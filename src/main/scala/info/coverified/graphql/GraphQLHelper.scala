@@ -8,13 +8,18 @@ package info.coverified.graphql
 import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.SelectionBuilder
 import com.typesafe.scalalogging.LazyLogging
-import info.coverified.graphql.GraphQLHelper.{isNewUrl, tagFilter}
+import info.coverified.graphql.GraphQLHelper.{
+  isNewUrl,
+  needsReAnalysis,
+  tagFilter
+}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   ArticleTag,
   ArticleTagCreateInput,
   ArticleTagWhereInput,
   ArticleTagsCreateInput,
+  EntryWhereInput,
   Mutation,
   Query,
   Source,
@@ -25,7 +30,8 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
 }
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
-import info.coverified.graphql.schema.SimpleUrl
+import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
+
 import org.asynchttpclient.DefaultAsyncHttpClient
 import sttp.capabilities.zio.ZioStreams
 import sttp.client3.SttpBackend
@@ -34,7 +40,7 @@ import sttp.model.Uri
 import zio.{Task, ZIO}
 
 import java.time.format.DateTimeFormatter
-import java.time.{ZoneId, ZonedDateTime}
+import java.time.{Duration, ZoneId, ZonedDateTime}
 
 class GraphQLHelper(
     private val apiUri: Uri,
@@ -126,6 +132,134 @@ class GraphQLHelper(
       first = Some(batchSize),
       skip = count * batchSize
     )(SimpleUrl.view)
+  }
+
+  /**
+    * Query all existing urls, that need to be re-analysed, as the re-analysis interval has expired since last visit.
+    *
+    * @param sourceId           Identifier of the source, the urls shall belong to
+    * @param reAnalysisInterval Minimum duration between two visits of a website
+    * @return An optional list of existing urls
+    */
+  def queryExistingUrls(
+      sourceId: String,
+      reAnalysisInterval: Duration
+  ): Option[List[SimpleUrlView]] = {
+    /* Define, what is relevant for re-analysis */
+    val mostRecentInstant = "\\[UTC]$".r.replaceAllIn(
+      DateTimeFormatter.ISO_DATE_TIME.format(
+        ZonedDateTime
+          .now(ZoneId.of("UTC"))
+          .minusHours(reAnalysisInterval.toHours)
+      ),
+      ""
+    )
+    val relevant = needsReAnalysis(sourceId, mostRecentInstant)
+
+    /* Query the relevant urls */
+    countExistingUrls(sourceId, relevant).map { amountOfUrls =>
+      neededBatches(amountOfUrls)
+        .flatMap(
+          batchCount => queryExistingUrls(batchCount, relevant)
+        )
+        .flatten
+        .toList
+    }
+  }
+
+  /**
+    * Count the amount of urls for a given source
+    *
+    * @param sourceId The given source
+    * @return Optional amount of available new urls
+    */
+  private def countExistingUrls(
+      sourceId: String,
+      needsReAnalysis: UrlWhereInput
+  ): Option[Int] = queryWithHeader {
+    Query.urlsCount(where = needsReAnalysis)
+  }
+
+  /**
+    * Query the batch given by count.
+    *
+    * @param count            The count of batch to get
+    * @param needsReAnalysis  Condition filter
+    * @return Optional list of view onto urls of a source, that need re-analysis
+    */
+  private def queryExistingUrls(
+      count: Int,
+      needsReAnalysis: UrlWhereInput
+  ): Option[List[SimpleUrlView]] = queryWithHeader {
+    Query.allUrls(
+      where = needsReAnalysis,
+      first = Some(batchSize),
+      skip = count * batchSize
+    )(SimpleUrl.view)
+  }
+
+  /**
+    * Query all entries, that be long to the urls with given ids
+    *
+    * @param urlIds List of url ids to consider
+    * @return An optional list of matching entries
+    */
+  def queryMatchingEntries(
+      urlIds: List[String]
+  ): Option[List[SimpleEntryView[SimpleUrlView, String]]] = {
+    val filter = matchingEntriesFilter(urlIds)
+    countMatchingEntries(filter).map { amountOfEntries =>
+      neededBatches(amountOfEntries)
+        .flatMap(
+          batchCount => queryMatchingEntries(batchCount, filter)
+        )
+        .flatten
+        .toList
+    }
+  }
+
+  /**
+    * Set up an entry filter, that selects all entries belonging to the given url ids
+    *
+    * @param urlIds List of applicable url ids
+    * @return Condition to select matching entries
+    */
+  private def matchingEntriesFilter(urlIds: List[String]): EntryWhereInput = {
+    val urlConditions = urlIds.map { urlId =>
+      UrlWhereInput(id = Some(urlId))
+    }
+    EntryWhereInput(OR = Some(urlConditions.map { urlCondition =>
+      EntryWhereInput(url = Some(urlCondition))
+    }))
+  }
+
+  /**
+    * Count the amount of matching entries
+    *
+    * @param filter Filter for matching entries
+    * @return Optional amount of available new urls
+    */
+  private def countMatchingEntries(filter: EntryWhereInput): Option[Int] =
+    queryWithHeader {
+      Query.entriesCount(where = filter)
+    }
+
+  /**
+    * Query the batch given by count.
+    *
+    * @param count  The count of batch to get
+    * @param filter Condition filter
+    * @return Optional list of view onto urls of a source, that need re-analysis
+    */
+  private def queryMatchingEntries(
+      count: Int,
+      filter: EntryWhereInput
+  ): Option[List[SimpleEntryView[SimpleUrlView, String]]] = queryWithHeader {
+    Query.allEntries(
+      where = filter,
+      first = Some(batchSize),
+      skip = count * batchSize
+    )(SimpleEntry.view(SimpleUrl.view, ArticleTag.id))
   }
 
   /**
@@ -397,13 +531,30 @@ object GraphQLHelper {
     * @param sourceId The given source
     * @return The url restriction model
     */
-  def isNewUrl(sourceId: String): UrlWhereInput = UrlWhereInput(
+  private def isNewUrl(sourceId: String): UrlWhereInput = UrlWhereInput(
     lastCrawl = Some(DUMMY_LAST_CRAWL_DATE_TIME),
     AND = Some(
       excludeCommonFiles ++ List(
         UrlWhereInput(source = Some(SourceWhereInput(id = Some(sourceId))))
       )
     )
+  )
+
+  /**
+    * Set up condition to find
+    *
+    * @param sourceId           Identifier of the source
+    * @param mostRecentInstant  Most recent instant, that is relevant for re-analysis
+    * @return
+    */
+  private def needsReAnalysis(
+      sourceId: String,
+      mostRecentInstant: String
+  ): UrlWhereInput = UrlWhereInput(
+    lastCrawl_lte = Some(mostRecentInstant),
+    lastCrawl_gt = Some(DUMMY_LAST_CRAWL_DATE_TIME),
+    source = Some(SourceWhereInput(id = Some(sourceId))),
+    AND = Some(excludeCommonFiles)
   )
 
   /**

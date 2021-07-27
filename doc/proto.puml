@@ -52,6 +52,25 @@ rnote over SourceHandler
     All urls are handled
 endrnote
 
+SourceHandler -> Supervisor: NewUrlsHandled(...)
+
+== Handle existing urls ==
+
+Supervisor -> SourceHandler: HandleExistingUrls(...)
+SourceHandler -[#blue]> API: //Get existing urls//
+API -[#blue]> SourceHandler: //Get existing urls//
+SourceHandler -> Supervisor: //If no existing urls://\nExistingUrlsHandled(...)
+SourceHandler -[#blue]> API: //Get matching entries//
+API -[#blue]> SourceHandler: //Get matching entries//
+
+rnote over SourceHandler: TODO: Implement logic
+
+rnote over SourceHandler
+    All existing urls handled
+endrnote
+
+SourceHandler -> Supervisor: ExistingUrlsHandled(...)
+
 == Shutdown ==
 
 Supervisor -> SourceHandler: Terminate
