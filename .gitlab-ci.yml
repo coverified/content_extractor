@@ -37,9 +37,6 @@ build4dockerImage:
     script:
         - ./gradlew shadowJar
         - ./gradlew buildDotEnv
-    only:
-      - main
-      - akka
     artifacts:
         reports:
             dotenv: dockerBuild.env
