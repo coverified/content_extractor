@@ -7,7 +7,7 @@ task prepareEnvironment {
 				|USER_AGENT=$userAgent
 				|BROWSE_TIMEOUT=$browseTimeout
 				|TARGET_DATE_TIME_PATTERN=$targetDateTimePattern
-				|TARGET_TIME_ZONE=$targetZoneId
+				|TARGET_TIME_ZONE=$targetTimeZone
 				|API_URL=$apiUrl
 				|AUTH_SECRET=$authSecret
 				|PAGE_PROFILE_DIRECTORY_PATH=$pageProfileDirectoryPath
