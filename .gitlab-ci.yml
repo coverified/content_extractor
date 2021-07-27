@@ -70,9 +70,6 @@ release-image:
 trigger-build-with-config:
     stage: trigger
     trigger: coverified/infrastructure
-    only:
-      - main
-      - akka
     variables:
         IMAGE_TO_BUILD: content_extractor
         IMAGE_HASH: $CI_COMMIT_SHA
