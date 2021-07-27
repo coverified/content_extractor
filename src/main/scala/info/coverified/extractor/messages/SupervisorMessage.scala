@@ -73,6 +73,16 @@ object SupervisorMessage {
       replyTo: ActorRef[SourceHandlerMessage]
   ) extends SupervisorMessage
 
+  /**
+    * Report back, that the existing urls have been handled
+    *
+    * @param sourceId Identifier of the source
+    */
+  final case class ExistingUrlsHandled(
+      sourceId: String,
+      replyTo: ActorRef[SourceHandlerMessage]
+  ) extends SupervisorMessage
+
   final case class SourceHandlerTerminated(sourceId: String)
       extends SupervisorMessage
 

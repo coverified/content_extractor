@@ -14,6 +14,7 @@ import info.coverified.extractor.messages.DistinctTagHandlerMessage.{
   Terminate
 }
 import info.coverified.extractor.messages.SourceHandlerMessage.{
+  HandleExistingUrls,
   HandleNewUrls,
   InitSourceHandler
 }
@@ -25,6 +26,7 @@ import info.coverified.extractor.messages.{
 import info.coverified.extractor.messages.SupervisorMessage.{
   DistinctTagHandlerInitialized,
   DistinctTagHandlerTerminated,
+  ExistingUrlsHandled,
   InitSupervisor,
   NewUrlsHandled,
   SourceHandlerInitialized,
@@ -215,10 +217,16 @@ object ExtractionSupervisor {
   ): Receive[SupervisorMessage] = Behaviors.receive[SupervisorMessage] {
     case (ctx, NewUrlsHandled(sourceId, sourceHandler)) =>
       ctx.log.info(
-        "All new urls of source '{}' are handled. Initiate shut down.",
+        "All new urls of source '{}' are handled. Initiate handling of existing urls.",
         sourceId
       )
-      // TODO: Implement actual routine!
+      sourceHandler ! HandleExistingUrls(ctx.self)
+      Behaviors.same
+    case (ctx, ExistingUrlsHandled(sourceId, sourceHandler)) =>
+      ctx.log.info(
+        "All existing urls of source '{}' are handled. Initiate shutdown.",
+        sourceId
+      )
       sourceHandler ! SourceHandlerMessage.Terminate
       Behaviors.same
     case (ctx, SourceHandlerTerminated(sourceId)) =>

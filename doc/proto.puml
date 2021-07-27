@@ -43,7 +43,7 @@ UrlHandler -> Mutator: UpdateUrl(...)
 Mutator -[#blue]> API: //Update url//
 API -[#blue]> Mutator
 ' TODO: Feed back about handled url
-UrlHandler -> SourceHandler: NewUrlHandledSuccessfully(...)\n//NewUrlHandledWithFailure(...)//
+UrlHandler -> SourceHandler: UrlHandledSuccessfully(...)\n//UrlHandledWithFailure(...)//
 
 SourceHandler -> SourceHandler: //If rate limit exceeded://\nReScheduleUrl(...)
 end loop

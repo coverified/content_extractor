@@ -29,15 +29,17 @@ import info.coverified.extractor.messages.{
   UrlHandlerMessage
 }
 import info.coverified.extractor.messages.SourceHandlerMessage.{
+  HandleExistingUrls,
   HandleNewUrls,
   InitSourceHandler,
   MutationsCompleted,
   MutatorInitialized,
-  NewUrlHandledSuccessfully,
-  NewUrlHandledWithFailure,
-  ReScheduleUrl
+  ReScheduleUrl,
+  UrlHandledSuccessfully,
+  UrlHandledWithFailure
 }
 import info.coverified.extractor.messages.SupervisorMessage.{
+  ExistingUrlsHandled,
   NewUrlsHandled,
   SourceHandlerInitialized,
   SourceHandlerTerminated
@@ -83,9 +85,9 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           )
           ) =>
         context.log.info(
-          "Initializing a source handler for source '{}' (to be found at '{}').",
-          source.id,
-          source.url.getOrElse("no url found")
+          "Initializing a source handler for source '{}' ({}).",
+          source.name.getOrElse(""),
+          source.id
         )
 
         /* Start a mutator */
@@ -180,9 +182,9 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
     Behaviors.receive[SourceHandlerMessage] {
       case (context, HandleNewUrls(replyTo)) =>
         context.log.info(
-          "Start to analyse new, not yet visited urls for source '{}' ('{}').",
-          stateData.source.id,
-          stateData.source.name
+          "Start to analyse new, not yet visited urls for source '{}' ({}).",
+          stateData.source.name.getOrElse(""),
+          stateData.source.id
         )
         /* Determine all new urls */
         val graphQLHelper =
@@ -246,6 +248,15 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
             )
             Behaviors.same
         }
+      case (ctx, HandleExistingUrls(replyTo)) =>
+        ctx.log.info(
+          "Start to analyse existing, yet already visited urls for source '{}' ({}).",
+          stateData.source.name.getOrElse(""),
+          stateData.source.id
+        )
+        // TODO: Implement routine
+        replyTo ! ExistingUrlsHandled(stateData.source.id, ctx.self)
+        Behaviors.same
       case (ctx, SourceHandlerMessage.Terminate) =>
         ctx.log.info(
           "Termination requested for source handler '{}'. Shut down mutator and worker pool.",
@@ -262,9 +273,9 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
   ): Behaviors.Receive[SourceHandlerMessage] = Behaviors.receive {
     case (ctx, MutationsCompleted) =>
       ctx.log.info(
-        s"Mutator terminated! Shutting down SourceHandler for '{}' ('{}').",
-        stateData.source.id,
-        stateData.source.name.getOrElse("")
+        s"Mutator terminated! Shutting down SourceHandler for '{}' ({}).",
+        stateData.source.name.getOrElse(""),
+        stateData.source.id
       )
       stateData.supervisor ! SourceHandlerTerminated(stateData.source.id)
       Behaviors.stopped
@@ -292,7 +303,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       supervisor: ActorRef[SupervisorMessage]
   ): Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
-      case (context, NewUrlHandledWithFailure(url, urlId, error)) =>
+      case (context, UrlHandledWithFailure(url, urlId, error)) =>
         /* Remove the reporter from list of active ones */
         val remainingActiveUrls = urlToActivation.filterNot {
           case (remainingUrl, _) => remainingUrl == url
@@ -334,7 +345,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           urlsToBeHandled,
           remainingActiveUrls
         )
-      case (context, NewUrlHandledSuccessfully(url)) =>
+      case (context, UrlHandledSuccessfully(url)) =>
         context.log
           .debug("The new url '{}' has been handled successfully.", url)
 

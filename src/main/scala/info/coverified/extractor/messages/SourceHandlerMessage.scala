@@ -37,18 +37,19 @@ object SourceHandlerMessage {
 
   final case class HandleNewUrls(replyTo: ActorRef[SupervisorMessage])
       extends SourceHandlerMessage
+  final case class HandleExistingUrls(replyTo: ActorRef[SupervisorMessage])
+      extends SourceHandlerMessage
 
   /**
     * Get report about _single_ handled urls from [[UrlHandlerMessage]]
     */
-  sealed trait NewUrlHandledMessage extends SourceHandlerMessage
-  final case class NewUrlHandledSuccessfully(url: String)
-      extends NewUrlHandledMessage
-  final case class NewUrlHandledWithFailure(
+  sealed trait UrlHandledMessage extends SourceHandlerMessage
+  final case class UrlHandledSuccessfully(url: String) extends UrlHandledMessage
+  final case class UrlHandledWithFailure(
       url: String,
       urlId: String,
       failure: Throwable
-  ) extends NewUrlHandledMessage
+  ) extends UrlHandledMessage
 
   final case class ReScheduleUrl(url: String, id: String)
       extends SourceHandlerMessage

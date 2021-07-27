@@ -14,8 +14,8 @@ import info.coverified.extractor.messages.MutatorMessage.{
   UpdateUrl
 }
 import info.coverified.extractor.messages.SourceHandlerMessage.{
-  NewUrlHandledSuccessfully,
-  NewUrlHandledWithFailure
+  UrlHandledSuccessfully,
+  UrlHandledWithFailure
 }
 import info.coverified.extractor.messages.{MutatorMessage, UrlHandlerMessage}
 import info.coverified.extractor.messages.UrlHandlerMessage.{
@@ -68,7 +68,7 @@ class UrlHandler {
               sourceHandler
             )
             mutator ! UpdateUrl(urlId, sourceHandler)
-            sourceHandler ! NewUrlHandledSuccessfully(url)
+            sourceHandler ! UrlHandledSuccessfully(url)
             Behaviors.same
           case Failure(exception) =>
             context.log.error(
@@ -76,7 +76,7 @@ class UrlHandler {
               url
             )
             mutator ! UpdateUrl(urlId, sourceHandler)
-            sourceHandler ! NewUrlHandledWithFailure(url, urlId, exception)
+            sourceHandler ! UrlHandledWithFailure(url, urlId, exception)
             Behaviors.same
         }
       case _ => Behaviors.unhandled
