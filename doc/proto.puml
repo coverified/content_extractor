@@ -63,7 +63,15 @@ SourceHandler -> Supervisor: //If no existing urls://\nExistingUrlsHandled(...)
 SourceHandler -[#blue]> API: //Get matching entries//
 API -[#blue]> SourceHandler: //Get matching entries//
 
-rnote over SourceHandler: TODO: Implement logic
+loop
+    SourceHandler -> UrlHandler: HandleExistingUrl(...)
+    rnote over SourceHandler: HandleExistingUrl contains\noptional field for existing entry
+
+    rnote over UrlHandler: TODO: Implement logic
+
+    UrlHandler -> SourceHandler: ExistingUrlHandledSuccessfully(...)\n//ExistingUrlHandledWithFailure(...)//
+
+end loop
 
 rnote over SourceHandler
     All existing urls handled

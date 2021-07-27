@@ -17,8 +17,10 @@ import info.coverified.extractor.messages.SourceHandlerMessage.{
   UrlHandledSuccessfully,
   UrlHandledWithFailure
 }
+import info.coverified.extractor.messages.SupervisorMessage.ExistingUrlsHandled
 import info.coverified.extractor.messages.{MutatorMessage, UrlHandlerMessage}
 import info.coverified.extractor.messages.UrlHandlerMessage.{
+  HandleExistingUrl,
   HandleNewUrl,
   InitUrlHandler
 }
@@ -79,6 +81,15 @@ class UrlHandler {
             sourceHandler ! UrlHandledWithFailure(url, urlId, exception)
             Behaviors.same
         }
+      case (
+          ctx,
+          HandleExistingUrl(url, urlId, maybeEntry, pageProfile, sourceHandler)
+          ) =>
+        ctx.log
+          .debug("Start content extraction for already visited url '{}'.", url)
+        /* TODO: Insert logic */
+        sourceHandler ! UrlHandledSuccessfully(url)
+        Behaviors.same
       case _ => Behaviors.unhandled
     }
 }

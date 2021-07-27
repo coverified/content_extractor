@@ -7,6 +7,8 @@ package info.coverified.extractor.messages
 
 import akka.actor.typed.ActorRef
 import info.coverified.extractor.profile.ProfileConfig
+import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
+import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 
 import java.time.{Duration, ZoneId}
 
@@ -31,9 +33,18 @@ object UrlHandlerMessage {
       targetDateTimePattern: String,
       targetTimeZone: ZoneId
   ) extends UrlHandlerMessage
+
   final case class HandleNewUrl(
       url: String,
       urlId: String,
+      pageProfile: ProfileConfig,
+      replyToSourceHandler: ActorRef[SourceHandlerMessage]
+  ) extends UrlHandlerMessage
+
+  final case class HandleExistingUrl(
+      url: String,
+      urlId: String,
+      maybeEntry: Option[SimpleEntryView[SimpleUrlView, String]],
       pageProfile: ProfileConfig,
       replyToSourceHandler: ActorRef[SourceHandlerMessage]
   ) extends UrlHandlerMessage

@@ -45,12 +45,14 @@ import info.coverified.extractor.messages.SupervisorMessage.{
   SourceHandlerTerminated
 }
 import info.coverified.extractor.messages.UrlHandlerMessage.{
+  HandleExistingUrl,
   HandleNewUrl,
   InitUrlHandler
 }
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.GraphQLHelper
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
+import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import org.jsoup.HttpStatusException
 import org.slf4j.Logger
@@ -241,8 +243,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
               stateData,
               remainingNewUrls,
               urlToActivation,
-              workerPoolProxy,
-              replyTo
+              workerPoolProxy
             )
         }
       case (ctx, HandleExistingUrls(replyTo)) =>
@@ -307,9 +308,32 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
                   }
                 }
 
-                /* TODO: Handle accordingly */
-                replyTo ! ExistingUrlsHandled(stateData.source.id, ctx.self)
-                Behaviors.same
+                /* Select the first batch, send them to the url workers and change state accordingly */
+                val (firstBatch, remainingUrls) =
+                  peek(urlToEntry, stateData.workerPoolSize)
+                val urlToActivation = firstBatch.flatMap {
+                  case (url, maybeEntry) if url.name.nonEmpty =>
+                    /* Send out messages to worker */
+                    workerPoolProxy ! HandleExistingUrl(
+                      url.name.get,
+                      url.id,
+                      maybeEntry,
+                      stateData.pageProfile,
+                      ctx.self
+                    )
+                    Some(url -> System.currentTimeMillis())
+                  case _ =>
+                    /* No actual url known, nothing to handle */
+                    None
+                }.toMap
+
+                /* Change state to handle existing urls */
+                handleExistingUrls(
+                  stateData,
+                  remainingUrls,
+                  urlToActivation,
+                  workerPoolProxy
+                )
               case None =>
                 ctx.log.error(
                   "Received empty reply from API when requesting matching entries for yet visited urls in source " +
@@ -359,17 +383,16 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
     * Behavior to steer the handling of new urls
     *
     * @param stateData       Current state of the actor
+    * @param urlsToBeHandled Remaining urls to be handled
     * @param urlToActivation Mapping from activated url to it's activation time
     * @param workerPoolProxy Reference to the worker pool proxy
-    * @param supervisor      Reference to the supervisor
     * @return The defined behavior
     */
   def handleNewUrls(
       stateData: SourceHandlerStateData,
       urlsToBeHandled: List[SimpleUrlView],
       urlToActivation: Map[String, Long],
-      workerPoolProxy: ActorRef[UrlHandlerMessage],
-      supervisor: ActorRef[SupervisorMessage]
+      workerPoolProxy: ActorRef[UrlHandlerMessage]
   ): Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
       case (context, UrlHandledWithFailure(url, urlId, error)) =>
@@ -377,39 +400,18 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         val remainingActiveUrls = urlToActivation.filterNot {
           case (remainingUrl, _) => remainingUrl == url
         }
-
-        error match {
-          case httpException: HttpStatusException
-              if httpException.getStatusCode == 404 =>
-            context.log.warn(
-              "The url '{}' doesn't exist (HTTP Status 404). Consider removing it.",
-              url
-            )
-          case httpException: HttpStatusException
-              if httpException.getStatusCode == 403 =>
-            context.log.warn(
-              "The url '{}' replied, that the rate limit is exceeded (HTTP Status 403). Consider adapting " +
-                "configuration, especially the rate limit. Will re-schedule the visit of this url in {} s.",
-              url,
-              stateData.repeatDelay.toMillis / 1000
-            )
-            timer.startSingleTimer(
-              ReScheduleUrl(url, urlId),
-              FiniteDuration(stateData.repeatDelay.toMillis, "ms")
-            )
-          case unknown =>
-            context.log.error(
-              "Handling the url '{}' failed with unknown error. Skip it.\n\tError: {} - \"{}\"",
-              url,
-              unknown.getClass.getSimpleName,
-              unknown.getMessage
-            )
-        }
+        /* Log the error and handle accordingly. */
+        logAndHandleUrlHandlingFailure(url, error, context.log, () => {
+          timer.startSingleTimer(
+            ReScheduleUrl(url, urlId),
+            FiniteDuration(stateData.repeatDelay.toMillis, "ms")
+          )
+        })
 
         maybeIssueNextUnhandledUrl(
           context,
           workerPoolProxy,
-          supervisor,
+          stateData.supervisor,
           stateData,
           urlsToBeHandled,
           remainingActiveUrls
@@ -426,7 +428,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         maybeIssueNextUnhandledUrl(
           context,
           workerPoolProxy,
-          supervisor,
+          stateData.supervisor,
           stateData,
           urlsToBeHandled,
           remainingActiveUrls
@@ -440,13 +442,112 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         maybeIssueNewHandling(
           context,
           workerPoolProxy,
-          supervisor,
+          stateData.supervisor,
           url,
           urlId,
           urlToActivation,
           urlsToBeHandled,
           stateData
         )
+      case _ => Behaviors.unhandled
+    }
+
+  /**
+    * Log the error when handling an url and handle accordingly in the case of a rate limit exceeding
+    *
+    * @param url                      Url, that was handled unsuccessfully
+    * @param failure                  Reported failure
+    * @param logger                   Instance of logger to use
+    * @param rateLimitExceededAction  Action to take care of, if rate limit is exceeded
+    */
+  private def logAndHandleUrlHandlingFailure(
+      url: String,
+      failure: Throwable,
+      logger: Logger,
+      rateLimitExceededAction: () => Unit
+  ): Unit = failure match {
+    case httpException: HttpStatusException
+        if httpException.getStatusCode == 404 =>
+      logger.warn(
+        "The url '{}' doesn't exist (HTTP Status 404). Consider removing it.",
+        url
+      )
+    case httpException: HttpStatusException
+        if httpException.getStatusCode == 403 =>
+      logger.warn(
+        "The url '{}' replied, that the rate limit is exceeded (HTTP Status 403). Consider adapting " +
+          "configuration, especially the rate limit. Will re-schedule the visit of this url.",
+        url
+      )
+      rateLimitExceededAction()
+    case unknown =>
+      logger.error(
+        "Handling the url '{}' failed with unknown error. Skip it.\n\tError: {} - \"{}\"",
+        url,
+        unknown.getClass.getSimpleName,
+        unknown.getMessage
+      )
+  }
+
+  /**
+    * Handle all existing entries
+    *
+    * @param stateData       Current state of the actor
+    * @param urlsToBeHandled Remaining urls and entries to be handled
+    * @param urlToActivation Mapping from activated url to it's activation time
+    * @param workerPoolProxy Reference to the worker pool proxy
+    * @return The defined behavior
+    */
+  def handleExistingUrls(
+      stateData: SourceHandlerStateData,
+      urlsToBeHandled: List[
+        (SimpleUrlView, Option[SimpleEntryView[SimpleUrlView, String]])
+      ],
+      urlToActivation: Map[SimpleUrlView, Long],
+      workerPoolProxy: ActorRef[UrlHandlerMessage]
+  ): Behaviors.Receive[SourceHandlerMessage] =
+    Behaviors.receive[SourceHandlerMessage] {
+      case (ctx, UrlHandledSuccessfully(url)) =>
+        ctx.log
+          .debug(
+            "The already visited url '{}' has been handled successfully.",
+            url
+          )
+
+        /* Remove the reporter from list of active ones */
+        val remainingActiveUrls = urlToActivation.filterNot {
+          case (remainingUrl, _) => remainingUrl.name.contains(url)
+        }
+        /* TODO: Add logic */
+        stateData.supervisor ! ExistingUrlsHandled(
+          stateData.source.id,
+          ctx.self
+        )
+        idle(stateData, workerPoolProxy)
+      case (ctx, UrlHandledWithFailure(url, urlId, failure)) =>
+        /* Remove the reporter from list of active ones */
+        val remainingActiveUrls = urlToActivation.filterNot {
+          case (remainingUrl, _) => remainingUrl.name.contains(url)
+        }
+        /* Log the error and handle accordingly. */
+        logAndHandleUrlHandlingFailure(
+          url,
+          failure,
+          ctx.log,
+          () => {
+            timer.startSingleTimer(
+              // TODO: Adapt re-scheduling message to accommodate the entry
+              ReScheduleUrl(url, urlId),
+              FiniteDuration(stateData.repeatDelay.toMillis, "ms")
+            )
+          }
+        )
+        /* TODO: Add logic */
+        stateData.supervisor ! ExistingUrlsHandled(
+          stateData.source.id,
+          ctx.self
+        )
+        idle(stateData, workerPoolProxy)
       case _ => Behaviors.unhandled
     }
 
@@ -518,8 +619,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         stateData,
         unhandledUrls,
         urlToActivation,
-        workerPoolProxy,
-        supervisor
+        workerPoolProxy
       )
     } else {
       context.log.info(
@@ -577,8 +677,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         stateData,
         remainingUrls,
         updateUrlToActivation,
-        workerPoolProxy,
-        supervisor
+        workerPoolProxy
       )
     } else {
       context.log.debug(
