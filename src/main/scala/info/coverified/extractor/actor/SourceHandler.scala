@@ -101,13 +101,13 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         )
         context.watchWith(mutator, MutationsCompleted)
 
+        val graphQLHelper = new GraphQLHelper(apiUri, authSecret)
         val stateData = SourceHandlerInitializingStateData(
           userAgent,
           browseTimeout,
           targetDateTimePattern,
           targetTimeZone,
-          apiUri,
-          authSecret,
+          graphQLHelper,
           pageProfile,
           reAnalysisInterval,
           workerPoolSize,
@@ -187,11 +187,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           stateData.source.id
         )
         /* Determine all new urls */
-        val graphQLHelper =
-          new GraphQLHelper(stateData.apiUri, stateData.authSecret)
-        val maybeUrls = graphQLHelper.queryNewUrls(stateData.source.id)
-        graphQLHelper.close()
-        maybeUrls match {
+        stateData.graphQLHelper.queryNewUrls(stateData.source.id) match {
           case Some(newUrls) if newUrls.isEmpty =>
             context.log.info(
               "Found no new urls. Report back to supervisor, that all new urls are handled."
@@ -277,6 +273,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         stateData.source.name.getOrElse(""),
         stateData.source.id
       )
+      stateData.graphQLHelper.close()
       stateData.supervisor ! SourceHandlerTerminated(stateData.source.id)
       Behaviors.stopped
     case (ctx, invalid) =>
@@ -534,8 +531,7 @@ object SourceHandler {
       browseTimeout: Duration,
       targetDateTimePattern: String,
       targetTimeZone: ZoneId,
-      apiUri: Uri,
-      authSecret: String,
+      graphQLHelper: GraphQLHelper,
       pageProfile: ProfileConfig,
       reAnalysisInterval: Duration,
       workerPoolSize: Int,
@@ -546,8 +542,7 @@ object SourceHandler {
   )
 
   final case class SourceHandlerStateData(
-      apiUri: Uri,
-      authSecret: String,
+      graphQLHelper: GraphQLHelper,
       pageProfile: ProfileConfig,
       reAnalysisInterval: Duration,
       workerPoolSize: Int,
@@ -559,8 +554,7 @@ object SourceHandler {
   object SourceHandlerStateData {
     def apply(initStateData: SourceHandlerInitializingStateData) =
       new SourceHandlerStateData(
-        initStateData.apiUri,
-        initStateData.authSecret,
+        initStateData.graphQLHelper,
         initStateData.pageProfile,
         initStateData.reAnalysisInterval,
         initStateData.workerPoolSize,
