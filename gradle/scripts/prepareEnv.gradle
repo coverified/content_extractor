@@ -3,8 +3,7 @@ task prepareEnvironment {
 
 	doFirst {
 		def content =
-				"""
-				|USER_AGENT=$userAgent
+				"""|USER_AGENT=$userAgent
 				|BROWSE_TIMEOUT=$browseTimeout
 				|TARGET_DATE_TIME_PATTERN=$targetDateTimePattern
 				|TARGET_TIME_ZONE=$targetTimeZone
