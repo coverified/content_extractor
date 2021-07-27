@@ -9,7 +9,7 @@ import akka.actor.typed.ActorRef
 import info.coverified.extractor.config.Config
 import sttp.model.Uri
 
-import java.time.Duration
+import java.time.{Duration, ZoneId}
 
 /**
   * All messages that are understood by the [[info.coverified.extractor.actor.ExtractionSupervisor]]
@@ -17,29 +17,41 @@ import java.time.Duration
 sealed trait SupervisorMessage
 object SupervisorMessage {
   final case class InitSupervisor(
+      userAgent: String,
+      browseTimeout: Duration,
+      targetDateTimePattern: String,
+      targetTimeZone: ZoneId,
       apiUri: Uri,
       profileDirectoryPath: String,
       reAnalysisInterval: Duration,
       authSecret: String,
-      chunkSize: Int,
+      workerPoolSize: Int,
       repeatDelay: Duration
   ) extends SupervisorMessage
   object InitSupervisor {
     def apply(config: Config): InitSupervisor = config match {
       case Config(
+          userAgent,
+          browseTimeout,
+          targetDateTimePattern,
+          targetTimeZone,
           apiUri,
+          authSecret,
           profileDirectoryPath,
           reAnalysisInterval,
-          authSecret,
-          chunkSize,
+          workerPoolSize,
           repeatDelay
           ) =>
         new InitSupervisor(
+          userAgent,
+          browseTimeout,
+          targetDateTimePattern,
+          targetTimeZone,
           apiUri,
           profileDirectoryPath,
           reAnalysisInterval,
           authSecret,
-          chunkSize,
+          workerPoolSize,
           repeatDelay
         )
     }

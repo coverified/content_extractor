@@ -13,6 +13,7 @@ import akka.actor.typed.scaladsl.{
   TimerScheduler
 }
 import info.coverified.extractor.actor.SourceHandler.{
+  SourceHandlerInitializingStateData,
   SourceHandlerStateData,
   nextUrl,
   peek
@@ -53,7 +54,7 @@ import org.jsoup.HttpStatusException
 import org.slf4j.Logger
 import sttp.model.Uri
 
-import java.time.Duration
+import java.time.{Duration, ZoneId}
 import scala.annotation.tailrec
 import scala.concurrent.duration.FiniteDuration
 
@@ -66,11 +67,15 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       case (
           context,
           InitSourceHandler(
+            userAgent,
+            browseTimeout,
+            targetDateTimePattern,
+            targetTimeZone,
             apiUri,
+            authSecret,
             pageProfile,
             reAnalysisInterval,
-            authSecret,
-            chunkSize,
+            workerPoolSize,
             repeatDelay,
             source,
             distinctTagHandler,
@@ -94,12 +99,16 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         )
         context.watchWith(mutator, MutationsCompleted)
 
-        val stateData = SourceHandlerStateData(
+        val stateData = SourceHandlerInitializingStateData(
+          userAgent,
+          browseTimeout,
+          targetDateTimePattern,
+          targetTimeZone,
           apiUri,
+          authSecret,
           pageProfile,
           reAnalysisInterval,
-          authSecret,
-          chunkSize,
+          workerPoolSize,
           repeatDelay,
           source,
           mutator,
@@ -110,19 +119,19 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
     }
 
   def initializing(
-      stateData: SourceHandlerStateData
+      initializingStateData: SourceHandlerInitializingStateData
   ): Behaviors.Receive[SourceHandlerMessage] = Behaviors.receive {
     case (ctx, MutatorInitialized) =>
       ctx.log.info(
         "Mutator for source '{}' ('{}') successfully initialized. Start worker pool of {} workers.",
-        stateData.source.id,
-        stateData.source.name.getOrElse(""),
-        stateData.chunkSize
+        initializingStateData.source.id,
+        initializingStateData.source.name.getOrElse(""),
+        initializingStateData.workerPoolSize
       )
 
       /* Set up a pool of workers to handle url */
       val urlWorkerPool = Routers
-        .pool(poolSize = stateData.chunkSize) {
+        .pool(poolSize = initializingStateData.workerPoolSize) {
           Behaviors
             .supervise(UrlHandler())
             .onFailure(SupervisorStrategy.restart)
@@ -135,17 +144,24 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       val urlWorkerProxy =
         ctx.spawn(
           urlWorkerPool,
-          "UrlWorkerPool_" + stateData.source.id
+          "UrlWorkerPool_" + initializingStateData.source.id
         )
 
       /* Broadcast reference to mutator to all workers */
-      urlWorkerProxy ! InitUrlHandler(stateData.mutator)
+      urlWorkerProxy ! InitUrlHandler(
+        initializingStateData.mutator,
+        initializingStateData.userAgent,
+        initializingStateData.browseTimeout,
+        initializingStateData.targetDateTimePattern,
+        initializingStateData.targetTimeZone
+      )
 
       /* Report completion of initialization */
-      stateData.supervisor ! SourceHandlerInitialized(
-        stateData.source.id,
+      initializingStateData.supervisor ! SourceHandlerInitialized(
+        initializingStateData.source.id,
         ctx.self
       )
+      val stateData = SourceHandlerStateData(initializingStateData)
       idle(stateData, urlWorkerProxy)
     case _ => Behaviors.unhandled
   }
@@ -192,7 +208,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
               stateData.source.name.getOrElse("")
             )
             val (firstBatch, remainingNewUrls) =
-              peek(newUrls, stateData.chunkSize)
+              peek(newUrls, stateData.workerPoolSize)
             /* Activate workers for the first batch and register the starting times */
             val urlToActivation = firstBatch.flatMap { url =>
               url.name match {
@@ -464,10 +480,10 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
     val firstRelevantInstant = currentInstant - stateData.repeatDelay.toMillis
     val relevantIssues =
       urlToActivation.values.filter(_ >= firstRelevantInstant)
-    if (relevantIssues.size < stateData.chunkSize) {
+    if (relevantIssues.size < stateData.workerPoolSize) {
       context.log.debug(
         "Rate limit {}/{} Hz is not exceeded. Issue a new url handling.",
-        stateData.chunkSize,
+        stateData.workerPoolSize,
         stateData.repeatDelay.toMillis / 1000
       )
       val updateUrlToActivation = urlToActivation + (targetUrl -> currentInstant)
@@ -487,7 +503,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
     } else {
       context.log.debug(
         "Rate limit {}/{} Hz currently is exceeded. Wait {}s with a new issue of url handling.",
-        stateData.chunkSize,
+        stateData.workerPoolSize,
         stateData.repeatDelay.toMillis / 1000,
         stateData.repeatDelay.toMillis / 1000
       )
@@ -502,17 +518,47 @@ object SourceHandler {
   def apply(): Behavior[SourceHandlerMessage] =
     Behaviors.withTimers(timer => new SourceHandler(timer).uninitialized)
 
-  final case class SourceHandlerStateData(
+  final case class SourceHandlerInitializingStateData(
+      userAgent: String,
+      browseTimeout: Duration,
+      targetDateTimePattern: String,
+      targetTimeZone: ZoneId,
       apiUri: Uri,
+      authSecret: String,
       pageProfile: ProfileConfig,
       reAnalysisInterval: Duration,
-      authSecret: String,
-      chunkSize: Int,
+      workerPoolSize: Int,
       repeatDelay: Duration,
       source: SourceView,
       mutator: ActorRef[MutatorMessage],
       supervisor: ActorRef[SupervisorMessage]
   )
+
+  final case class SourceHandlerStateData(
+      apiUri: Uri,
+      authSecret: String,
+      pageProfile: ProfileConfig,
+      reAnalysisInterval: Duration,
+      workerPoolSize: Int,
+      repeatDelay: Duration,
+      source: SourceView,
+      mutator: ActorRef[MutatorMessage],
+      supervisor: ActorRef[SupervisorMessage]
+  )
+  object SourceHandlerStateData {
+    def apply(initStateData: SourceHandlerInitializingStateData) =
+      new SourceHandlerStateData(
+        initStateData.apiUri,
+        initStateData.authSecret,
+        initStateData.pageProfile,
+        initStateData.reAnalysisInterval,
+        initStateData.workerPoolSize,
+        initStateData.repeatDelay,
+        initStateData.source,
+        initStateData.mutator,
+        initStateData.supervisor
+      )
+  }
 
   def peek[A](list: List[A], first: Int): (List[A], List[A]) = {
     val peek = list.take(first)

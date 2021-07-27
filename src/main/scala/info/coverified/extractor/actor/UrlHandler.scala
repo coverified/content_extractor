@@ -31,19 +31,35 @@ import scala.util.{Failure, Success}
 class UrlHandler {
   def uninitialized: Behaviors.Receive[UrlHandlerMessage] =
     Behaviors.receive[UrlHandlerMessage] {
-      case (_, InitUrlHandler(mutator)) =>
-        idle(mutator)
+      case (
+          _,
+          InitUrlHandler(
+            mutatorRef,
+            userAgent,
+            browseTimeout,
+            targetDateTimePattern,
+            targetTimeZone
+          )
+          ) =>
+        val analyzer = Analyzer(
+          userAgent,
+          browseTimeout,
+          targetDateTimePattern,
+          targetTimeZone
+        )
+        idle(mutatorRef, analyzer)
       case _ => Behaviors.unhandled
     }
 
   def idle(
-      mutator: ActorRef[MutatorMessage]
+      mutator: ActorRef[MutatorMessage],
+      analyzer: Analyzer
   ): Behaviors.Receive[UrlHandlerMessage] =
     Behaviors.receive[UrlHandlerMessage] {
       case (context, HandleNewUrl(url, urlId, pageProfile, sourceHandler)) =>
         context.log.debug("Start content extraction for new url '{}'.", url)
 
-        Analyzer.run(url, pageProfile) match {
+        analyzer.run(url, pageProfile) match {
           case Success(rawEntryInformation) =>
             context.log.debug("Visiting of web site '{}' successful.", url)
             mutator ! CreateEntry(

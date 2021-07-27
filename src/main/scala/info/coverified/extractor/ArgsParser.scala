@@ -16,22 +16,29 @@ import scopt.{OptionParser => scoptOptionParser}
 object ArgsParser {
 
   final case class Args(
-      apiUrl: Option[String] = None,
-      pageProfileFolderPath: Option[String] = None,
-      reAnalyzeInterval: Option[Int] = None,
-      authSecret: Option[String] = None,
-      chunkSize: Option[Int] = None,
-      repeatDelay: Option[Int] = None
+      apiUrl: String,
+      authSecret: String,
+      pageProfileDirectoryPath: String,
+      reAnalysisInterval: Option[Int] = None,
+      workerPoolSize: Option[Int] = None,
+      repeatDelay: Option[Int] = None,
+      userAgent: Option[String] = None,
+      browseTimeout: Option[Int] = None,
+      targetDateTimePattern: Option[String] = None,
+      targetTimeZone: Option[String] = None
   )
 
   private def buildParser: scoptOptionParser[Args] = {
     new scoptOptionParser[Args]("CoVerifiedExtractor") {
       opt[String]("apiUrl")
-        .action((value, args) => {
-          args.copy(
-            apiUrl = Option(value)
-          )
-        })
+        .required()
+        .action { (value, args) =>
+          {
+            args.copy(
+              apiUrl = value
+            )
+          }
+        }
         .validate(
           value =>
             if (value.trim.isEmpty) failure("apiUrl cannot be empty!")
@@ -39,38 +46,11 @@ object ArgsParser {
         )
         .text("Backend API Url")
         .minOccurs(1)
-      opt[String]("pageProfileFolderPath")
-        .action((value, args) => {
-          args.copy(
-            pageProfileFolderPath = Option(value)
-          )
-        })
-        .validate(
-          value =>
-            if (value.trim.isEmpty)
-              failure("page profile folder path cannot be empty!")
-            else success
-        )
-        .text("full path to all page profile config files")
-        .minOccurs(1)
-      opt[Int]("reAnalyzeInterval")
-        .action((value, args) => {
-          args.copy(
-            reAnalyzeInterval = Option(value)
-          )
-        })
-        .validate(
-          value =>
-            if (value < 0)
-              failure("re analysis interval must be greater than zero!")
-            else success
-        )
-        .text("frequency of re-analyzing content in hours")
-        .minOccurs(1)
       opt[String]("authSecret")
+        .required()
         .action((value, args) => {
           args.copy(
-            authSecret = Option(value)
+            authSecret = value
           )
         })
         .validate(
@@ -81,19 +61,48 @@ object ArgsParser {
         )
         .text("secret to authenticate against API")
         .minOccurs(1)
-      opt[Int]("chunkSize")
+      opt[String]("pageProfileDirectoryPath")
+        .required()
         .action((value, args) => {
           args.copy(
-            chunkSize = Option(value)
+            pageProfileDirectoryPath = value
+          )
+        })
+        .validate(
+          value =>
+            if (value.trim.isEmpty)
+              failure("page profile folder path cannot be empty!")
+            else success
+        )
+        .text("full path to all page profile config files")
+        .minOccurs(1)
+      opt[Int]("reAnalysisInterval")
+        .action((value, args) => {
+          args.copy(
+            reAnalysisInterval = Option(value)
+          )
+        })
+        .validate(
+          value =>
+            if (value < 0)
+              failure("re analysis interval must be greater than zero!")
+            else success
+        )
+        .text("frequency of re-analyzing content in hours")
+        .minOccurs(1)
+      opt[Int]("workerPoolSize")
+        .action((value, args) => {
+          args.copy(
+            workerPoolSize = Option(value)
           )
         })
         .validate(
           value =>
             if (value <= 0)
-              failure("Chunk size may be greater than zero!")
+              failure("Amount of workers may be greater than zero!")
             else success
         )
-        .text("Amount of urls to query at the same time")
+        .text("Amount of url workers for parallel handling.")
         .minOccurs(1)
       opt[Int]("repeatDelay")
         .action((value, args) => {
@@ -111,10 +120,54 @@ object ArgsParser {
           "Amount of seconds, that successive runs should be delayed, if not all urls are handled, yet."
         )
         .minOccurs(1)
+      opt[String]("userAgent")
+        .action { (value, args) =>
+          {
+            args.copy(userAgent = Option(value))
+          }
+        }
+        .text(
+          "User agent information, that needs to be send when visiting websites"
+        )
+        .minOccurs(1)
+      opt[Int]("browseTimeout")
+        .action { (value, args) =>
+          {
+            args.copy(browseTimeout = Option(value))
+          }
+        }
+        .validate { timeout =>
+          if (timeout < 0) failure("Browse timeout may be greater than zero.")
+          else success
+        }
+        .text(
+          "Timeout in seconds to apply, when visiting a website."
+        )
+        .minOccurs(1)
+      opt[String]("targetDateTimePattern")
+        .action { (value, args) =>
+          {
+            args.copy(targetDateTimePattern = Option(value))
+          }
+        }
+        .text(
+          "Target pattern, when sending date time information to GraphQL API."
+        )
+        .minOccurs(1)
+      opt[String]("targetTimeZone")
+        .action { (value, args) =>
+          {
+            args.copy(targetTimeZone = Option(value))
+          }
+        }
+        .text(
+          "Target time zone, when sending date time information to GraphQL API."
+        )
+        .minOccurs(1)
     }
 
   }
 
   def parse(args: Array[String]): Option[Args] =
-    buildParser.parse(args, init = Args())
+    buildParser.parse(args, init = Args("", "", ""))
 }

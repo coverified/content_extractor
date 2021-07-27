@@ -10,7 +10,7 @@ import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
 import sttp.model.Uri
 
-import java.time.Duration
+import java.time.{Duration, ZoneId}
 
 /**
   * All messages that are understood by the [[info.coverified.extractor.actor.SourceHandler]]
@@ -18,11 +18,15 @@ import java.time.Duration
 sealed trait SourceHandlerMessage
 object SourceHandlerMessage {
   final case class InitSourceHandler(
+      userAgent: String,
+      browseTimeout: Duration,
+      targetDateTimePattern: String,
+      targetTimeZone: ZoneId,
       apiUri: Uri,
+      authSecret: String,
       pageProfile: ProfileConfig,
       reAnalysisInterval: Duration,
-      authSecret: String,
-      chunkSize: Int,
+      workerPoolSize: Int,
       repeatDelay: Duration,
       source: SourceView,
       distinctTagHandler: ActorRef[DistinctTagHandlerMessage],

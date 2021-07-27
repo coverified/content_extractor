@@ -37,7 +37,7 @@ import sttp.model.Uri
 
 import java.io.File
 import java.net.URL
-import java.time.Duration
+import java.time.{Duration, ZoneId}
 
 object ExtractionSupervisor {
   def apply(): Behavior[SupervisorMessage] = uninitialized
@@ -81,11 +81,15 @@ object ExtractionSupervisor {
           )
           val stateData = InitializingStateData(
             initMessage.profileDirectoryPath,
+            initMessage.userAgent,
+            initMessage.browseTimeout,
+            initMessage.targetDateTimePattern,
+            initMessage.targetTimeZone,
             initMessage.apiUri,
             initMessage.authSecret,
             initMessage.reAnalysisInterval,
             initMessage.repeatDelay,
-            initMessage.chunkSize,
+            initMessage.workerPoolSize,
             distinctTagHandlerRef,
             sources
           )
@@ -108,11 +112,15 @@ object ExtractionSupervisor {
       val sourceIdToHandlerRef = initStateData match {
         case InitializingStateData(
             profileDirectoryPath,
+            userAgent,
+            browseTimeout,
+            targetDateTimePattern,
+            targetTimeZone,
             apiUri,
             authSecret,
             reAnalysisInterval,
             repeatDelay,
-            chunkSize,
+            workerPoolSize,
             distinctTagHandlerRef,
             sourcesToInitialize
             ) =>
@@ -120,11 +128,15 @@ object ExtractionSupervisor {
             ctx,
             distinctTagHandlerRef,
             profileDirectoryPath,
+            userAgent,
+            browseTimeout,
+            targetDateTimePattern,
+            targetTimeZone,
             apiUri,
             authSecret,
             reAnalysisInterval,
             repeatDelay,
-            chunkSize,
+            workerPoolSize,
             sourcesToInitialize
           )
       }
@@ -168,7 +180,7 @@ object ExtractionSupervisor {
 
         val stateData = ExtractorStateData(
           initStateData.reAnalysisInterval,
-          initStateData.chunkSize,
+          initStateData.workerPoolSize,
           initStateData.repeatDelay,
           initStateData.distinctTagHandlerRef
         )
@@ -275,26 +287,36 @@ object ExtractionSupervisor {
   /**
     * Initialize source handler per available source
     *
-    * @param context              Current actor context
-    * @param distinctTagHandler   Reference to distinct tag handler
-    * @param profileDirectoryPath Directory path, where to find page profiles
-    * @param apiUri               Uri for the GraphQL API
-    * @param authSecret           Auth token for GraphQL API
-    * @param reAnalysisInterval   Duration, when an entry shall be re-analysed
-    * @param repeatDelay          Amount of time, that a) is reference for rate limit and b) delay time for postponed urls
-    * @param chunkSize            Amount of url co-workers and amount of urls to be visited within given time
-    * @param sources              Collection of available sources
+    * @param context                Current actor context
+    * @param distinctTagHandler     Reference to distinct tag handler
+    * @param profileDirectoryPath   Directory path, where to find page profiles
+    * @param userAgent              User agent to be sent when reaching out to websites
+    * @param browseTimeout          Time out, when reaching out for websites
+    * @param targetDateTimePattern  The target date time pattern, in which date time information shall be sent to
+    *                               [[info.coverified.extractor.actor.Mutator]]
+    * @param targetTimeZone         The target time zone, in which date time information shall be sent to
+    *                               [[info.coverified.extractor.actor.Mutator]]
+    * @param apiUri                 Uri for the GraphQL API
+    * @param authSecret             Auth token for GraphQL API
+    * @param reAnalysisInterval     Duration, when an entry shall be re-analysed
+    * @param repeatDelay            Amount of time, that a) is reference for rate limit and b) delay time for postponed urls
+    * @param workerPoolSize         Amount of url co-workers and amount of urls to be visited within given time
+    * @param sources                Collection of available sources
     * @return Defined behavior
     */
   private def initializeChildren(
       context: ActorContext[SupervisorMessage],
       distinctTagHandler: ActorRef[DistinctTagHandlerMessage],
       profileDirectoryPath: String,
+      userAgent: String,
+      browseTimeout: Duration,
+      targetDateTimePattern: String,
+      targetTimeZone: ZoneId,
       apiUri: Uri,
       authSecret: String,
       reAnalysisInterval: Duration,
       repeatDelay: Duration,
-      chunkSize: Int,
+      workerPoolSize: Int,
       sources: List[SourceView]
   ): Map[String, ActorRef[SourceHandlerMessage]] = {
     /* Read page profile configs */
@@ -325,11 +347,15 @@ object ExtractionSupervisor {
                   "SourceHandler_" + source.id
                 )
               handler ! InitSourceHandler(
+                userAgent,
+                browseTimeout,
+                targetDateTimePattern,
+                targetTimeZone,
                 apiUri,
+                authSecret,
                 pageProfile,
                 reAnalysisInterval,
-                authSecret,
-                chunkSize,
+                workerPoolSize,
                 repeatDelay,
                 source,
                 distinctTagHandler,
@@ -357,18 +383,22 @@ object ExtractionSupervisor {
 
   final case class InitializingStateData(
       profileDirectoryPath: String,
+      userAgent: String,
+      browseTimeout: Duration,
+      targetDateTimePattern: String,
+      targetTimeZone: ZoneId,
       apiUri: Uri,
       authSecret: String,
       reAnalysisInterval: Duration,
       repeatDelay: Duration,
-      chunkSize: Int,
+      workerPoolSize: Int,
       distinctTagHandlerRef: ActorRef[DistinctTagHandlerMessage],
       sourcesToInitialize: List[SourceView]
   )
 
   final case class ExtractorStateData(
       reAnalysisInterval: Duration,
-      chunkSize: Int,
+      workerPoolSize: Int,
       repeatDelay: Duration,
       distinctTagHandler: ActorRef[DistinctTagHandlerMessage]
   )
