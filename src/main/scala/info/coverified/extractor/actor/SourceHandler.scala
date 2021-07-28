@@ -307,6 +307,15 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage])
                     entry.url.exists(_.id == url.id)
                   }
                 }
+                ctx.log.debug(
+                  "Found the following relation between urls and entries:\n\t{}",
+                  urlToEntry
+                    .map {
+                      case (urlView, maybeEntryView) =>
+                        s"${urlView.id} -> ${maybeEntryView.map(_.id).toString}"
+                    }
+                    .mkString("\n\t")
+                )
 
                 /* Select the first batch, send them to the url workers and change state accordingly */
                 val (firstBatch, remainingUrls) =

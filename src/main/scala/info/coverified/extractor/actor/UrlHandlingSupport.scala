@@ -25,7 +25,10 @@ import info.coverified.extractor.messages.SupervisorMessage.{
   ExistingUrlsHandled,
   NewUrlsHandled
 }
-import info.coverified.extractor.messages.UrlHandlerMessage.HandleNewUrl
+import info.coverified.extractor.messages.UrlHandlerMessage.{
+  HandleExistingUrl,
+  HandleNewUrl
+}
 import info.coverified.extractor.messages.{
   SourceHandlerMessage,
   SupervisorMessage,
@@ -33,7 +36,7 @@ import info.coverified.extractor.messages.{
 }
 import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
-import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
+import info.coverified.graphql.schema.SimpleUrl.{SimpleUrlView, urlId}
 import org.jsoup.HttpStatusException
 import org.slf4j.Logger
 
@@ -60,14 +63,10 @@ trait UrlHandlingSupport {
       workerPoolProxy: ActorRef[UrlHandlerMessage],
       timer: TimerScheduler[SourceHandlerMessage],
       context: ActorContext[SourceHandlerMessage]
-  ): Behaviors.Receive[SourceHandlerMessage] = handleUrls(
-    stateData,
-    urlsToBeHandled,
-    urlToActivation,
-    workerPoolProxy,
-    timer,
-    NewUrlsHandled(stateData.source.id, context.self),
-    (
+  ): Behaviors.Receive[SourceHandlerMessage] = {
+    /* Define some functions, that are issued later, when certain generic actions / events need to be translated into
+     * state changes or activation messages etc. */
+    val stateChangeOnActivation = (
         remainingUrls: List[SimpleUrl],
         updatedUrlToActivation: Map[String, Long]
     ) =>
@@ -79,7 +78,33 @@ trait UrlHandlingSupport {
         timer,
         context
       )
-  )
+    val toActivationMessage: (
+        String,
+        String,
+        Option[Nothing]
+    ) => UrlHandlerMessage = (
+        url: String,
+        urlId: String,
+        maybePayLoad: Option[Nothing]
+    ) =>
+      HandleNewUrl(
+        url,
+        urlId,
+        stateData.pageProfile,
+        context.self
+      )
+
+    handleUrls(
+      stateData,
+      urlsToBeHandled,
+      urlToActivation,
+      workerPoolProxy,
+      timer,
+      NewUrlsHandled(stateData.source.id, context.self),
+      stateChangeOnActivation,
+      toActivationMessage
+    )
+  }
 
   /**
     * Behavior to steer the handling of new urls
@@ -99,7 +124,40 @@ trait UrlHandlingSupport {
       workerPoolProxy: ActorRef[UrlHandlerMessage],
       timer: TimerScheduler[SourceHandlerMessage],
       context: ActorContext[SourceHandlerMessage]
-  ): Behaviors.Receive[SourceHandlerMessage] =
+  ): Behaviors.Receive[SourceHandlerMessage] = {
+    /* Define some functions, that are issued later, when certain generic actions / events need to be translated into
+     * state changes or activation messages etc. */
+    val stateChangeOnActivation = (
+        remainingUrls: List[
+          UrlWithPayLoad[SimpleEntryView[SimpleUrlView, ArticleTagView]]
+        ],
+        updatedUrlToActivation: Map[String, Long]
+    ) =>
+      handleExistingUrls(
+        stateData,
+        remainingUrls,
+        updatedUrlToActivation,
+        workerPoolProxy,
+        timer,
+        context
+      )
+    val toActivationMessage: (
+        String,
+        String,
+        Option[SimpleEntryView[SimpleUrlView, ArticleTagView]]
+    ) => UrlHandlerMessage = (
+        url: String,
+        urlId: String,
+        maybePayLoad: Option[SimpleEntryView[SimpleUrlView, ArticleTagView]]
+    ) =>
+      HandleExistingUrl(
+        url,
+        urlId,
+        maybePayLoad,
+        stateData.pageProfile,
+        context.self
+      )
+
     handleUrls[UrlWithPayLoad[SimpleEntryView[SimpleUrlView, ArticleTagView]], SimpleEntryView[
       SimpleUrlView,
       ArticleTagView
@@ -110,21 +168,10 @@ trait UrlHandlingSupport {
       workerPoolProxy,
       timer,
       ExistingUrlsHandled(stateData.source.id, context.self),
-      (
-          remainingUrls: List[
-            UrlWithPayLoad[SimpleEntryView[SimpleUrlView, ArticleTagView]]
-          ],
-          updatedUrlToActivation: Map[String, Long]
-      ) =>
-        handleExistingUrls(
-          stateData,
-          remainingUrls,
-          updatedUrlToActivation,
-          workerPoolProxy,
-          timer,
-          context
-        )
+      stateChangeOnActivation,
+      toActivationMessage
     )
+  }
 
   /**
     * Handle queued urls. There are three possible scenarios:
@@ -140,6 +187,7 @@ trait UrlHandlingSupport {
     * @param timer                    A timer to re-schedule urls
     * @param completionMessage        Completion message to send, after handling finished
     * @param stateChangeOnActivation  State to apply, after a new url handling has been issued
+    * @param toActivationMessage      Function to build activation message to [[UrlHandler]]
     * @tparam U Type of queued url elements
     * @tparam P Type of payload of queued elements
     * @return Defined behavior.
@@ -153,7 +201,8 @@ trait UrlHandlingSupport {
       completionMessage: SupervisorMessage,
       stateChangeOnActivation: (List[U], Map[String, Long]) => Behavior[
         SourceHandlerMessage
-      ]
+      ],
+      toActivationMessage: (String, String, Option[P]) => UrlHandlerMessage
   ): Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
       case (context, UrlHandledWithFailure(url, urlId, payLoad, error)) =>
@@ -199,7 +248,8 @@ trait UrlHandlingSupport {
           urlsToBeHandled,
           remainingActiveUrls,
           completionMessage,
-          stateChangeOnActivation
+          stateChangeOnActivation,
+          toActivationMessage
         )
       case (context, UrlHandledSuccessfully(url)) =>
         context.log
@@ -219,7 +269,8 @@ trait UrlHandlingSupport {
           urlsToBeHandled,
           remainingActiveUrls,
           completionMessage,
-          stateChangeOnActivation
+          stateChangeOnActivation,
+          toActivationMessage
         )
 
       case (context, ScheduleUrl(urlId, url, payLoad: Option[P])) =>
@@ -235,6 +286,7 @@ trait UrlHandlingSupport {
           url,
           urlId,
           payLoad,
+          toActivationMessage,
           urlsToBeHandled,
           urlToActivation,
           stateData,
@@ -339,6 +391,7 @@ trait UrlHandlingSupport {
     * @param urlToActivation    Mapping from active url to activation time
     * @param completionMessage  Message, that indicates completion to source handler
     * @param stateChangeOnActivation  State, that shall be used after activation of new url
+    * @param toActivationMessage      Function to build activation message to [[UrlHandler]]
     * @return
     */
   private def maybeIssueNextUnhandledUrl[U <: UrlQueueObject[P], P](
@@ -352,7 +405,8 @@ trait UrlHandlingSupport {
       completionMessage: SupervisorMessage,
       stateChangeOnActivation: (List[U], Map[String, Long]) => Behavior[
         SourceHandlerMessage
-      ]
+      ],
+      toActivationMessage: (String, String, Option[P]) => UrlHandlerMessage
   ): Behavior[SourceHandlerMessage] =
     if (unhandledUrls.nonEmpty) {
       /* Trigger new runs */
@@ -372,6 +426,7 @@ trait UrlHandlingSupport {
             nextUrl.name.get,
             nextUrl.id,
             nextUrl.payload,
+            toActivationMessage,
             remainingUrls,
             urlToActivation,
             stateData,
@@ -447,6 +502,7 @@ trait UrlHandlingSupport {
     * @param timer                    Timer for message scheduling
     * @param targetUrl                The targeted url
     * @param targetUrlId              Id of the targeted url in database
+    * @param toActivationMessage      Function to build activation message to [[UrlHandler]]
     * @param remainingUrls            Remaining urls to handle
     * @param urlToActivation          Mapping from active url to it's activation time.
     * @param stateData                Current state of the actor
@@ -461,6 +517,7 @@ trait UrlHandlingSupport {
       targetUrl: String,
       targetUrlId: String,
       maybePayload: Option[P],
+      toActivationMessage: (String, String, Option[P]) => UrlHandlerMessage,
       remainingUrls: List[U],
       urlToActivation: Map[String, Long],
       stateData: SourceHandlerStateData,
@@ -468,6 +525,13 @@ trait UrlHandlingSupport {
         SourceHandlerMessage
       ]
   ): Behavior[SourceHandlerMessage] = {
+    context.log.debug(
+      "Check if handling of url '{}' ({}) with{} pay load can be triggered.",
+      targetUrl,
+      targetUrlId,
+      maybePayload.map(_ => "out").getOrElse("")
+    )
+
     /* Figure out, which issue dates are within the last allowed duration */
     val currentInstant = System.currentTimeMillis()
     val firstRelevantInstant = currentInstant - stateData.repeatDelay.toMillis
@@ -475,25 +539,25 @@ trait UrlHandlingSupport {
       urlToActivation.values.filter(_ >= firstRelevantInstant)
     if (relevantIssues.size < stateData.workerPoolSize) {
       context.log.debug(
-        "Rate limit {}/{} Hz is not exceeded. Issue a new url handling.",
+        "Rate limit {}/{} Hz is not exceeded. Issue a new handling for url '{}'.",
         stateData.workerPoolSize,
-        stateData.repeatDelay.toMillis / 1000
+        stateData.repeatDelay.toMillis / 1000,
+        targetUrl
       )
       val updatedUrlToActivation = urlToActivation + (targetUrl -> currentInstant)
-      workerPoolProxy ! HandleNewUrl(
+      workerPoolProxy ! toActivationMessage(
         targetUrl,
         targetUrlId,
-        stateData.pageProfile,
-        context.self
+        maybePayload
       )
       stateChangeOnActivation(remainingUrls, updatedUrlToActivation)
 
     } else {
       context.log.debug(
-        "Rate limit {}/{} Hz currently is exceeded. Wait {}s with a new issue of url handling.",
+        "Rate limit {}/{} Hz currently is exceeded. Wait with a new issue of url handling for '{}'.",
         stateData.workerPoolSize,
         stateData.repeatDelay.toMillis / 1000,
-        stateData.repeatDelay.toMillis / 1000
+        targetUrl
       )
 
       /* This is a first try. Therefore, no registration of re-tries is needed here! */
