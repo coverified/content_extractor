@@ -18,7 +18,6 @@ import info.coverified.extractor.actor.SourceHandler.{
   nextUrl,
   peek
 }
-import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.messages.MutatorMessage.{
   InitMutator,
   Terminate
@@ -35,7 +34,7 @@ import info.coverified.extractor.messages.SourceHandlerMessage.{
   InitSourceHandler,
   MutationsCompleted,
   MutatorInitialized,
-  ReScheduleUrl,
+  ScheduleUrl,
   UrlHandledSuccessfully,
   UrlHandledWithFailure
 }
@@ -456,7 +455,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           remainingActiveUrls
         )
 
-      case (context, ReScheduleUrl(url, urlId)) =>
+      case (context, ScheduleUrl(urlId, url, _)) =>
         context.log.debug(
           "I'm ask to reschedule the url '{}'. Check rate limit and if applicable, send out request to my worker pool.",
           url
@@ -599,6 +598,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
     * @param maxRetries         Maximum permissible amount of retries
     * @param url                Actual url information
     * @param urlId              Identifier of the url
+    * @param payLoad            Possible, additional payload for scheduling of an url
     * @param repeatDelay        Repeat delay
     * @return The updated mapping from url to retry and a boolean indicator, if that url has been re-scheduled
     */
@@ -607,14 +607,15 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
       maxRetries: Int,
       url: String,
       urlId: String,
-      repeatDelay: Duration
+      repeatDelay: Duration,
+      payLoad: Option[_] = None
   ): (Map[String, Int], Boolean) = {
     val numOfRetries = urlToNumOfRetries.getOrElse(urlId, 0)
     if (numOfRetries < maxRetries) {
       /* ReSchedule url and register it */
       val currentRetry = numOfRetries + 1
       timer.startSingleTimer(
-        ReScheduleUrl(url, urlId),
+        ScheduleUrl(urlId, url, payLoad),
         FiniteDuration(currentRetry * repeatDelay.toMillis, "ms")
       )
       (urlToNumOfRetries + (urlId -> currentRetry), true)
@@ -762,7 +763,10 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
 
       /* This is a first try. Therefore, no registration of re-tries is needed here! */
       val waitTimeOut = FiniteDuration(stateData.repeatDelay.toMillis, "ms")
-      timer.startSingleTimer(ReScheduleUrl(targetUrl, targetUrlId), waitTimeOut)
+      timer.startSingleTimer(
+        ScheduleUrl(targetUrlId, targetUrl, None),
+        waitTimeOut
+      )
       Behaviors.same
     }
   }

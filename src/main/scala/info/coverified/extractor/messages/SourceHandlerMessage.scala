@@ -52,7 +52,7 @@ object SourceHandlerMessage {
       failure: Throwable
   ) extends UrlHandledMessage
 
-  final case class ReScheduleUrl(url: String, id: String)
+  final case class ScheduleUrl[P](id: String, url: String, payLoad: Option[P])
       extends SourceHandlerMessage
 
   final case object MutationsCompleted extends SourceHandlerMessage
