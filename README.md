@@ -21,14 +21,30 @@ _(not comprehensive, but the most important ones)_
 	-   reset the flag, if that entry has been tagged to false and
 	-   remove All tags
 
-## Environment variables to be set
--   `EXTRACTOR_API_URL` - The url, where GraphQL queries can be posted to
--   `AUTH_SECRET` - Secret token to authenticate against GraphQL-API
--   `EXTRACTOR_PAGE_PROFILE_PATH` - Path, where to find the page profiles
--   `RE_ANALYSIS_INTERVAL` - Amount of hours, after which sites may be re-analysed (default value: 48 hrs)
--   `SENTRY_DSN` - Data Source Name to use for Sentry integration (empty String disables it, e.g., for local execution)
--   `EXTRACTOR_CHUNK_SIZE` - Amount of urls, that should get queried at once (default value: 1,000)
--   `EXTRACTOR_REPEAT_DELAY` - Delay between processing two chunks (default value: 900s)
+## Configuration
+The following configuration parameters are available.
+Some are optional and default to the given value.
+Most of them can either be set by CLI argument or Environment variable.
+However, either all are given as CLI argument or Environment variable.
+
+| Description | Java CLI Argument | Environment variable | Default value |
+| ----------- | ----------------- | -------------------- | ------------- |
+| Url of GraphQL API | `apiUrl` | `API_URL` | --- |
+| Auth secret for GraphQL API | `authSecret` | `AUTH_SECRET` | --- |
+| Path to directory, where page profiles are stored | `pageProfileDirectoryPath` | `PAGE_PROFILE_DIRECTORY_PATH` | --- |
+| Minimum waiting time, until a url is re-visited and re-analyzed. Given in hours. | `reAnalysisInterval` | `RE_ANALYSIS_INTERVAL` | 48 hrs |
+| Amount of parallel url workers | `workerPoolSize` | `WORKER_POOL_SIZE` | 100
+| Delay when rescheduling a given url, if a host's rate limit is violated. Given in seconds. | `repeatDelay` | `REPEAT_DELAY` | 1s |
+| Maximum amount of retries, when a website reports rate limit exceeding. | `maxRetries` | `MAX_RETRIES` | 5 |
+| User agent information to be sent when visiting website | `userAgent` | `USER_AGENT` | "CoVerifiedBot-Extractor" |
+| Time out when browsing a web site. Given in seconds. | `browseTimeout` | `BROWSE_TIMEOUT` | 60s |
+| Date time pattern, in which date time information shall be transmitted to GraphQL API. | `targetDateTimePattern` | `TARGET_DATE_TIME_PATTERN` | "yyyy-MM-dd'T'HH:mm:ssXXX" |
+| Time zone, in which date time information shall be transmitted to GraphQL API. | `targetTimeZone` | `TARGET_TIME_ZONE` | "UTC" |
+
+Per host, a rate limit built by `workerPoolSize` / `repeatDelay` is respected.
+
+Additionally, the environment variable `SENTRY_DSN`, giving the Data Source Name to use for Sentry integration, has to be set.
+An empty String disables it, e.g., for local execution.
 
 ## Dockerfile build arguments
 -   `PROJECT_NAME` - Name of the project (to assemble name of compiled jar file)

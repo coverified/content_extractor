@@ -2,17 +2,22 @@ task prepareEnvironment {
 	description "Preparing the environemnt for testing phase in GitLab's CI/ CD pipeline"
 
 	doFirst {
-		def content = """|EXTRACTOR_API_URL=$apiUrl
-        |EXTRACTOR_PAGE_PROFILE_PATH=$profilePath
-        |RE_ANALYSIS_INTERVAL=$reAnalysisInterval
-        |AUTH_SECRET=$authSecret
-		|EXTRACTOR_CHUNK_SIZE=$chunkSize
-		|EXTRACTOR_REPEAT_DELAY=$repeatDelay
-        |""".stripMargin()
+		def content =
+				"""|USER_AGENT=$userAgent
+				|BROWSE_TIMEOUT=$browseTimeout
+				|TARGET_DATE_TIME_PATTERN=$targetDateTimePattern
+				|TARGET_TIME_ZONE=$targetTimeZone
+				|API_URL=$apiUrl
+				|AUTH_SECRET=$authSecret
+				|PAGE_PROFILE_DIRECTORY_PATH=$pageProfileDirectoryPath
+				|RE_ANALYSIS_INTERVAL=$reAnalysisInterval
+				|WORKER_POOL_SIZE=$workerPoolSize
+				|REPEAT_DELAY=$repeatDelay
+				|MAX_RETRIES=$maxRetries
+				|""".stripMargin()
+
 		def file = new File("build.env")
 		file.write(content)
-		println "Wrote apiUrl '$apiUrl', profileDirectory '$profilePath', re anaylsis interval " +
-				"'$reAnalysisInterval'(h), auth secret '$authSecret', chunk size $chunkSize and repeat delay" +
-				"'$repeatDelay'(s) to build.env"
+		println "Wrote build.env"
 	}
 }

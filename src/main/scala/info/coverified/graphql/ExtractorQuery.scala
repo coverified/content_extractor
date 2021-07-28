@@ -7,10 +7,13 @@ package info.coverified.graphql
 
 import caliban.client.Operations.RootQuery
 import caliban.client.SelectionBuilder
+import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Tag.TagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
+  ArticleTag,
   EntryWhereInput,
   Query,
+  SourceWhereInput,
   Tag,
   Url,
   UrlWhereInput
@@ -63,6 +66,7 @@ object ExtractorQuery {
     ".m4r"
   )
 
+  @deprecated("Use equivalent method in GraphQLHelper")
   private def excludeCommonFiles: List[UrlWhereInput] =
     commonFileEndings.map(
       ending => UrlWhereInput(name_not_contains_i = Some(ending))
@@ -74,8 +78,50 @@ object ExtractorQuery {
     * @param first Amount of urls to query
     * @return An equivalent [[SelectionBuilder]]
     */
+  @deprecated("Use equivalent method in GraphQLHelper")
   def newUrls(
       first: Int
+  ): SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
+    newUrls(Some(first))
+
+  /**
+    * Query all new urls
+    *
+    * @return A selection build to query all not yet visited urls
+    */
+  @deprecated("Use equivalent method in GraphQLHelper")
+  def newUrls
+      : SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
+    newUrls(None)
+
+  /**
+    * Query all new urls for a given source
+    *
+    * @param sourceId Id of the source, the url shall belong to
+    * @return A selection build to query all not yet visited urls, that belong to a source
+    */
+  @deprecated("Use equivalent method in GraphQLHelper")
+  def newUrls(
+      sourceId: String
+  ): SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
+    Query.allUrls(
+      where = UrlWhereInput(
+        lastCrawl = Some(DUMMY_LAST_CRAWL_DATE_TIME),
+        AND = Some(
+          excludeCommonFiles ++ List(
+            UrlWhereInput(name_not_contains_i = Some("/Videos/")),
+            UrlWhereInput(source = Some(SourceWhereInput(id = Some(sourceId))))
+          )
+        )
+      ),
+      skip = 0
+    )(
+      SimpleUrl.view
+    )
+
+  @deprecated("Use equivalent method in GraphQLHelper")
+  private def newUrls(
+      maybeFirst: Option[Int]
   ): SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
     Query.allUrls(
       where = UrlWhereInput(
@@ -87,7 +133,7 @@ object ExtractorQuery {
         )
       ),
       skip = 0,
-      first = Some(first)
+      first = maybeFirst
     )(
       SimpleUrl.view
     )
@@ -135,12 +181,12 @@ object ExtractorQuery {
     * @return An equivalent [[SelectionBuilder]]
     */
   def existingEntry(urlId: String): SelectionBuilder[RootQuery, Option[
-    List[SimpleEntry.SimpleEntryView[String, TagView[String]]]
+    List[SimpleEntry.SimpleEntryView[String, ArticleTagView]]
   ]] =
     Query.allEntries(
       where = EntryWhereInput(url = Some(UrlWhereInput(id = Some(urlId)))),
       skip = 0
-    )(SimpleEntry.view(Url.id, Tag.view(CoVerifiedClientSchema.Language.id)))
+    )(SimpleEntry.view(Url.id, ArticleTag.view))
 
   /**
     * Query all entries with the given hash code
@@ -148,18 +194,13 @@ object ExtractorQuery {
     * @param contentHash Hash code of the content
     * @return A List of applicable entries
     */
-  def entriesWithGivenHash(
+  def countEntriesWithGivenHash(
       contentHash: String
-  ): SelectionBuilder[RootQuery, Option[
-    List[SimpleEntry.SimpleEntryView[String, TagView[String]]]
-  ]] =
-    Query.allEntries(
+  ): SelectionBuilder[RootQuery, Option[Int]] =
+    Query.entriesCount(
       where = EntryWhereInput(
         contentHash = Some(contentHash),
         disabled = Some(false)
-      ),
-      skip = 0
-    )(
-      SimpleEntry.view(Url.id, Tag.view(CoVerifiedClientSchema.Language.id))
+      )
     )
 }

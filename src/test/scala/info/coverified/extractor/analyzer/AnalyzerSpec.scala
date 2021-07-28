@@ -17,14 +17,13 @@ import info.coverified.extractor.profile.ProfileConfig.PageType.{
   Selectors
 }
 import info.coverified.extractor.profile.ProfileConfig.Profile
-import info.coverified.test.scalatest.MockBrowser.DislikeThatUrlException
 import info.coverified.test.scalatest.{MockBrowser, ZioSpec}
 import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
 import org.jsoup.Jsoup
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.Inside.inside
 
-import java.time.{LocalDateTime, ZoneId, ZonedDateTime}
+import java.time.{Duration, LocalDateTime, ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
 import scala.util.{Failure, Success, Try}
 
@@ -35,6 +34,14 @@ class AnalyzerSpec
     with MockitoSugar
     with ContentExtractorHelper {
   "Given an analyzer" when {
+    val targetDateTimePattern = "yyyy-MM-dd'T'HH:mm:ssXXX"
+    val analyzer = Analyzer(
+      userAgent = "CoVerifiedBot-Extractor",
+      browseTimeout = Duration.ofMillis(60000L),
+      targetDateTimePattern = targetDateTimePattern,
+      targetTimeZone = ZoneId.of("UTC")
+    )
+
     val validPageType = ProfileConfig.PageType(
       condition = Condition(
         path = Some(coverifiedUrl + "/impressum"),
@@ -74,7 +81,7 @@ class AnalyzerSpec
           condition = validPageType.condition
             .copy(selector = Some("this won't work"))
         )
-        Analyzer invokePrivate selectorMatches(
+        analyzer invokePrivate selectorMatches(
           validUrlPageDoc.toScraperDoc,
           pageTypeWithoutSelectors
         ) shouldBe false
@@ -85,7 +92,7 @@ class AnalyzerSpec
           condition = validPageType.condition
             .copy(selector = Some("title"))
         )
-        Analyzer invokePrivate selectorMatches(
+        analyzer invokePrivate selectorMatches(
           validUrlPageDoc.toScraperDoc,
           pageTypeWithoutSelectors
         ) shouldBe true
@@ -96,7 +103,7 @@ class AnalyzerSpec
           condition = validPageType.condition
             .copy(selector = None)
         )
-        Analyzer invokePrivate selectorMatches(
+        analyzer invokePrivate selectorMatches(
           validUrlPageDoc.toScraperDoc,
           pageTypeWithoutSelectors
         ) shouldBe true
@@ -109,7 +116,7 @@ class AnalyzerSpec
           condition = validPageType.condition
             .copy(path = Some("https://wwww.ard.de"))
         )
-        Analyzer invokePrivate pathMatches(
+        analyzer invokePrivate pathMatches(
           coverifiedUrl + "/impressum/subpage",
           pageTypeWithPath
         ) shouldBe false
@@ -120,7 +127,7 @@ class AnalyzerSpec
           condition = validPageType.condition
             .copy(path = Some(coverifiedUrl + "/impressum"))
         )
-        Analyzer invokePrivate pathMatches(
+        analyzer invokePrivate pathMatches(
           coverifiedUrl + "/impressum/subpage",
           pageTypeWithPath
         ) shouldBe true
@@ -131,7 +138,7 @@ class AnalyzerSpec
           condition = validPageType.condition
             .copy(path = None)
         )
-        Analyzer invokePrivate pathMatches(
+        analyzer invokePrivate pathMatches(
           coverifiedUrl + "/impressum/subpage",
           pageTypeWithPath
         ) shouldBe true
@@ -159,7 +166,7 @@ class AnalyzerSpec
             Profile(coverifiedUrl, List(pageType))
           )
 
-          Analyzer invokePrivate getSelectors(
+          analyzer invokePrivate getSelectors(
             coverifiedUrl + "/impressum/subpage",
             validUrlPageDoc.toScraperDoc,
             profileConfig
@@ -192,7 +199,7 @@ class AnalyzerSpec
             Profile(coverifiedUrl, List(pageType))
           )
 
-          Analyzer invokePrivate getSelectors(
+          analyzer invokePrivate getSelectors(
             coverifiedUrl + "/impressum/subpage",
             validUrlPageDoc.toScraperDoc,
             profileConfig
@@ -211,8 +218,6 @@ class AnalyzerSpec
 
     "extracting the date information" should {
       val selector = "#date"
-      val ISO_DATE_TIME_PATTERN =
-        PrivateMethod[String](Symbol("ISO_DATE_TIME_PATTERN"))
       val url = "test.url"
 
       "correctly parse a valid ISO date time string to ZonedDateTime" in {
@@ -220,11 +225,9 @@ class AnalyzerSpec
         val expected =
           ZonedDateTime.of(2019, 6, 27, 22, 0, 0, 0, ZoneId.of("Z"))
 
-        val dateTimePattern = Analyzer invokePrivate ISO_DATE_TIME_PATTERN()
-
         val actual = ZonedDateTime.parse(
           input,
-          DateTimeFormatter.ofPattern(dateTimePattern)
+          DateTimeFormatter.ofPattern(targetDateTimePattern)
         )
         actual shouldBe expected
       }
@@ -238,7 +241,7 @@ class AnalyzerSpec
             |</html>
             |""".stripMargin))
 
-        Analyzer.getDateTimeStringFromContent(document, selector, url) match {
+        analyzer.getDateTimeStringFromContent(document, selector, url) match {
           case Failure(_) => succeed
           case Success(_) =>
             fail("Extraction of information was meant to fail, but passed.")
@@ -256,7 +259,7 @@ class AnalyzerSpec
             |</html>
             |""".stripMargin))
 
-        Analyzer.getDateTimeStringFromContent(document, selector, url) match {
+        analyzer.getDateTimeStringFromContent(document, selector, url) match {
           case Success(dateTimeString) => dateTimeString shouldBe expected
           case Failure(_) =>
             fail("Extraction of information failed, but was meant to pass.")
@@ -283,7 +286,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeStringFromElement(document, config, url) match {
+        analyzer.getDateTimeStringFromElement(document, config, url) match {
           case Success(dateTimeString) => dateTimeString shouldBe expected
           case Failure(_) =>
             fail("Extraction of information failed, but was meant to pass.")
@@ -310,7 +313,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeStringFromElement(document, config, url) match {
+        analyzer.getDateTimeStringFromElement(document, config, url) match {
           case Success(dateTimeString) => dateTimeString shouldBe expected
           case Failure(_) =>
             fail("Extraction of information failed, but was meant to pass.")
@@ -337,7 +340,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeStringFromElement(document, config, url) match {
+        analyzer.getDateTimeStringFromElement(document, config, url) match {
           case Success(dateTimeString) => dateTimeString shouldBe expected
           case Failure(_) =>
             fail("Extraction of information failed, but was meant to pass.")
@@ -366,7 +369,6 @@ class AnalyzerSpec
 
       "get date time string from correct source, if receive from JSON-LD is desired and succeeds" in {
         val expected = "2021-07-20T23:20:00+01:00"
-        val expectedDateTimePattern = Analyzer invokePrivate ISO_DATE_TIME_PATTERN()
 
         val config = Date(
           tryJsonLdFirst = true,
@@ -377,9 +379,9 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeString(fullDocument, config, url) match {
+        analyzer.getDateTimeString(fullDocument, config, url) match {
           case Success(dateTimeString) =>
-            dateTimeString shouldBe (expected, expectedDateTimePattern)
+            dateTimeString shouldBe (expected, targetDateTimePattern)
           case Failure(_) =>
             fail("Extraction of information failed, but was meant to pass.")
         }
@@ -406,7 +408,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeString(fullDocument, config, url) match {
+        analyzer.getDateTimeString(fullDocument, config, url) match {
           case Success(dateTimeString) =>
             dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssZ")
           case Failure(_) =>
@@ -426,7 +428,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeString(fullDocument, config, url) match {
+        analyzer.getDateTimeString(fullDocument, config, url) match {
           case Success(dateTimeString) =>
             dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssZ")
           case Failure(_) =>
@@ -446,7 +448,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeString(fullDocument, config, url) match {
+        analyzer.getDateTimeString(fullDocument, config, url) match {
           case Success(dateTimeString) =>
             dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssZ")
           case Failure(_) =>
@@ -466,7 +468,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeString(fullDocument, config, url) match {
+        analyzer.getDateTimeString(fullDocument, config, url) match {
           case Success(dateTimeString) =>
             dateTimeString shouldBe (expected, "yyyy-MM-dd'T'HH:mm:ssZ")
           case Failure(_) =>
@@ -484,7 +486,7 @@ class AnalyzerSpec
           defaultZoneId = "Europe/Berlin"
         )
 
-        Analyzer.getDateTimeString(fullDocument, config, url) match {
+        analyzer.getDateTimeString(fullDocument, config, url) match {
           case Success(_) =>
             fail("Extraction of information was meant to fail, but succeeded.")
           case Failure(_) => succeed
@@ -492,7 +494,7 @@ class AnalyzerSpec
       }
 
       "hand back original string, if no regex pattern shall be applied" in {
-        Analyzer.applyDateTimeRegex("20.07.2021 | Von", None, url) match {
+        analyzer.applyDateTimeRegex("20.07.2021 | Von", None, url) match {
           case Success(value) => value shouldBe "20.07.2021 | Von"
           case Failure(exception) =>
             fail("Applying regex was meant to pass, but failed.", exception)
@@ -500,7 +502,7 @@ class AnalyzerSpec
       }
 
       "correctly apply regex pattern" in {
-        Analyzer.applyDateTimeRegex(
+        analyzer.applyDateTimeRegex(
           "20.07.2021 | Von",
           Some("\\d{2}\\.\\d{2}\\.\\d{4}"),
           url
@@ -512,7 +514,7 @@ class AnalyzerSpec
       }
 
       "fail, if pattern does not apply" in {
-        Analyzer.applyDateTimeRegex(
+        analyzer.applyDateTimeRegex(
           "20.07.2021 | Von",
           Some("^BlaFoo\\d+"),
           url
@@ -539,24 +541,22 @@ class AnalyzerSpec
         )
 
         /* If no time zone information is provided, assume we are in UTC */
-        Analyzer.reformatDateTimePattern(input, format, fallBackZone) shouldBe expected
+        analyzer.reformatDateTimePattern(input, format, fallBackZone) shouldBe expected
       }
 
       "properly reformat date time string with 'Z' as time zone" in {
         val input = "2019-06-27T22:00:00Z"
         val expected = Success(input)
-        val dateTimeFormat = Analyzer invokePrivate ISO_DATE_TIME_PATTERN()
 
-        Analyzer.reformatDateTimePattern(input, dateTimeFormat) shouldBe expected
+        analyzer.reformatDateTimePattern(input, targetDateTimePattern) shouldBe expected
       }
 
       "properly reformat date time string with other time zone description" in {
         val input = "2019-06-27T22:00:00+01:00"
         /* The input is given in another time zone, therefore the instant is transferred to UTC. */
         val expected = Success("2019-06-27T21:00:00Z")
-        val dateTimeFormat = Analyzer invokePrivate ISO_DATE_TIME_PATTERN()
 
-        Analyzer.reformatDateTimePattern(input, dateTimeFormat) shouldBe expected
+        analyzer.reformatDateTimePattern(input, targetDateTimePattern) shouldBe expected
       }
 
       "properly reformat date time string with missing time" in {
@@ -574,7 +574,7 @@ class AnalyzerSpec
             .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssX"))
         )
 
-        Analyzer.reformatDateTimePattern(input, format, fallBackZone) shouldBe expected
+        analyzer.reformatDateTimePattern(input, format, fallBackZone) shouldBe expected
       }
     }
 
@@ -585,7 +585,7 @@ class AnalyzerSpec
 
       "throw an AnalysisException, if the mandatory title cannot be extracted" in {
         inside(
-          Analyzer invokePrivate extractInformation(
+          analyzer invokePrivate extractInformation(
             urlPageDocWithoutTitle.toScraperDoc,
             validPageType.selectors,
             url
@@ -609,7 +609,7 @@ class AnalyzerSpec
 
       "extract information correctly from url page" in {
         inside(
-          Analyzer invokePrivate extractInformation(
+          analyzer invokePrivate extractInformation(
             validUrlPageDoc.toScraperDoc,
             validPageType.selectors,
             url
@@ -634,7 +634,7 @@ class AnalyzerSpec
 
       "extract information correctly from url page, if optional entries are not apparent" in {
         inside(
-          Analyzer invokePrivate extractInformation(
+          analyzer invokePrivate extractInformation(
             validUrlPageDocWithoutOptionalInformation.toScraperDoc,
             validPageType.selectors,
             url
@@ -681,7 +681,7 @@ class AnalyzerSpec
               contentSelector,
               excludeSelectors
               ) =>
-            Analyzer invokePrivate extractContent(
+            analyzer invokePrivate extractContent(
               rawDocument,
               contentSelector,
               excludeSelectors
@@ -717,9 +717,8 @@ class AnalyzerSpec
           )
         )
 
-        Analyzer invokePrivate analyze(
+        analyzer invokePrivate analyze(
           coverifiedUrl + "/impressum/subpage",
-          coverifiedUrlId,
           validUrlPageDoc.toScraperDoc,
           profileConfig
         ) match {
@@ -734,7 +733,6 @@ class AnalyzerSpec
 
       "succeed, if analysis was successful" in {
         val url = coverifiedUrl
-        val urlId = coverifiedUrlId
         val profileConfig = ProfileConfig(
           Profile(
             coverifiedUrl,
@@ -746,46 +744,14 @@ class AnalyzerSpec
           )
         )
 
-        Analyzer invokePrivate analyze(
+        analyzer invokePrivate analyze(
           url,
-          urlId,
           validUrlPageDoc.toScraperDoc,
           profileConfig
         ) match {
           case Success(_) => succeed
           case Failure(exception) =>
             fail("Analysis was meant to succeed, but failed.", exception)
-        }
-      }
-    }
-
-    "running the analysis" should {
-      val validUrl = coverifiedUrl
-      val mockBrowser = new MockBrowser(Map(validUrl -> validUrlPageDoc))
-      val queryUrl: String => Try[JsoupDocument] =
-        (url: String) => Try(mockBrowser.get(url)).map(JsoupDocument)
-
-      "return Failure, when browser fails" in {
-        val profileConfig = getConfig(MockBrowser.dislikedUrl)
-        Analyzer.run(
-          MockBrowser.dislikedUrl,
-          coverifiedUrlId,
-          profileConfig,
-          queryUrl
-        ) match {
-          case Failure(exception: DislikeThatUrlException) =>
-            exception.msg shouldBe "I don't like that url."
-          case Failure(exception) =>
-            fail("Browser failed with wrong exception.", exception)
-          case Success(_) => fail("Browser was meant to fail, but succeeded.")
-        }
-      }
-
-      "return something, if browser does not fail and analysis does not fail" in {
-        Analyzer.run(validUrl, "coverified", getConfig(validUrl), queryUrl) match {
-          case Success(_) => succeed
-          case Failure(exception) =>
-            fail("Browser did not fail, but analysis failed.", exception)
         }
       }
     }

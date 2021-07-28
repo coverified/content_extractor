@@ -11,6 +11,7 @@ import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.model.Document
 import com.typesafe.scalalogging.LazyLogging
+import info.coverified.extractor.analyzer.Analyzer.ISO_DATE_TIME_PATTERN
 import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig.PageType
@@ -29,20 +30,34 @@ import scala.util.{Failure, Success, Try}
   * @version 0.1
   * @since 26.02.21
   */
-object Analyzer extends LazyLogging {
-  private val USER_AGENT: String = "CoVerifiedBot-Extractor"
-  private val BROWSE_TIME_OUT: Duration = Duration.ofMillis(3000L)
+object Analyzer {
+  def apply(
+      userAgent: String,
+      browseTimeout: Duration,
+      targetDateTimePattern: String,
+      targetTimeZone: ZoneId
+  ): Analyzer =
+    new Analyzer(
+      userAgent,
+      browseTimeout,
+      targetDateTimePattern,
+      targetTimeZone
+    )
 
   private val ISO_DATE_TIME_PATTERN = "yyyy-MM-dd'T'HH:mm:ssXXX"
-  private val TARGET_TIME_ZONE = ZoneId.of("UTC")
+}
 
+class Analyzer private (
+    userAgent: String,
+    browseTimeout: Duration,
+    targetDateTimePattern: String,
+    targetTimeZone: ZoneId
+) extends LazyLogging {
   def run(
       url: String,
-      urlId: String,
-      cfg: ProfileConfig,
-      queryUrl: String => Try[JsoupDocument] = u => Analyzer.queryUrl(u)
+      cfg: ProfileConfig
   ): Try[RawEntryInformation] =
-    queryUrl(url).flatMap(analyze(url, urlId, _, cfg))
+    buildPageDocument(url).flatMap(analyze(url, _, cfg))
 
   /**
     * Get the content of the web page to be reached with the current url
@@ -50,13 +65,13 @@ object Analyzer extends LazyLogging {
     * @param url Url location of the web page
     * @return The content, that can be scraped later
     */
-  def queryUrl(url: String): Try[JsoupDocument] = Try {
+  def buildPageDocument(url: String): Try[JsoupDocument] = Try {
     JsoupDocument(
       Jsoup
         .connect(url)
         .ignoreContentType(false)
-        .userAgent(USER_AGENT)
-        .timeout(BROWSE_TIME_OUT.toMillis.toInt)
+        .userAgent(userAgent)
+        .timeout(browseTimeout.toMillis.toInt)
         .followRedirects(false)
         .execute()
         .parse()
@@ -67,14 +82,12 @@ object Analyzer extends LazyLogging {
     * Analyze the given page document and extract information
     *
     * @param url           Url of page
-    * @param urlId         Identifier of the url entry in data base
     * @param pageDoc       Page document
     * @param profileConfig Applicable profile config for this page
     * @return A trial onto the needed information
     */
   private def analyze(
       url: String,
-      urlId: String,
       pageDoc: JsoupDocument,
       profileConfig: ProfileConfig
   ): Try[RawEntryInformation] =
@@ -258,8 +271,9 @@ object Analyzer extends LazyLogging {
         Some(dateTimeString)
       case Failure(exception) =>
         logger.error(
-          "Extraction of date time information failed due to the following reason. Leave this information out.",
-          exception
+          "Extraction of date time information failed due to the following reason. Leave this information out.\n\tError: {} - \"{}\"",
+          exception.getClass.getSimpleName,
+          exception.getMessage
         )
         None
     }
@@ -394,9 +408,9 @@ object Analyzer extends LazyLogging {
       .getOrElse(Success(rawDateTimeString))
 
   /**
-    * Bring an arbitrary date time pattern to an ISO date time pattern. The input string is parsed with it's given time
-    * zone information and transferred to UTC. If no time zone information is available, we use fall back information.
-    * If no time information is given at all, set it to the beginning of the day.
+    * Bring an arbitrary date time pattern to desired pattern. The input string is parsed with it's given time zone
+    * information and transferred to target time zone. If no time zone information is available, we use fall back
+    * information. If no time information is given at all, set it to the beginning of the day.
     *
     * @param dateTimeString The input string
     * @param dateTimeFormat The matching format
@@ -430,8 +444,8 @@ object Analyzer extends LazyLogging {
         /* The string does not contain time information. It is set to 00:00 h */
         LocalDate.from(temporalAccessor).atStartOfDay(fallBackZone)
       }
-    }.map(_.withZoneSameInstant(TARGET_TIME_ZONE))
-      .map(_.format(DateTimeFormatter.ofPattern(ISO_DATE_TIME_PATTERN)))
+    }.map(_.withZoneSameInstant(targetTimeZone))
+      .map(_.format(DateTimeFormatter.ofPattern(targetDateTimePattern)))
 
   /**
     * Extract content from web page under consideration of exclude selectors, that are meant to odd out child elements,
