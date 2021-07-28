@@ -85,6 +85,7 @@ class UrlHandler {
           analyzer,
           url,
           urlId,
+          None,
           pageProfile,
           urlHandling,
           sourceHandler,
@@ -96,7 +97,13 @@ class UrlHandler {
         Behaviors.same
       case (
           ctx,
-          HandleExistingUrl(url, urlId, Some(entry), pageProfile, sourceHandler)
+          HandleExistingUrl(
+            url,
+            urlId,
+            payload @ Some(entry),
+            pageProfile,
+            sourceHandler
+          )
           ) =>
         ctx.log
           .debug(
@@ -112,6 +119,7 @@ class UrlHandler {
           analyzer,
           url,
           urlId,
+          payload,
           pageProfile,
           urlHandling,
           sourceHandler,
@@ -137,6 +145,7 @@ class UrlHandler {
           analyzer,
           url,
           urlId,
+          None,
           pageProfile,
           urlHandling,
           sourceHandler,
@@ -165,15 +174,17 @@ object UrlHandler {
     * @param analyzer           Analyzer to use for page analysis
     * @param url                The url itself
     * @param urlId              Identifier of the url
+    * @param payLoad            Possible pay load of request
     * @param pageProfile        Applicable page profile
     * @param handlingFunction   A function, that handles existing information as well as information from analyzer
     * @param sourceHandler      Reference to the source handler
     * @param logger             Logging instance
     */
-  private def visitUrlAndHandleEntry(
+  private def visitUrlAndHandleEntry[P](
       analyzer: Analyzer,
       url: String,
       urlId: String,
+      payLoad: Option[P],
       pageProfile: ProfileConfig,
       handlingFunction: EntryHandlingFunction,
       sourceHandler: ActorRef[SourceHandlerMessage],
@@ -191,7 +202,7 @@ object UrlHandler {
         "Error during visit of web site '{}'. Report to my source handler.",
         url
       )
-      sourceHandler ! UrlHandledWithFailure(url, urlId, exception)
+      sourceHandler ! UrlHandledWithFailure(url, urlId, payLoad, exception)
   }
 
   /**

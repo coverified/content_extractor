@@ -7,7 +7,11 @@ package info.coverified.extractor.actor
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, TimerScheduler}
-import info.coverified.extractor.actor.UrlHandlingSupport.UrlQueueObject
+import info.coverified.extractor.actor.UrlHandlingSupport.{
+  SimpleUrl,
+  UrlQueueObject,
+  UrlWithPayLoad
+}
 import info.coverified.extractor.actor.SourceHandler.{
   SourceHandlerStateData,
   peek
@@ -51,29 +55,28 @@ trait UrlHandlingSupport {
     */
   def handleNewUrls(
       stateData: SourceHandlerStateData,
-      urlsToBeHandled: List[SimpleUrlView],
+      urlsToBeHandled: List[SimpleUrl],
       urlToActivation: Map[String, Long],
       workerPoolProxy: ActorRef[UrlHandlerMessage],
       timer: TimerScheduler[SourceHandlerMessage],
       context: ActorContext[SourceHandlerMessage]
-  ): Behaviors.Receive[SourceHandlerMessage] =
-    handleUrls(
-      stateData,
-      urlsToBeHandled,
-      urlToActivation,
-      workerPoolProxy,
-      timer,
-      NewUrlsHandled(stateData.source.id, context.self),
-      (updatedUrlToActivation: Map[String, Long]) =>
-        handleNewUrls(
-          stateData,
-          urlsToBeHandled,
-          updatedUrlToActivation,
-          workerPoolProxy,
-          timer,
-          context
-        )
-    )
+  ): Behaviors.Receive[SourceHandlerMessage] = handleUrls(
+    stateData,
+    urlsToBeHandled,
+    urlToActivation,
+    workerPoolProxy,
+    timer,
+    NewUrlsHandled(stateData.source.id, context.self),
+    (updatedUrlToActivation: Map[String, Long]) =>
+      handleNewUrls(
+        stateData,
+        urlsToBeHandled,
+        updatedUrlToActivation,
+        workerPoolProxy,
+        timer,
+        context
+      )
+  )
 
   /**
     * Behavior to steer the handling of new urls
@@ -87,14 +90,17 @@ trait UrlHandlingSupport {
   def handleExistingUrls(
       stateData: SourceHandlerStateData,
       urlsToBeHandled: List[
-        (SimpleUrlView, Option[SimpleEntryView[SimpleUrlView, ArticleTagView]])
+        UrlWithPayLoad[SimpleEntryView[SimpleUrlView, ArticleTagView]]
       ],
       urlToActivation: Map[String, Long],
       workerPoolProxy: ActorRef[UrlHandlerMessage],
       timer: TimerScheduler[SourceHandlerMessage],
       context: ActorContext[SourceHandlerMessage]
   ): Behaviors.Receive[SourceHandlerMessage] =
-    handleUrls(
+    handleUrls[UrlWithPayLoad[SimpleEntryView[SimpleUrlView, ArticleTagView]], SimpleEntryView[
+      SimpleUrlView,
+      ArticleTagView
+    ]](
       stateData,
       urlsToBeHandled,
       urlToActivation,
@@ -142,7 +148,7 @@ trait UrlHandlingSupport {
       ]
   ): Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
-      case (context, UrlHandledWithFailure(url, urlId, error)) =>
+      case (context, UrlHandledWithFailure(url, urlId, payLoad, error)) =>
         /* Remove the reporter from list of active ones */
         val remainingActiveUrls = urlToActivation.filterNot {
           case (remainingUrl, _) => remainingUrl == url
@@ -153,9 +159,10 @@ trait UrlHandlingSupport {
             stateData.stashedUrls,
             stateData.maxRetries,
             url,
-            urlId, // TODO: Payload
+            urlId,
             stateData.repeatDelay,
-            timer
+            timer,
+            payLoad
           )
           if (!hasBeenRescheduled) {
             context.log.warn(
@@ -175,7 +182,7 @@ trait UrlHandlingSupport {
           handleRateLimitExceeding
         ).getOrElse(stateData)
 
-        maybeIssueNextUnhandledUrl(
+        maybeIssueNextUnhandledUrl[U, P](
           context,
           workerPoolProxy,
           stateData.supervisor,
@@ -195,7 +202,7 @@ trait UrlHandlingSupport {
           case (remainingUrl, _) => remainingUrl == url
         }
 
-        maybeIssueNextUnhandledUrl(
+        maybeIssueNextUnhandledUrl[U, P](
           context,
           workerPoolProxy,
           stateData.supervisor,
@@ -207,7 +214,7 @@ trait UrlHandlingSupport {
           stateChangeOnActivation
         )
 
-      case (context, ScheduleUrl(urlId, url, _)) =>
+      case (context, ScheduleUrl(urlId, url, payLoad)) =>
         context.log.debug(
           "I'm ask to reschedule the url '{}'. Check rate limit and if applicable, send out request to my worker pool.",
           url
@@ -219,7 +226,7 @@ trait UrlHandlingSupport {
           timer,
           url,
           urlId,
-          None,
+          payLoad,
           urlToActivation,
           stateData,
           stateChangeOnActivation
@@ -333,7 +340,7 @@ trait UrlHandlingSupport {
     if (unhandledUrls.nonEmpty) {
       /* Trigger new runs */
       val (maybeNextUrl, remainingUrls) =
-        nextUrl(unhandledUrls, context.log)
+        nextUrl[U, P](unhandledUrls, context.log)
       maybeNextUrl match {
         case Some(nextUrl) =>
           context.log.debug(
@@ -407,7 +414,7 @@ trait UrlHandlingSupport {
           "The url entry with id '{}' does not contain an actual, visitable url. Cannot handle this.",
           peakUrl.id
         )
-        nextUrl(remainingUrls, logger)
+        nextUrl[U, P](remainingUrls, logger)
       case None =>
         (None, remainingUrls)
     }
@@ -485,5 +492,33 @@ object UrlHandlingSupport {
     def id: String
     def name: Option[String]
     def payload: Option[P]
+  }
+
+  final class SimpleUrl private (urlId: String, url: Option[String])
+      extends UrlQueueObject[Nothing] {
+    override def id: String = urlId
+    override def name: Option[String] = url
+    override def payload: Option[Nothing] = None
+  }
+  object SimpleUrl {
+    def apply(simpleUrlView: SimpleUrlView) =
+      new SimpleUrl(simpleUrlView.id, simpleUrlView.name)
+  }
+
+  final class UrlWithPayLoad[P](
+      urlId: String,
+      url: Option[String],
+      payLoad: Option[P]
+  ) extends UrlQueueObject[P] {
+    override def id: String = urlId
+    override def name: Option[String] = url
+    override def payload: Option[P] = payLoad
+  }
+  object UrlWithPayLoad {
+    def apply[P](tuple: (SimpleUrlView, Option[P])): UrlWithPayLoad[P] =
+      tuple match {
+        case (simpleUrlView, payLoad) =>
+          new UrlWithPayLoad[P](simpleUrlView.id, simpleUrlView.name, payLoad)
+      }
   }
 }

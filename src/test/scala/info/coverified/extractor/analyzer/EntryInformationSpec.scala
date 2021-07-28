@@ -11,8 +11,9 @@ import info.coverified.test.scalatest.UnitSpec
 class EntryInformationSpec extends UnitSpec {
   "Having entry information" when {
     "determining the content hash code" should {
+      val contentHash = PrivateMethod[Int](Symbol("contentHash"))
       "lead to correct hash code" in {
-        EntryInformation.contentHash(
+        EntryInformation invokePrivate contentHash(
           "The title",
           "This summarizes everything",
           "This contains a lot.",
@@ -21,7 +22,7 @@ class EntryInformationSpec extends UnitSpec {
       }
 
       "return a different hash code on different content" in {
-        EntryInformation.contentHash(
+        EntryInformation invokePrivate contentHash(
           "The title",
           "This summarizes everything",
           "This contains less.",
@@ -30,7 +31,7 @@ class EntryInformationSpec extends UnitSpec {
       }
 
       "return correct hash code, if some fields have empty content" in {
-        EntryInformation.contentHash("The title", "", "", "") shouldBe 318208789
+        EntryInformation invokePrivate contentHash("The title", "", "", "") shouldBe 318208789
       }
 
       "return correct hash code from entry creation information" in {

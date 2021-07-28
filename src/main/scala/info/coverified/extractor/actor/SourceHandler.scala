@@ -12,6 +12,10 @@ import info.coverified.extractor.actor.SourceHandler.{
   SourceHandlerStateData,
   peek
 }
+import info.coverified.extractor.actor.UrlHandlingSupport.{
+  SimpleUrl,
+  UrlWithPayLoad
+}
 import info.coverified.extractor.messages.MutatorMessage.{
   InitMutator,
   Terminate
@@ -232,9 +236,10 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage])
               }
             }.toMap
 
+            val queueEntries = remainingNewUrls.map(SimpleUrl(_))
             handleNewUrls(
               stateData,
-              remainingNewUrls,
+              queueEntries,
               urlToActivation,
               workerPoolProxy,
               timer,
@@ -324,9 +329,10 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage])
                 }.toMap
 
                 /* Change state to handle existing urls */
+                val queueEntries = remainingUrls.map(UrlWithPayLoad(_))
                 handleExistingUrls(
                   stateData,
-                  remainingUrls,
+                  queueEntries,
                   urlToActivation,
                   workerPoolProxy,
                   timer,

@@ -46,9 +46,10 @@ object SourceHandlerMessage {
     */
   sealed trait UrlHandledMessage extends SourceHandlerMessage
   final case class UrlHandledSuccessfully(url: String) extends UrlHandledMessage
-  final case class UrlHandledWithFailure(
+  final case class UrlHandledWithFailure[P](
       url: String,
       urlId: String,
+      payLoad: Option[P],
       failure: Throwable
   ) extends UrlHandledMessage
 
