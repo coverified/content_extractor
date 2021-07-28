@@ -67,10 +67,13 @@ trait UrlHandlingSupport {
     workerPoolProxy,
     timer,
     NewUrlsHandled(stateData.source.id, context.self),
-    (updatedUrlToActivation: Map[String, Long]) =>
+    (
+        remainingUrls: List[SimpleUrl],
+        updatedUrlToActivation: Map[String, Long]
+    ) =>
       handleNewUrls(
         stateData,
-        urlsToBeHandled,
+        remainingUrls,
         updatedUrlToActivation,
         workerPoolProxy,
         timer,
@@ -107,10 +110,15 @@ trait UrlHandlingSupport {
       workerPoolProxy,
       timer,
       ExistingUrlsHandled(stateData.source.id, context.self),
-      (updatedUrlToActivation: Map[String, Long]) =>
+      (
+          remainingUrls: List[
+            UrlWithPayLoad[SimpleEntryView[SimpleUrlView, ArticleTagView]]
+          ],
+          updatedUrlToActivation: Map[String, Long]
+      ) =>
         handleExistingUrls(
           stateData,
-          urlsToBeHandled,
+          remainingUrls,
           updatedUrlToActivation,
           workerPoolProxy,
           timer,
@@ -143,7 +151,7 @@ trait UrlHandlingSupport {
       workerPoolProxy: ActorRef[UrlHandlerMessage],
       timer: TimerScheduler[SourceHandlerMessage],
       completionMessage: SupervisorMessage,
-      stateChangeOnActivation: Map[String, Long] => Behavior[
+      stateChangeOnActivation: (List[U], Map[String, Long]) => Behavior[
         SourceHandlerMessage
       ]
   ): Behaviors.Receive[SourceHandlerMessage] =
@@ -214,12 +222,12 @@ trait UrlHandlingSupport {
           stateChangeOnActivation
         )
 
-      case (context, ScheduleUrl(urlId, url, payLoad)) =>
+      case (context, ScheduleUrl(urlId, url, payLoad: Option[P])) =>
         context.log.debug(
           "I'm ask to reschedule the url '{}'. Check rate limit and if applicable, send out request to my worker pool.",
           url
         )
-        maybeIssueNewHandling(
+        maybeIssueNewHandling[U, P](
           context,
           workerPoolProxy,
           stateData.supervisor,
@@ -227,10 +235,19 @@ trait UrlHandlingSupport {
           url,
           urlId,
           payLoad,
+          urlsToBeHandled,
           urlToActivation,
           stateData,
           stateChangeOnActivation
         )
+
+      case (context, ScheduleUrl(_, url, _)) =>
+        context.log.debug(
+          "I'm ask to reschedule the url '{}' with unsupported payload. Cannot do this.",
+          url
+        )
+        Behaviors.same
+
       case _ => Behaviors.unhandled
     }
 
@@ -333,7 +350,7 @@ trait UrlHandlingSupport {
       unhandledUrls: List[U],
       urlToActivation: Map[String, Long],
       completionMessage: SupervisorMessage,
-      stateChangeOnActivation: Map[String, Long] => Behavior[
+      stateChangeOnActivation: (List[U], Map[String, Long]) => Behavior[
         SourceHandlerMessage
       ]
   ): Behavior[SourceHandlerMessage] =
@@ -355,6 +372,7 @@ trait UrlHandlingSupport {
             nextUrl.name.get,
             nextUrl.id,
             nextUrl.payload,
+            remainingUrls,
             urlToActivation,
             stateData,
             stateChangeOnActivation
@@ -381,7 +399,7 @@ trait UrlHandlingSupport {
           ""
         }
       )
-      stateChangeOnActivation(urlToActivation)
+      stateChangeOnActivation(List.empty, urlToActivation)
     } else {
       context.log.info(
         "All new urls of source '{}' ('{}') are handled. Report to supervisor.",
@@ -429,12 +447,13 @@ trait UrlHandlingSupport {
     * @param timer                    Timer for message scheduling
     * @param targetUrl                The targeted url
     * @param targetUrlId              Id of the targeted url in database
+    * @param remainingUrls            Remaining urls to handle
     * @param urlToActivation          Mapping from active url to it's activation time.
     * @param stateData                Current state of the actor
     * @param stateChangeOnActivation  State, that shall be used after activation of new url
     * @return Defined behavior
     */
-  private def maybeIssueNewHandling[P](
+  private def maybeIssueNewHandling[U <: UrlQueueObject[P], P](
       context: ActorContext[SourceHandlerMessage],
       workerPoolProxy: ActorRef[UrlHandlerMessage],
       supervisor: ActorRef[SupervisorMessage],
@@ -442,9 +461,10 @@ trait UrlHandlingSupport {
       targetUrl: String,
       targetUrlId: String,
       maybePayload: Option[P],
+      remainingUrls: List[U],
       urlToActivation: Map[String, Long],
       stateData: SourceHandlerStateData,
-      stateChangeOnActivation: Map[String, Long] => Behavior[
+      stateChangeOnActivation: (List[U], Map[String, Long]) => Behavior[
         SourceHandlerMessage
       ]
   ): Behavior[SourceHandlerMessage] = {
@@ -466,7 +486,7 @@ trait UrlHandlingSupport {
         stateData.pageProfile,
         context.self
       )
-      stateChangeOnActivation(updatedUrlToActivation)
+      stateChangeOnActivation(remainingUrls, updatedUrlToActivation)
 
     } else {
       context.log.debug(
