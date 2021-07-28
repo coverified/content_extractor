@@ -260,7 +260,6 @@ object Mutator {
 
   /**
     * Build a model to connect to related article tags
-    * TODO: Check!!
     *
     * @param maybeConnectToArticleTags Optional list of models, that describe single tags to connect to
     * @return Optional model to describe necessary connections to article tags

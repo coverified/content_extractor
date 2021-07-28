@@ -35,6 +35,7 @@ However, either all are given as CLI argument or Environment variable.
 | Minimum waiting time, until a url is re-visited and re-analyzed. Given in hours. | `reAnalysisInterval` | `RE_ANALYSIS_INTERVAL` | 48 hrs |
 | Amount of parallel url workers | `workerPoolSize` | `WORKER_POOL_SIZE` | 100
 | Delay when rescheduling a given url, if a host's rate limit is violated. Given in seconds. | `repeatDelay` | `REPEAT_DELAY` | 1s |
+| Maximum amount of retries, when a website reports rate limit exceeding. | `maxRetries` | `MAX_RETRIES` | 5 |
 | User agent information to be sent when visiting website | `userAgent` | `USER_AGENT` | "CoVerifiedBot-Extractor" |
 | Time out when browsing a web site. Given in seconds. | `browseTimeout` | `BROWSE_TIMEOUT` | 60s |
 | Date time pattern, in which date time information shall be transmitted to GraphQL API. | `targetDateTimePattern` | `TARGET_DATE_TIME_PATTERN` | "yyyy-MM-dd'T'HH:mm:ssXXX" |

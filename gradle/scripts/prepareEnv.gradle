@@ -13,6 +13,7 @@ task prepareEnvironment {
 				|RE_ANALYSIS_INTERVAL=$reAnalysisInterval
 				|WORKER_POOL_SIZE=$workerPoolSize
 				|REPEAT_DELAY=$repeatDelay
+				|MAX_RETRIES=$maxRetries
 				|""".stripMargin()
 
 		def file = new File("build.env")

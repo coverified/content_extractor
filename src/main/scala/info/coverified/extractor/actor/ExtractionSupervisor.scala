@@ -91,6 +91,7 @@ object ExtractionSupervisor {
             initMessage.authSecret,
             initMessage.reAnalysisInterval,
             initMessage.repeatDelay,
+            initMessage.maxRetries,
             initMessage.workerPoolSize,
             distinctTagHandlerRef,
             sources
@@ -122,6 +123,7 @@ object ExtractionSupervisor {
             authSecret,
             reAnalysisInterval,
             repeatDelay,
+            maxRetries,
             workerPoolSize,
             distinctTagHandlerRef,
             sourcesToInitialize
@@ -138,6 +140,7 @@ object ExtractionSupervisor {
             authSecret,
             reAnalysisInterval,
             repeatDelay,
+            maxRetries,
             workerPoolSize,
             sourcesToInitialize
           )
@@ -308,6 +311,7 @@ object ExtractionSupervisor {
     * @param authSecret             Auth token for GraphQL API
     * @param reAnalysisInterval     Duration, when an entry shall be re-analysed
     * @param repeatDelay            Amount of time, that a) is reference for rate limit and b) delay time for postponed urls
+    * @param maxRetries             Maximum permissible amount of retries, if an url's rate limit is exceeded
     * @param workerPoolSize         Amount of url co-workers and amount of urls to be visited within given time
     * @param sources                Collection of available sources
     * @return Defined behavior
@@ -324,6 +328,7 @@ object ExtractionSupervisor {
       authSecret: String,
       reAnalysisInterval: Duration,
       repeatDelay: Duration,
+      maxRetries: Int,
       workerPoolSize: Int,
       sources: List[SourceView]
   ): Map[String, ActorRef[SourceHandlerMessage]] = {
@@ -365,6 +370,7 @@ object ExtractionSupervisor {
                 reAnalysisInterval,
                 workerPoolSize,
                 repeatDelay,
+                maxRetries,
                 source,
                 distinctTagHandler,
                 context.self
@@ -399,6 +405,7 @@ object ExtractionSupervisor {
       authSecret: String,
       reAnalysisInterval: Duration,
       repeatDelay: Duration,
+      maxRetries: Int,
       workerPoolSize: Int,
       distinctTagHandlerRef: ActorRef[DistinctTagHandlerMessage],
       sourcesToInitialize: List[SourceView]
