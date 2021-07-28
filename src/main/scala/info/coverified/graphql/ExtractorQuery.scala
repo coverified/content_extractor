@@ -203,4 +203,23 @@ object ExtractorQuery {
         disabled = Some(false)
       )
     )
+
+  /**
+    * Count all entries with the given hash code, that are NOT the one denoted by the given id
+    *
+    * @param contentHash Hash code of the content
+    * @param entryId     Entry to neglect while counting
+    * @return A List of applicable entries
+    */
+  def countEntriesWithGivenHash(
+      contentHash: String,
+      entryId: String
+  ): SelectionBuilder[RootQuery, Option[Int]] =
+    Query.entriesCount(
+      where = EntryWhereInput(
+        id_not = Some(entryId),
+        contentHash = Some(contentHash),
+        disabled = Some(false)
+      )
+    )
 }

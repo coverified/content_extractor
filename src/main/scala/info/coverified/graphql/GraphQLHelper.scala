@@ -276,6 +276,19 @@ class GraphQLHelper(
     ).exists(_ > 0)
 
   /**
+    * Check, if there is a entry with same content hash already available, that is NOT the one with the given id
+    *
+    * @param contentHash  The content hash to check against
+    * @param entryId      Id of the entry, that is meant to be neglected.
+    * @return True, if there is one
+    */
+  def existsEntryWithSameHash(contentHash: String, entryId: String): Boolean =
+    queryWithHeader(
+      ExtractorQuery
+        .countEntriesWithGivenHash(contentHash, entryId)
+    ).exists(_ > 0)
+
+  /**
     * Query all existing, matching tags
     *
     * @param tags The tags
