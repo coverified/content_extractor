@@ -8,13 +8,19 @@ package info.coverified.graphql
 import caliban.client.Operations.{RootMutation, RootQuery}
 import caliban.client.SelectionBuilder
 import com.typesafe.scalalogging.LazyLogging
-import info.coverified.graphql.GraphQLHelper.{isNewUrl, tagFilter}
+import info.coverified.graphql.GraphQLHelper.{
+  isNewUrl,
+  needsReAnalysis,
+  tagFilter
+}
 import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   ArticleTag,
   ArticleTagCreateInput,
   ArticleTagWhereInput,
   ArticleTagsCreateInput,
+  EntryUpdateInput,
+  EntryWhereInput,
   Mutation,
   Query,
   Source,
@@ -25,7 +31,11 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
 }
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
-import info.coverified.graphql.schema.SimpleUrl
+import info.coverified.graphql.schema.{
+  CoVerifiedClientSchema,
+  SimpleEntry,
+  SimpleUrl
+}
 import org.asynchttpclient.DefaultAsyncHttpClient
 import sttp.capabilities.zio.ZioStreams
 import sttp.client3.SttpBackend
@@ -34,7 +44,7 @@ import sttp.model.Uri
 import zio.{Task, ZIO}
 
 import java.time.format.DateTimeFormatter
-import java.time.{ZoneId, ZonedDateTime}
+import java.time.{Duration, ZoneId, ZonedDateTime}
 
 class GraphQLHelper(
     private val apiUri: Uri,
@@ -129,6 +139,113 @@ class GraphQLHelper(
   }
 
   /**
+    * Query all existing urls, that need to be re-analysed, as the re-analysis interval has expired since last visit.
+    *
+    * @param sourceId           Identifier of the source, the urls shall belong to
+    * @param reAnalysisInterval Minimum duration between two visits of a website
+    * @return An optional list of existing urls
+    */
+  def queryExistingUrls(
+      sourceId: String,
+      reAnalysisInterval: Duration
+  ): Option[List[SimpleUrlView]] = {
+    /* Define, what is relevant for re-analysis */
+    val mostRecentInstant = "\\[UTC]$".r.replaceAllIn(
+      DateTimeFormatter.ISO_DATE_TIME.format(
+        ZonedDateTime
+          .now(ZoneId.of("UTC"))
+          .minusHours(reAnalysisInterval.toHours)
+      ),
+      ""
+    )
+    val relevant = needsReAnalysis(sourceId, mostRecentInstant)
+
+    /* Query the relevant urls */
+    countExistingUrls(sourceId, relevant).map { amountOfUrls =>
+      neededBatches(amountOfUrls)
+        .flatMap(
+          batchCount => queryExistingUrls(batchCount, relevant)
+        )
+        .flatten
+        .toList
+    }
+  }
+
+  /**
+    * Count the amount of urls for a given source
+    *
+    * @param sourceId The given source
+    * @return Optional amount of available new urls
+    */
+  private def countExistingUrls(
+      sourceId: String,
+      needsReAnalysis: UrlWhereInput
+  ): Option[Int] = queryWithHeader {
+    Query.urlsCount(where = needsReAnalysis)
+  }
+
+  /**
+    * Query the batch given by count.
+    *
+    * @param count            The count of batch to get
+    * @param needsReAnalysis  Condition filter
+    * @return Optional list of view onto urls of a source, that need re-analysis
+    */
+  private def queryExistingUrls(
+      count: Int,
+      needsReAnalysis: UrlWhereInput
+  ): Option[List[SimpleUrlView]] = queryWithHeader {
+    Query.allUrls(
+      where = needsReAnalysis,
+      first = Some(batchSize),
+      skip = count * batchSize
+    )(SimpleUrl.view)
+  }
+
+  /**
+    * Query the entry, that matches the given url id
+    *
+    * @param urlId  Url identifier in query
+    * @return An option onto the article
+    */
+  def queryMatchingEntry(
+      urlId: String
+  ): Option[SimpleEntryView[SimpleUrlView, ArticleTagView]] =
+    firstEntryMatchingUrlId(urlId)(
+      SimpleEntry.view(SimpleUrl.view, ArticleTag.view)
+    )
+
+  /**
+    * Query the entry, that matches the given url id
+    *
+    * @param urlId  Url identifier in query
+    * @return An option onto the article
+    */
+  def queryMatchingEntryId(
+      urlId: String
+  ): Option[String] =
+    firstEntryMatchingUrlId(urlId)(CoVerifiedClientSchema.Entry.id)
+
+  /**
+    * Queries the first entry, that matches the given url id
+    *
+    * @param urlId            Url identifier
+    * @param selectionBuilder Selection builder to determine the result to get
+    * @tparam T Type of return
+    * @return Optional first match
+    */
+  private def firstEntryMatchingUrlId[T](urlId: String)(
+      selectionBuilder: SelectionBuilder[CoVerifiedClientSchema.Entry, T]
+  ): Option[T] =
+    queryWithHeader(
+      Query.allEntries(
+        where = EntryWhereInput(url = Some(UrlWhereInput(id = Some(urlId)))),
+        first = Some(1),
+        skip = 0
+      )(selectionBuilder)
+    ).flatMap(_.headOption)
+
+  /**
     * Check, if there is a entry with same content hash already available
     *
     * @param contentHash The content hash to check against
@@ -139,6 +256,33 @@ class GraphQLHelper(
       ExtractorQuery
         .countEntriesWithGivenHash(contentHash)
     ).exists(_ > 0)
+
+  /**
+    * Check, if there is a entry with same content hash already available, that is NOT the one with the given id
+    *
+    * @param contentHash  The content hash to check against
+    * @param entryId      Id of the entry, that is meant to be neglected.
+    * @return True, if there is one
+    */
+  def existsEntryWithSameHash(contentHash: String, entryId: String): Boolean =
+    queryWithHeader(
+      ExtractorQuery
+        .countEntriesWithGivenHash(contentHash, entryId)
+    ).exists(_ > 0)
+
+  /**
+    * Disable the given entry
+    *
+    * @param entryId Identifier of the entry in question
+    * @return An Option onto the disabled attribute of the entry
+    */
+  def disableEntry(entryId: String): Option[Option[Boolean]] =
+    sendMutationWithHeader(
+      Mutation.updateEntry(
+        id = entryId,
+        data = Some(EntryUpdateInput(disabled = Some(true)))
+      )(CoVerifiedClientSchema.Entry.disabled)
+    )
 
   /**
     * Query all existing, matching tags
@@ -397,13 +541,30 @@ object GraphQLHelper {
     * @param sourceId The given source
     * @return The url restriction model
     */
-  def isNewUrl(sourceId: String): UrlWhereInput = UrlWhereInput(
+  private def isNewUrl(sourceId: String): UrlWhereInput = UrlWhereInput(
     lastCrawl = Some(DUMMY_LAST_CRAWL_DATE_TIME),
     AND = Some(
       excludeCommonFiles ++ List(
         UrlWhereInput(source = Some(SourceWhereInput(id = Some(sourceId))))
       )
     )
+  )
+
+  /**
+    * Set up condition to find
+    *
+    * @param sourceId           Identifier of the source
+    * @param mostRecentInstant  Most recent instant, that is relevant for re-analysis
+    * @return
+    */
+  private def needsReAnalysis(
+      sourceId: String,
+      mostRecentInstant: String
+  ): UrlWhereInput = UrlWhereInput(
+    lastCrawl_lte = Some(mostRecentInstant),
+    lastCrawl_gt = Some(DUMMY_LAST_CRAWL_DATE_TIME),
+    source = Some(SourceWhereInput(id = Some(sourceId))),
+    AND = Some(excludeCommonFiles)
   )
 
   /**

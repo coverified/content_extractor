@@ -41,7 +41,7 @@ API -[#blue]> Mutator
 UrlHandler -> Mutator: UpdateUrl(...)
 Mutator -[#blue]> API: //Update url//
 API -[#blue]> Mutator
-UrlHandler -> SourceHandler: NewUrlHandledSuccessfully(...)\n//NewUrlHandledWithFailure(...)//
+UrlHandler -> SourceHandler: UrlHandledSuccessfully(...)\n//UrlHandledWithFailure(...)//
 
 Mutator -[#green]> SourceHandler: EntryCreationSuccessful(...)\n//EntryCreationFailed(...)//
 Mutator -[#green]> SourceHandler: UrlUpdateSuccessful(...)\n//UrlUpdateFailed(...)//
@@ -57,43 +57,41 @@ SourceHandler -> Supervisor: NewUrlsHandled(...)
 
 == Handle existing urls ==
 
-Supervisor -[#green]> SourceHandler: HandleExistingUrls(...)
+Supervisor -> SourceHandler: HandleExistingUrls(...)
 SourceHandler -[#blue]> API: //Get existing urls//
 API -[#blue]> SourceHandler: //Get existing urls//
-SourceHandler -[#green]> Supervisor: //If no existing urls://\nExistingUrlsHandled(...)
-SourceHandler -[#blue]> API: //Get matching entries//
-API -[#blue]> SourceHandler: //Get matching entries//
+SourceHandler -> Supervisor: //If no existing urls://\nExistingUrlsHandled(...)
 
 loop
-    SourceHandler -[#green]> UrlHandler: HandleExistingUrl(...)
+    SourceHandler -> UrlHandler: HandleExistingUrl(...)
+    UrlHandler -[#blue]> API: //Get matching entries//
+    API -[#blue]> UrlHandler: //Get matching entries//
     rnote over SourceHandler: HandleExistingUrl contains\noptional field for existing entry
     UrlHandler -[#blue]> WWW: RequestHTMLContent
     WWW -[#blue]> UrlHandler: HTMLContent
 
-    UrlHandler -[#green]> Mutator: CreateEntry(...) **or:**\nUpdateEntry(...)
-    Mutator -[#green]> DistinctTagHandler: ConsolidateArticleTags(...)
+    UrlHandler -> Mutator: CreateEntry(...) **or:**\nUpdateEntry(...)
+    Mutator -> DistinctTagHandler: ConsolidateArticleTags(...)
     DistinctTagHandler -[#blue]> API: //Get matching tags//
     API -[#blue]> DistinctTagHandler
-    DistinctTagHandler -[#green]> Mutator: ConnectToArticleTags(...)
+    DistinctTagHandler -> Mutator: ConnectToArticleTags(...)
     Mutator -[#blue]> API: //Save or//\n//update entry//
     API -[#blue]> Mutator
-    UrlHandler -[#green]> Mutator: UpdateUrl(...)
+    UrlHandler -> Mutator: UpdateUrl(...)
     Mutator -[#blue]> API: //Update url//
     API -[#blue]> Mutator
-    UrlHandler -[#green]> SourceHandler: ExistingUrlHandledSuccessfully(...)\n//ExistingUrlHandledWithFailure(...)//
 
     Mutator -[#green]> SourceHandler: EntryCreationSuccessful(...) **or:**\nEntryUpdateSuccessful(...)\n//EntryCreationFailed(...) **or:**//\n//EntryUpdateFailed(...)//
-
     Mutator -[#green]> SourceHandler: UrlUpdateSuccessful(...)\n//UrlUpdateFailed(...)//
 
-    SourceHandler -[#green]> SourceHandler: //If rate limit exceeded://\nReScheduleUrl(...)
+    SourceHandler -> SourceHandler: //If rate limit exceeded://\nReScheduleUrl(...)
 end loop
 
 rnote over SourceHandler
     All existing urls handled
 endrnote
 
-SourceHandler -[#green]> Supervisor: ExistingUrlsHandled(...)
+SourceHandler -> Supervisor: ExistingUrlsHandled(...)
 
 == Shutdown ==
 
@@ -107,7 +105,7 @@ Mutator --> SourceHandler: //Death watch//
 SourceHandler -> Supervisor:SourceHandlerTerminated(...)
 
 rnote over Supervisor
-    All sources are handled
+    All sources have terminated
 endrnote
 Supervisor -> DistinctTagHandler: Terminate
 DistinctTagHandler --> Supervisor: //Death watch//

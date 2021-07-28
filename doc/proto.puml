@@ -43,7 +43,7 @@ UrlHandler -> Mutator: UpdateUrl(...)
 Mutator -[#blue]> API: //Update url//
 API -[#blue]> Mutator
 ' TODO: Feed back about handled url
-UrlHandler -> SourceHandler: NewUrlHandledSuccessfully(...)\n//NewUrlHandledWithFailure(...)//
+UrlHandler -> SourceHandler: UrlHandledSuccessfully(...)\n//UrlHandledWithFailure(...)//
 
 SourceHandler -> SourceHandler: //If rate limit exceeded://\nReScheduleUrl(...)
 end loop
@@ -51,6 +51,45 @@ end loop
 rnote over SourceHandler
     All urls are handled
 endrnote
+
+SourceHandler -> Supervisor: NewUrlsHandled(...)
+
+== Handle existing urls ==
+
+Supervisor -> SourceHandler: HandleExistingUrls(...)
+SourceHandler -[#blue]> API: //Get existing urls//
+API -[#blue]> SourceHandler: //Get existing urls//
+SourceHandler -> Supervisor: //If no existing urls://\nExistingUrlsHandled(...)
+
+loop
+    SourceHandler -> UrlHandler: HandleExistingUrl(...)
+    UrlHandler -[#blue]> API: //Get matching entries//
+    API -[#blue]> UrlHandler: //Get matching entries//
+    rnote over SourceHandler: HandleExistingUrl contains\noptional field for existing entry
+    UrlHandler -[#blue]> WWW: RequestHTMLContent
+    WWW -[#blue]> UrlHandler: HTMLContent
+
+    UrlHandler -> Mutator: CreateEntry(...) **or:**\nUpdateEntry(...)
+    Mutator -> DistinctTagHandler: ConsolidateArticleTags(...)
+    DistinctTagHandler -[#blue]> API: //Get matching tags//
+    API -[#blue]> DistinctTagHandler
+    DistinctTagHandler -> Mutator: ConnectToArticleTags(...)
+    Mutator -[#blue]> API: //Save or//\n//update entry//
+    API -[#blue]> Mutator
+    UrlHandler -> Mutator: UpdateUrl(...)
+    Mutator -[#blue]> API: //Update url//
+    API -[#blue]> Mutator
+
+    UrlHandler -> SourceHandler: ExistingUrlHandledSuccessfully(...)\n//ExistingUrlHandledWithFailure(...)//
+
+    SourceHandler -> SourceHandler: //If rate limit exceeded://\nReScheduleUrl(...)
+end loop
+
+rnote over SourceHandler
+    All existing urls handled
+endrnote
+
+SourceHandler -> Supervisor: ExistingUrlsHandled(...)
 
 == Shutdown ==
 

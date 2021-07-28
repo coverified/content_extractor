@@ -9,7 +9,11 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.Behaviors
 import caliban.client.Operations.RootMutation
 import caliban.client.SelectionBuilder
-import info.coverified.extractor.analyzer.EntryInformation.CreateEntryInformation
+import info.coverified.extractor.analyzer.EntryInformation
+import info.coverified.extractor.analyzer.EntryInformation.{
+  CreateEntryInformation,
+  UpdateEntryInformation
+}
 import info.coverified.extractor.messages.DistinctTagHandlerMessage.ConsolidateArticleTags
 import info.coverified.extractor.messages.{
   DistinctTagHandlerMessage,
@@ -18,8 +22,10 @@ import info.coverified.extractor.messages.{
 import info.coverified.extractor.messages.MutatorMessage.{
   ConnectToTags,
   CreateEntry,
+  DisableEntryForUrl,
   InitMutator,
   Terminate,
+  UpdateEntry,
   UpdateUrl
 }
 import info.coverified.extractor.messages.SourceHandlerMessage.MutatorInitialized
@@ -30,6 +36,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   ArticleTagRelateToManyInput,
   ArticleTagWhereUniqueInput,
   EntryCreateInput,
+  EntryUpdateInput,
   Mutation,
   UrlRelateToOneInput,
   UrlWhereUniqueInput
@@ -75,19 +82,19 @@ object Mutator {
             context.log.debug(
               "Request to create an entry received. Ask the distinct tag handler, to ensure a consistent state for this."
             )
-            val contentHash = createEntryInformation.contentHash
-            stateData.distinctTagHandler ! ConsolidateArticleTags(
-              contentHash,
+            val updatedStateData = requestTagConsolidation(
+              urlId,
+              createEntryInformation,
               articleTags,
+              stateData,
               context.self
             )
-            val updatedAwaitMap = stateData.awaitTagConsolidation + (contentHash -> (createEntryInformation, urlId))
-            idle(stateData.copy(awaitTagConsolidation = updatedAwaitMap))
+            idle(updatedStateData)
           case None =>
             context.log.debug(
               "Request to create an entry received. No need to harmonize tags. Create mutation."
             )
-            issueMutation(
+            createEntry(
               createEntryInformation,
               None,
               urlId,
@@ -98,28 +105,103 @@ object Mutator {
             Behaviors.same
         }
 
+      case (context, UpdateEntry(updateEntryInformation, urlId, replyTo)) =>
+        updateEntryInformation.tags match {
+          case Some(articleTags) =>
+            context.log.debug(
+              "Request to update an entry received. Ask the distinct tag handler, to ensure a consistent state for this."
+            )
+            val updatedStateData = requestTagConsolidation(
+              urlId,
+              updateEntryInformation,
+              articleTags,
+              stateData,
+              context.self
+            )
+            idle(updatedStateData)
+          case None =>
+            context.log.debug(
+              "Request to update an entry received. No need to harmonize tags. Update content."
+            )
+            updateEntry(
+              updateEntryInformation,
+              None,
+              urlId,
+              stateData.reAnalysisInterval,
+              stateData.helper,
+              context.log
+            )
+            Behaviors.same
+        }
+
+      case (context, DisableEntryForUrl(urlId, replyTo)) =>
+        /* If available, a matching entry shall be disabled */
+        stateData.helper.queryMatchingEntryId(urlId) match {
+          case Some(entryId) =>
+            stateData.helper.disableEntry(entryId) match {
+              case Some(Some(false)) =>
+                context.log.debug(
+                  "Entry '{}' successfully disabled.",
+                  entryId
+                )
+              case Some(Some(false)) | Some(None) | None =>
+                context.log.error("Disabling of entry '{}' was unsuccessful.")
+              /* TODO: Report to source handler */
+            }
+          case None =>
+            context.log.debug(
+              "There is no entry for url id '{}'. No need to disable anything.",
+              urlId
+            )
+        }
+        Behaviors.same
+
       case (context, ConnectToTags(contentHash, tagIds)) =>
         context.log.debug(
           "Received information, to which tags the content with hash code '{}' shall be connected.",
           contentHash
         )
         stateData.awaitTagConsolidation.get(contentHash) match {
-          case Some((cei, urlId)) =>
-            context.log.debug(
-              "Actually create the mutation for entry '{}'.",
-              contentHash
-            )
+          case Some((entryInformation, urlId)) =>
             val connectTo = tagIds.map { tagId =>
               ArticleTagWhereUniqueInput(id = Some(tagId))
             }
-            issueMutation(
-              cei,
-              Some(connectTo),
-              urlId,
-              stateData.reAnalysisInterval,
-              stateData.helper,
-              context.log
-            )
+
+            entryInformation match {
+              case uei: UpdateEntryInformation =>
+                context.log.debug(
+                  "Received information, to which tags the content with hash code '{}' shall be connected. Update the entry! Tags to connect to:\n\t{}",
+                  contentHash,
+                  tagIds.mkString("\n\t")
+                )
+                updateEntry(
+                  uei,
+                  Some(connectTo),
+                  urlId,
+                  stateData.reAnalysisInterval,
+                  stateData.helper,
+                  context.log
+                )
+              case cei: CreateEntryInformation =>
+                context.log.debug(
+                  "Received information, to which tags the content with hash code '{}' shall be connected. Create the entry! Tags to connect to:\n\t{}",
+                  contentHash,
+                  tagIds.mkString("\n\t")
+                )
+                createEntry(
+                  cei,
+                  Some(connectTo),
+                  urlId,
+                  stateData.reAnalysisInterval,
+                  stateData.helper,
+                  context.log
+                )
+              case rei: EntryInformation.RawEntryInformation =>
+                context.log.warn(
+                  "Received unsupported entry information '{}'. Do not handle it.",
+                  rei
+                )
+            }
 
             /* Update state information */
             val updatedAwaitingMap = stateData.awaitTagConsolidation.filterNot {
@@ -162,6 +244,33 @@ object Mutator {
     }
 
   /**
+    * Ask the [[DistinctTagHandler]] to consolidate the given page tags
+    *
+    * @param urlId            Identifier of the url
+    * @param entryInformation Entry information to keep in mind
+    * @param articleTags      List of page provided tags
+    * @param stateData        Current state of actor
+    * @param self             Reference to self
+    * @return Updated state data
+    */
+  private def requestTagConsolidation(
+      urlId: String,
+      entryInformation: EntryInformation,
+      articleTags: List[String],
+      stateData: MutatorStateData,
+      self: ActorRef[MutatorMessage]
+  ): MutatorStateData = {
+    val contentHash = entryInformation.contentHash
+    stateData.distinctTagHandler ! ConsolidateArticleTags(
+      contentHash,
+      articleTags,
+      self
+    )
+    val updatedAwaitMap = stateData.awaitTagConsolidation + (contentHash -> (entryInformation, urlId))
+    stateData.copy(awaitTagConsolidation = updatedAwaitMap)
+  }
+
+  /**
     * Finally builds the mutation and sends it to GraphQL-API
     *
     * @param createEntryInformation     Raw information to create entry from
@@ -171,7 +280,7 @@ object Mutator {
     * @param graphQLHelper              Helper to connect to GraphQL
     * @param logger                     Logging instance
     */
-  private def issueMutation(
+  private def createEntry(
       createEntryInformation: CreateEntryInformation,
       maybeConnectToArticleTags: Option[Seq[ArticleTagWhereUniqueInput]],
       urlId: String,
@@ -239,6 +348,7 @@ object Mutator {
           contentHash = Some(contentHash),
           disabled = Some(disabled),
           nextCrawl = determineNextCrawl(timeToNextCrawl),
+          updatedAt = updatedNow,
           articleTags = buildTagRelationInput(maybeConnectToArticleTags)
         )
       )
@@ -247,15 +357,128 @@ object Mutator {
         .view(SimpleUrl.view, ArticleTag.view)
     )
 
+  /**
+    * Build a mutation to update the entry
+    *
+    * @param entryId                    Identifier of to be updated entry
+    * @param urlId                      Identifier of url
+    * @param title                      Title
+    * @param maybeSummary               Optional summary information
+    * @param maybeContent               Optional content information
+    * @param maybeDate                  Optional date information
+    * @param maybeConnectToArticleTags  An optional model to connect to article tags
+    * @param disabled                   If the entry needs to be disabled
+    * @param contentHash                The content hash information
+    * @param timeToNextCrawl            Duration, until the next analysis shall wait
+    * @return A selection builder forming the reply from API
+    */
+  private def updateEntry(
+      entryId: String,
+      urlId: String,
+      title: String,
+      maybeSummary: Option[String],
+      maybeContent: Option[String],
+      maybeDate: Option[String],
+      maybeConnectToArticleTags: Option[Seq[ArticleTagWhereUniqueInput]],
+      disabled: Boolean,
+      contentHash: String,
+      timeToNextCrawl: Duration
+  ): SelectionBuilder[RootMutation, Option[
+    SimpleEntryView[SimpleUrlView, ArticleTagView]
+  ]] =
+    Mutation.updateEntry(
+      id = entryId,
+      data = Some(
+        EntryUpdateInput(
+          name = Some(title),
+          hasBeenTagged = Some(false),
+          url = Some(
+            UrlRelateToOneInput(
+              connect = Some(UrlWhereUniqueInput(id = Some(urlId)))
+            )
+          ),
+          articleTags = buildTagRelationInput(maybeConnectToArticleTags),
+          content = maybeContent,
+          summary = maybeSummary,
+          date = maybeDate,
+          nextCrawl = determineNextCrawl(timeToNextCrawl),
+          updatedAt = updatedNow,
+          contentHash = Some(contentHash),
+          disabled = Some(disabled)
+        )
+      )
+    )(SimpleEntry.view(SimpleUrl.view, ArticleTag.view))
+
   private def determineNextCrawl(timeToNextCrawl: Duration): Option[String] = {
     val nextCrawlDateTime =
       ZonedDateTime.now(ZoneId.of("UTC")).plus(timeToNextCrawl)
-    Some(
-      "\\[UTC]$".r.replaceAllIn(
-        DateTimeFormatter.ISO_DATE_TIME.format(nextCrawlDateTime),
-        ""
-      )
+    Some(toIsoDateTimeString(nextCrawlDateTime))
+  }
+
+  private def updatedNow: Option[String] =
+    Some(toIsoDateTimeString(ZonedDateTime.now(ZoneId.of("UTC"))))
+
+  private def toIsoDateTimeString(zdt: ZonedDateTime) =
+    "\\[UTC]$".r.replaceAllIn(
+      DateTimeFormatter.ISO_DATE_TIME.format(zdt),
+      ""
     )
+
+  /**
+    * Finally builds the mutation and sends it to GraphQL-API
+    *
+    * @param updateEntryInformation     Raw information to create entry from
+    * @param maybeConnectToArticleTags  Optional model to connect to several tags
+    * @param urlId                      Id of the url, the article does belong to
+    * @param reAnalysisInterval         Interval, when the next analysis shall be made
+    * @param graphQLHelper              Helper to connect to GraphQL
+    * @param logger                     Logging instance
+    */
+  private def updateEntry(
+      updateEntryInformation: UpdateEntryInformation,
+      maybeConnectToArticleTags: Option[Seq[ArticleTagWhereUniqueInput]],
+      urlId: String,
+      reAnalysisInterval: Duration,
+      graphQLHelper: GraphQLHelper,
+      logger: Logger
+  ): Unit = {
+    /* Check, if there isn't yet an entry with the same content */
+    val contentHash = updateEntryInformation.contentHash.toString
+    val disabled = graphQLHelper.existsEntryWithSameHash(
+      contentHash,
+      updateEntryInformation.id
+    )
+    if (disabled) {
+      logger.warn(
+        s"There is / are already entries available with the same content hash code. Update the entry, but disable it."
+      )
+    }
+
+    val mutation = updateEntryInformation match {
+      case UpdateEntryInformation(id, title, summary, content, date, _) =>
+        updateEntry(
+          id,
+          urlId,
+          title,
+          summary,
+          content,
+          date,
+          maybeConnectToArticleTags,
+          disabled,
+          contentHash,
+          reAnalysisInterval
+        )
+    }
+
+    graphQLHelper.saveEntry(mutation) match {
+      case Some(_) =>
+        logger.debug(
+          "Entry '{}' successfully updated.",
+          updateEntryInformation.id
+        )
+      case None =>
+      /* TODO: Report to source handler */
+    }
   }
 
   /**
@@ -277,6 +500,7 @@ object Mutator {
       .map { connectToRelation =>
         /* Build an model to connect to all of these models */
         ArticleTagRelateToManyInput(
+          disconnectAll = Some(true),
           connect = Some(connectToRelation)
         )
       }
@@ -285,7 +509,6 @@ object Mutator {
       helper: GraphQLHelper,
       reAnalysisInterval: Duration,
       distinctTagHandler: ActorRef[DistinctTagHandlerMessage],
-      awaitTagConsolidation: Map[Int, (CreateEntryInformation, String)] =
-        Map.empty
+      awaitTagConsolidation: Map[Int, (EntryInformation, String)] = Map.empty
   )
 }

@@ -6,7 +6,10 @@
 package info.coverified.extractor.messages
 
 import akka.actor.typed.ActorRef
-import info.coverified.extractor.analyzer.EntryInformation.CreateEntryInformation
+import info.coverified.extractor.analyzer.EntryInformation.{
+  CreateEntryInformation,
+  UpdateEntryInformation
+}
 import sttp.model.Uri
 
 import java.time.{Duration, ZoneId}
@@ -24,6 +27,15 @@ object MutatorMessage {
 
   final case class CreateEntry(
       createEntryInformation: CreateEntryInformation,
+      urlId: String,
+      replyTo: ActorRef[SourceHandlerMessage]
+  ) extends MutatorMessage
+  final case class UpdateEntry(
+      updateEntryInformation: UpdateEntryInformation,
+      urlId: String,
+      replyTo: ActorRef[SourceHandlerMessage]
+  ) extends MutatorMessage
+  final case class DisableEntryForUrl(
       urlId: String,
       replyTo: ActorRef[SourceHandlerMessage]
   ) extends MutatorMessage
