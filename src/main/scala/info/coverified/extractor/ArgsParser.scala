@@ -22,6 +22,7 @@ object ArgsParser {
       reAnalysisInterval: Option[Int] = None,
       workerPoolSize: Option[Int] = None,
       repeatDelay: Option[Int] = None,
+      maxRetries: Option[Int] = None,
       userAgent: Option[String] = None,
       browseTimeout: Option[Int] = None,
       targetDateTimePattern: Option[String] = None,
@@ -118,6 +119,22 @@ object ArgsParser {
         )
         .text(
           "Amount of seconds, that successive runs should be delayed, if not all urls are handled, yet."
+        )
+        .minOccurs(1)
+      opt[Int]("maxRetries")
+        .action((value, args) => {
+          args.copy(
+            maxRetries = Option(value)
+          )
+        })
+        .validate(
+          value =>
+            if (value <= 0)
+              failure("Amount of retries may be greater than zero!")
+            else success
+        )
+        .text(
+          "Amount of retries, if a website reports rate limit exceeding."
         )
         .minOccurs(1)
       opt[String]("userAgent")

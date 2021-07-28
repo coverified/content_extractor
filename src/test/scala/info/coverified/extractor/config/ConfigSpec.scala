@@ -21,16 +21,17 @@ class ConfigSpec extends UnitSpec {
           Config
             .fromArgs(
               Args(
-                "https://www.coverified.info",
-                "authSecret",
-                "in/some/directory",
-                Some(36),
-                Some(200),
-                Some(20),
-                Some("userAgent"),
-                Some(90),
-                Some("yyyy"),
-                Some("Europe/Berlin")
+                apiUrl = "https://www.coverified.info",
+                authSecret = "authSecret",
+                pageProfileDirectoryPath = "in/some/directory",
+                reAnalysisInterval = Some(36),
+                workerPoolSize = Some(200),
+                repeatDelay = Some(20),
+                maxRetries = Some(42),
+                userAgent = Some("userAgent"),
+                browseTimeout = Some(90),
+                targetDateTimePattern = Some("yyyy"),
+                targetTimeZone = Some("Europe/Berlin")
               )
             )
         ) {
@@ -45,7 +46,8 @@ class ConfigSpec extends UnitSpec {
                 profileDirectoryPath,
                 reAnalysisInterval,
                 workerPoolSize,
-                repeatDelay
+                repeatDelay,
+                maxRetries
               )
               ) =>
             userAgent shouldBe "userAgent"
@@ -58,6 +60,7 @@ class ConfigSpec extends UnitSpec {
             reAnalysisInterval shouldBe Duration.ofHours(36L)
             workerPoolSize shouldBe 200
             repeatDelay shouldBe Duration.ofSeconds(20L)
+            maxRetries shouldBe 42
           case Failure(exception) =>
             fail(
               s"Parsing was meant to pass, but failed with exception '$exception'."
@@ -80,7 +83,8 @@ class ConfigSpec extends UnitSpec {
                 profileDirectoryPath,
                 reAnalysisInterval,
                 workerPoolSize,
-                repeatDelay
+                repeatDelay,
+                maxRetries
               )
               ) =>
             /* The values expected here, have to placed within the environment during the build CI-stage.
@@ -95,6 +99,7 @@ class ConfigSpec extends UnitSpec {
             reAnalysisInterval shouldBe Duration.ofHours(36L)
             workerPoolSize shouldBe 200
             repeatDelay shouldBe Duration.ofSeconds(20L)
+            maxRetries shouldBe 42
           case Failure(exception) =>
             fail(
               "Parsing config from environment variables was meant to succeed, but failed.",

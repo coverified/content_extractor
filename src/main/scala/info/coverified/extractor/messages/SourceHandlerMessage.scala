@@ -28,6 +28,7 @@ object SourceHandlerMessage {
       reAnalysisInterval: Duration,
       workerPoolSize: Int,
       repeatDelay: Duration,
+      maxRetries: Int,
       source: SourceView,
       distinctTagHandler: ActorRef[DistinctTagHandlerMessage],
       replyTo: ActorRef[SupervisorMessage]

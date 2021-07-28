@@ -15,7 +15,7 @@ cache:
 prepareEnv4test:
     stage: build
     image: registry.gitlab.com/coverified/infrastructure/scala-base:latest
-    script: ./gradlew prepareEnvironment -PuserAgent="userAgent" -PbrowseTimeout=90 -PtargetDateTimePattern="yyyy" -PtargetTimeZone="Europe/Berlin" -PapiUrl="https://www.coverified.info" -PauthSecret="authSecret" -PpageProfileDirectoryPath="in/some/directory" -PreAnalysisInterval=36 -PworkerPoolSize=200 -PrepeatDelay=20
+    script: ./gradlew prepareEnvironment -PuserAgent="userAgent" -PbrowseTimeout=90 -PtargetDateTimePattern="yyyy" -PtargetTimeZone="Europe/Berlin" -PapiUrl="https://www.coverified.info" -PauthSecret="authSecret" -PpageProfileDirectoryPath="in/some/directory" -PreAnalysisInterval=36 -PworkerPoolSize=200 -PrepeatDelay=20 -PmaxRetries=42
     artifacts:
         reports:
             dotenv: build.env

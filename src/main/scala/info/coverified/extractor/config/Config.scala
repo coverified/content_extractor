@@ -24,11 +24,12 @@ import scala.util.{Failure, Success, Try}
   * @param targetTimeZone         The target time zone, in which date time information shall be sent to GraphQL
   *                               API
   * @param apiUri                URI of the API that needs to be queried for the sites to extract content from
+  * @param authSecret            Secret to authenticate against API
   * @param profileDirectoryPath  Directory path, where to find the site profiles
   * @param reAnalysisInterval    Interval, after which the content may be analyzed once again
-  * @param authSecret            Secret to authenticate against API
   * @param workerPoolSize        Amount of workers to paralle handle urls in parallel
   * @param repeatDelay           Delay between two successive runs, if there are still some urls left
+  * @param maxRetries            Maximum permissible amount of retries, if an url's rate limit is exceeded
   */
 final case class Config private (
     userAgent: String,
@@ -40,7 +41,8 @@ final case class Config private (
     profileDirectoryPath: String,
     reAnalysisInterval: Duration,
     workerPoolSize: Int,
-    repeatDelay: Duration
+    repeatDelay: Duration,
+    maxRetries: Int
 )
 
 object Config extends LazyLogging {
@@ -54,6 +56,7 @@ object Config extends LazyLogging {
   private val RE_ANALYSIS_INTERVAL = "RE_ANALYSIS_INTERVAL"
   private val WORKER_POOL_SIZE = "WORKER_POOL_SIZE"
   private val REPEAT_DELAY = "REPEAT_DELAY"
+  private val MAX_RETRIES = "MAX_RETRIES"
 
   object DefaultValues {
     val userAgent: String = "CoVerifiedBot-Extractor"
@@ -63,6 +66,7 @@ object Config extends LazyLogging {
     val reAnalysisInterval: Duration = Duration.ofHours(48L)
     val workerPoolSize = 100
     val repeatDelay: Duration = Duration.ofSeconds(1L)
+    val maxRetries: Int = 5
   }
 
   def apply(
@@ -75,7 +79,8 @@ object Config extends LazyLogging {
       profileDirectoryPath: String,
       reAnalysisInterval: Duration,
       workerPoolSize: Int,
-      repeatDelay: Duration
+      repeatDelay: Duration,
+      maxRetries: Int
   ): Config =
     new Config(
       userAgent,
@@ -87,7 +92,8 @@ object Config extends LazyLogging {
       profileDirectoryPath,
       reAnalysisInterval,
       workerPoolSize,
-      repeatDelay
+      repeatDelay,
+      maxRetries
     )
 
   private val parseZoneIdOrDefault: String => ZoneId = (timeZoneId: String) =>
@@ -116,6 +122,7 @@ object Config extends LazyLogging {
         maybeReAnalysisInterval,
         maybeWorkerPoolSize,
         maybeRepeatDelay,
+        maybeMaxRetries,
         maybeUserAgent,
         maybeBrowseTimeout,
         maybeTargetDateTimePattern,
@@ -148,7 +155,8 @@ object Config extends LazyLogging {
           maybeWorkerPoolSize.getOrElse(DefaultValues.workerPoolSize),
           maybeRepeatDelay
             .map(repeatDelay => Duration.ofSeconds(repeatDelay.toLong))
-            .getOrElse(DefaultValues.repeatDelay)
+            .getOrElse(DefaultValues.repeatDelay),
+          maybeMaxRetries.getOrElse(DefaultValues.maxRetries)
         )
       )
     case _ =>
@@ -201,6 +209,11 @@ object Config extends LazyLogging {
         repeatDelayInSeconds => Duration.ofSeconds(repeatDelayInSeconds.toLong),
         DefaultValues.repeatDelay
       )
+      maxRetries <- fromEnv(
+        MAX_RETRIES,
+        _.toInt,
+        DefaultValues.maxRetries
+      )
     } yield {
       Config(
         userAgent,
@@ -212,7 +225,8 @@ object Config extends LazyLogging {
         profileDirectory,
         reAnalysisInterval,
         workerPoolSize,
-        repeatDelay
+        repeatDelay,
+        maxRetries
       )
     }
 

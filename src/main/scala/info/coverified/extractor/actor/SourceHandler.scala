@@ -18,6 +18,7 @@ import info.coverified.extractor.actor.SourceHandler.{
   nextUrl,
   peek
 }
+import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.messages.MutatorMessage.{
   InitMutator,
   Terminate
@@ -77,6 +78,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
             reAnalysisInterval,
             workerPoolSize,
             repeatDelay,
+            maxRetries,
             source,
             distinctTagHandler,
             replyTo
@@ -110,6 +112,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           reAnalysisInterval,
           workerPoolSize,
           repeatDelay,
+          maxRetries,
           source,
           mutator,
           replyTo
@@ -279,6 +282,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
     * Behavior to steer the handling of new urls
     *
     * @param stateData       Current state of the actor
+    * @param urlsToBeHandled List of urls, that need to be addressed
     * @param urlToActivation Mapping from activated url to it's activation time
     * @param workerPoolProxy Reference to the worker pool proxy
     * @param supervisor      Reference to the supervisor
@@ -298,13 +302,15 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
           case (remainingUrl, _) => remainingUrl == url
         }
 
-        error match {
+        /* Try to handle the error found */
+        val updateStateData = (error match {
           case httpException: HttpStatusException
               if httpException.getStatusCode == 404 =>
             context.log.warn(
               "The url '{}' doesn't exist (HTTP Status 404). Consider removing it.",
               url
             )
+            None
           case httpException: HttpStatusException
               if httpException.getStatusCode == 403 =>
             context.log.warn(
@@ -313,10 +319,22 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
               url,
               stateData.repeatDelay.toMillis / 1000
             )
-            timer.startSingleTimer(
-              ReScheduleUrl(url, urlId),
-              FiniteDuration(stateData.repeatDelay.toMillis, "ms")
+            val (newlyStashedUrls, hasBeenRescheduled) = tryToReScheduleUrl(
+              stateData.stashedUrls,
+              stateData.maxRetries,
+              url,
+              urlId,
+              stateData.repeatDelay
             )
+            if (!hasBeenRescheduled) {
+              context.log.warn(
+                "The url '{}' ({}) already has been scheduled {} times. Give up on it.",
+                url,
+                urlId,
+                stateData.maxRetries
+              )
+            }
+            Some(stateData.copy(stashedUrls = newlyStashedUrls))
           case unknown =>
             context.log.error(
               "Handling the url '{}' failed with unknown error. Skip it.\n\tError: {} - \"{}\"",
@@ -324,13 +342,14 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
               unknown.getClass.getSimpleName,
               unknown.getMessage
             )
-        }
+            None
+        }).getOrElse(stateData)
 
         maybeIssueNextUnhandledUrl(
           context,
           workerPoolProxy,
           supervisor,
-          stateData,
+          updateStateData,
           urlsToBeHandled,
           remainingActiveUrls
         )
@@ -369,6 +388,40 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         )
       case _ => Behaviors.unhandled
     }
+
+  /**
+    * Checks the current amount of retries for this url and, if the maximum amount of retries is not exceeded,
+    * re-schedule the url. Each time, the repeat delay is enlarged by multiplying it with the repeat delay. The boolean
+    * return part indicates, if the url has been re-scheduled.
+    *
+    * @param urlToNumOfRetries  Mapping from url id to current amount of retries
+    * @param maxRetries         Maximum permissible amount of retries
+    * @param url                Actual url information
+    * @param urlId              Identifier of the url
+    * @param repeatDelay        Repeat delay
+    * @return The updated mapping from url to retry and a boolean indicator, if that url has been re-scheduled
+    */
+  private def tryToReScheduleUrl(
+      urlToNumOfRetries: Map[String, Int],
+      maxRetries: Int,
+      url: String,
+      urlId: String,
+      repeatDelay: Duration
+  ): (Map[String, Int], Boolean) = {
+    val numOfRetries = urlToNumOfRetries.getOrElse(urlId, 0)
+    if (numOfRetries < maxRetries) {
+      /* ReSchedule url and register it */
+      val currentRetry = numOfRetries + 1
+      timer.startSingleTimer(
+        ReScheduleUrl(url, urlId),
+        FiniteDuration(currentRetry * repeatDelay.toMillis, "ms")
+      )
+      (urlToNumOfRetries + (urlId -> currentRetry), true)
+    } else {
+      /* Already tried often enough */
+      (urlToNumOfRetries - urlId, false)
+    }
+  }
 
   /**
     * Check out the not yet handled urls and attempt to handle one if applicable
@@ -507,6 +560,8 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         stateData.repeatDelay.toMillis / 1000,
         stateData.repeatDelay.toMillis / 1000
       )
+
+      /* This is a first try. Therefore, no registration of re-tries is needed here! */
       val waitTimeOut = FiniteDuration(stateData.repeatDelay.toMillis, "ms")
       timer.startSingleTimer(ReScheduleUrl(targetUrl, targetUrlId), waitTimeOut)
       Behaviors.same
@@ -529,6 +584,7 @@ object SourceHandler {
       reAnalysisInterval: Duration,
       workerPoolSize: Int,
       repeatDelay: Duration,
+      maxRetries: Int,
       source: SourceView,
       mutator: ActorRef[MutatorMessage],
       supervisor: ActorRef[SupervisorMessage]
@@ -541,9 +597,11 @@ object SourceHandler {
       reAnalysisInterval: Duration,
       workerPoolSize: Int,
       repeatDelay: Duration,
+      maxRetries: Int,
       source: SourceView,
       mutator: ActorRef[MutatorMessage],
-      supervisor: ActorRef[SupervisorMessage]
+      supervisor: ActorRef[SupervisorMessage],
+      stashedUrls: Map[String, Int] = Map.empty
   )
   object SourceHandlerStateData {
     def apply(initStateData: SourceHandlerInitializingStateData) =
@@ -554,6 +612,7 @@ object SourceHandler {
         initStateData.reAnalysisInterval,
         initStateData.workerPoolSize,
         initStateData.repeatDelay,
+        initStateData.maxRetries,
         initStateData.source,
         initStateData.mutator,
         initStateData.supervisor

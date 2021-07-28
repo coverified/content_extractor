@@ -24,6 +24,7 @@ object SupervisorMessage {
       apiUri: Uri,
       profileDirectoryPath: String,
       reAnalysisInterval: Duration,
+      maxRetries: Int,
       authSecret: String,
       workerPoolSize: Int,
       repeatDelay: Duration
@@ -40,7 +41,8 @@ object SupervisorMessage {
           profileDirectoryPath,
           reAnalysisInterval,
           workerPoolSize,
-          repeatDelay
+          repeatDelay,
+          maxRetries
           ) =>
         new InitSupervisor(
           userAgent,
@@ -50,6 +52,7 @@ object SupervisorMessage {
           apiUri,
           profileDirectoryPath,
           reAnalysisInterval,
+          maxRetries,
           authSecret,
           workerPoolSize,
           repeatDelay
