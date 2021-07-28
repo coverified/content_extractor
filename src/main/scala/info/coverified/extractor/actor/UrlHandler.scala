@@ -127,7 +127,7 @@ class UrlHandler {
         )
 
         /* Ask the mutator to update the url */
-        sourceHandler ! UrlHandledSuccessfully(url)
+        mutator ! UpdateUrl(urlId, sourceHandler)
         Behaviors.same
       case (
           ctx,
