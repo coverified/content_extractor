@@ -6,16 +6,10 @@
 package info.coverified.extractor.actor
 
 import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
-import akka.actor.typed.scaladsl.{
-  ActorContext,
-  Behaviors,
-  Routers,
-  TimerScheduler
-}
+import akka.actor.typed.scaladsl.{Behaviors, Routers, TimerScheduler}
 import info.coverified.extractor.actor.SourceHandler.{
   SourceHandlerInitializingStateData,
   SourceHandlerStateData,
-  nextUrl,
   peek
 }
 import info.coverified.extractor.messages.MutatorMessage.{
@@ -34,7 +28,6 @@ import info.coverified.extractor.messages.SourceHandlerMessage.{
   InitSourceHandler,
   MutationsCompleted,
   MutatorInitialized,
-  ScheduleUrl,
   UrlHandledSuccessfully,
   UrlHandledWithFailure
 }
@@ -55,17 +48,14 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleT
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
-import org.jsoup.HttpStatusException
-import org.slf4j.Logger
 
 import java.time.{Duration, ZoneId}
-import scala.annotation.tailrec
-import scala.concurrent.duration.FiniteDuration
 
 /**
   * An actor, that handles the extraction process per source
   */
-class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
+class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage])
+    extends UrlHandlingSupport {
   def uninitialized: Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
       case (
@@ -196,7 +186,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
             context.log.error(
               "Received malformed reply when requesting new urls."
             )
-            stateData.supervisor ! NewUrlsHandled(
+            replyTo ! NewUrlsHandled(
               stateData.source.id,
               context.self
             )
@@ -207,7 +197,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
               stateData.source.name.getOrElse(""),
               stateData.source.id
             )
-            stateData.supervisor ! NewUrlsHandled(
+            replyTo ! NewUrlsHandled(
               stateData.source.id,
               context.self
             )
@@ -246,7 +236,9 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
               stateData,
               remainingNewUrls,
               urlToActivation,
-              workerPoolProxy
+              workerPoolProxy,
+              timer,
+              context
             )
         }
       case (ctx, HandleExistingUrls(replyTo)) =>
@@ -317,14 +309,15 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
                 val urlToActivation = firstBatch.flatMap {
                   case (url, maybeEntry) if url.name.nonEmpty =>
                     /* Send out messages to worker */
+                    val actualUrl = url.name.get
                     workerPoolProxy ! HandleExistingUrl(
-                      url.name.get,
+                      actualUrl,
                       url.id,
                       maybeEntry,
                       stateData.pageProfile,
                       ctx.self
                     )
-                    Some(url -> System.currentTimeMillis())
+                    Some(actualUrl -> System.currentTimeMillis())
                   case _ =>
                     /* No actual url known, nothing to handle */
                     None
@@ -335,7 +328,9 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
                   stateData,
                   remainingUrls,
                   urlToActivation,
-                  workerPoolProxy
+                  workerPoolProxy,
+                  timer,
+                  ctx
                 )
               case None =>
                 ctx.log.error(
@@ -380,396 +375,6 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
         s"Invalid message received during shutdown process: '$invalid"
       )
       Behaviors.same
-  }
-
-  /**
-    * Behavior to steer the handling of new urls
-    *
-    * @param stateData       Current state of the actor
-    * @param urlsToBeHandled List of urls, that need to be addressed
-    * @param urlToActivation Mapping from activated url to it's activation time
-    * @param workerPoolProxy Reference to the worker pool proxy
-    * @return The defined behavior
-    */
-  def handleNewUrls(
-      stateData: SourceHandlerStateData,
-      urlsToBeHandled: List[SimpleUrlView],
-      urlToActivation: Map[String, Long],
-      workerPoolProxy: ActorRef[UrlHandlerMessage]
-  ): Behaviors.Receive[SourceHandlerMessage] =
-    Behaviors.receive[SourceHandlerMessage] {
-      case (context, UrlHandledWithFailure(url, urlId, error)) =>
-        /* Remove the reporter from list of active ones */
-        val remainingActiveUrls = urlToActivation.filterNot {
-          case (remainingUrl, _) => remainingUrl == url
-        }
-        /* Define, what happens if the rate limit is exceeded */
-        val handleRateLimitExceeding = () => {
-          val (newlyStashedUrls, hasBeenRescheduled) = tryToReScheduleUrl(
-            stateData.stashedUrls,
-            stateData.maxRetries,
-            url,
-            urlId,
-            stateData.repeatDelay
-          )
-          if (!hasBeenRescheduled) {
-            context.log.warn(
-              "The url '{}' ({}) already has been scheduled {} times. Give up on it.",
-              url,
-              urlId,
-              stateData.maxRetries
-            )
-          }
-          Some(stateData.copy(stashedUrls = newlyStashedUrls))
-        }
-        /* Log the error and handle accordingly. */
-        val updateStateData = logAndHandleUrlHandlingFailure(
-          url,
-          error,
-          context.log,
-          handleRateLimitExceeding
-        ).getOrElse(stateData)
-
-        maybeIssueNextUnhandledUrl(
-          context,
-          workerPoolProxy,
-          stateData.supervisor,
-          updateStateData,
-          urlsToBeHandled,
-          remainingActiveUrls
-        )
-      case (context, UrlHandledSuccessfully(url)) =>
-        context.log
-          .debug("The new url '{}' has been handled successfully.", url)
-
-        /* Remove the reporter from list of active ones */
-        val remainingActiveUrls = urlToActivation.filterNot {
-          case (remainingUrl, _) => remainingUrl == url
-        }
-
-        maybeIssueNextUnhandledUrl(
-          context,
-          workerPoolProxy,
-          stateData.supervisor,
-          stateData,
-          urlsToBeHandled,
-          remainingActiveUrls
-        )
-
-      case (context, ScheduleUrl(urlId, url, _)) =>
-        context.log.debug(
-          "I'm ask to reschedule the url '{}'. Check rate limit and if applicable, send out request to my worker pool.",
-          url
-        )
-        maybeIssueNewHandling(
-          context,
-          workerPoolProxy,
-          stateData.supervisor,
-          url,
-          urlId,
-          urlToActivation,
-          urlsToBeHandled,
-          stateData
-        )
-      case _ => Behaviors.unhandled
-    }
-
-  /**
-    * Log the error when handling an url and handle accordingly in the case of a rate limit exceeding
-    *
-    * @param url                      Url, that was handled unsuccessfully
-    * @param failure                  Reported failure
-    * @param logger                   Instance of logger to use
-    * @param rateLimitExceededAction  Action to take care of, if rate limit is exceeded
-    */
-  private def logAndHandleUrlHandlingFailure(
-      url: String,
-      failure: Throwable,
-      logger: Logger,
-      rateLimitExceededAction: () => Option[SourceHandlerStateData]
-  ): Option[SourceHandlerStateData] = failure match {
-    case httpException: HttpStatusException
-        if httpException.getStatusCode == 404 =>
-      logger.warn(
-        "The url '{}' doesn't exist (HTTP Status 404). Consider removing it.",
-        url
-      )
-      None
-    case httpException: HttpStatusException
-        if httpException.getStatusCode == 403 =>
-      logger.warn(
-        "The url '{}' replied, that the rate limit is exceeded (HTTP Status 403). Consider adapting " +
-          "configuration, especially the rate limit. Will re-schedule the visit of this url.",
-        url
-      )
-      rateLimitExceededAction()
-    case unknown =>
-      logger.error(
-        "Handling the url '{}' failed with unknown error. Skip it.\n\tError: {} - \"{}\"",
-        url,
-        unknown.getClass.getSimpleName,
-        unknown.getMessage
-      )
-      None
-  }
-
-  /**
-    * Handle all existing entries
-    *
-    * @param stateData       Current state of the actor
-    * @param urlsToBeHandled Remaining urls and entries to be handled
-    * @param urlToActivation Mapping from activated url to it's activation time
-    * @param workerPoolProxy Reference to the worker pool proxy
-    * @return The defined behavior
-    */
-  def handleExistingUrls(
-      stateData: SourceHandlerStateData,
-      urlsToBeHandled: List[
-        (SimpleUrlView, Option[SimpleEntryView[SimpleUrlView, ArticleTagView]])
-      ],
-      urlToActivation: Map[SimpleUrlView, Long],
-      workerPoolProxy: ActorRef[UrlHandlerMessage]
-  ): Behaviors.Receive[SourceHandlerMessage] =
-    Behaviors.receive[SourceHandlerMessage] {
-      case (ctx, UrlHandledSuccessfully(url)) =>
-        ctx.log
-          .debug(
-            "The already visited url '{}' has been handled successfully.",
-            url
-          )
-
-        /* Remove the reporter from list of active ones */
-        val remainingActiveUrls = urlToActivation.filterNot {
-          case (remainingUrl, _) => remainingUrl.name.contains(url)
-        }
-        /* TODO: Add logic */
-        stateData.supervisor ! ExistingUrlsHandled(
-          stateData.source.id,
-          ctx.self
-        )
-        idle(stateData, workerPoolProxy)
-      case (ctx, UrlHandledWithFailure(url, urlId, failure)) =>
-        /* Remove the reporter from list of active ones */
-        val remainingActiveUrls = urlToActivation.filterNot {
-          case (remainingUrl, _) => remainingUrl.name.contains(url)
-        }
-        /* Define, what happens if the rate limit is exceeded */
-        val handleRateLimitExceeding = () => {
-          // TODO: Adapt re-scheduling message to accommodate the entry
-          val (newlyStashedUrls, hasBeenRescheduled) = tryToReScheduleUrl(
-            stateData.stashedUrls,
-            stateData.maxRetries,
-            url,
-            urlId,
-            stateData.repeatDelay
-          )
-          if (!hasBeenRescheduled) {
-            ctx.log.warn(
-              "The url '{}' ({}) already has been scheduled {} times. Give up on it.",
-              url,
-              urlId,
-              stateData.maxRetries
-            )
-          }
-          Some(stateData.copy(stashedUrls = newlyStashedUrls))
-        }
-        /* Log the error and handle accordingly. */
-        val updateStateData = logAndHandleUrlHandlingFailure(
-          url,
-          failure,
-          ctx.log,
-          handleRateLimitExceeding
-        ).getOrElse(stateData)
-
-        /* TODO: Add logic */
-        stateData.supervisor ! ExistingUrlsHandled(
-          updateStateData.source.id,
-          ctx.self
-        )
-        idle(updateStateData, workerPoolProxy)
-      case _ => Behaviors.unhandled
-    }
-
-  /**
-    * Checks the current amount of retries for this url and, if the maximum amount of retries is not exceeded,
-    * re-schedule the url. Each time, the repeat delay is enlarged by multiplying it with the repeat delay. The boolean
-    * return part indicates, if the url has been re-scheduled.
-    *
-    * @param urlToNumOfRetries  Mapping from url id to current amount of retries
-    * @param maxRetries         Maximum permissible amount of retries
-    * @param url                Actual url information
-    * @param urlId              Identifier of the url
-    * @param payLoad            Possible, additional payload for scheduling of an url
-    * @param repeatDelay        Repeat delay
-    * @return The updated mapping from url to retry and a boolean indicator, if that url has been re-scheduled
-    */
-  private def tryToReScheduleUrl(
-      urlToNumOfRetries: Map[String, Int],
-      maxRetries: Int,
-      url: String,
-      urlId: String,
-      repeatDelay: Duration,
-      payLoad: Option[_] = None
-  ): (Map[String, Int], Boolean) = {
-    val numOfRetries = urlToNumOfRetries.getOrElse(urlId, 0)
-    if (numOfRetries < maxRetries) {
-      /* ReSchedule url and register it */
-      val currentRetry = numOfRetries + 1
-      timer.startSingleTimer(
-        ScheduleUrl(urlId, url, payLoad),
-        FiniteDuration(currentRetry * repeatDelay.toMillis, "ms")
-      )
-      (urlToNumOfRetries + (urlId -> currentRetry), true)
-    } else {
-      /* Already tried often enough */
-      (urlToNumOfRetries - urlId, false)
-    }
-  }
-
-  /**
-    * Check out the not yet handled urls and attempt to handle one if applicable
-    *
-    * @param context         Actor context, the actor is in
-    * @param workerPoolProxy Reference to the proxy for the worker pool
-    * @param supervisor      Reference to the supervisor
-    * @param stateData       Current state of the actor
-    * @param unhandledUrls   List of remaining urls
-    * @param urlToActivation Mapping from active url to activation time
-    * @return
-    */
-  def maybeIssueNextUnhandledUrl(
-      context: ActorContext[SourceHandlerMessage],
-      workerPoolProxy: ActorRef[UrlHandlerMessage],
-      supervisor: ActorRef[SupervisorMessage],
-      stateData: SourceHandlerStateData,
-      unhandledUrls: List[SimpleUrlView],
-      urlToActivation: Map[String, Long]
-  ): Behavior[SourceHandlerMessage] =
-    if (unhandledUrls.nonEmpty) {
-      /* Trigger new runs */
-      val (maybeNextUrl, remainingUrls) =
-        nextUrl(unhandledUrls, context.log)
-      maybeNextUrl match {
-        case Some(nextUrl) =>
-          context.log.debug(
-            "Still {} urls remaining to be handled. Check, if rate limit allows for another issue.",
-            remainingUrls.size
-          )
-          maybeIssueNewHandling(
-            context,
-            workerPoolProxy,
-            supervisor,
-            nextUrl.name.get,
-            nextUrl.id,
-            urlToActivation,
-            remainingUrls,
-            stateData
-          )
-        case None =>
-          context.log.info(
-            "All new urls of source '{}' ('{}') are handled. Report to supervisor.",
-            stateData.source.id,
-            stateData.source.name.getOrElse("")
-          )
-          stateData.supervisor ! NewUrlsHandled(
-            stateData.source.id,
-            context.self
-          )
-          /* Change to idle and wait for termination message */
-          idle(stateData, workerPoolProxy)
-      }
-    } else if (urlToActivation.nonEmpty) {
-      context.log.info(
-        "No more unhandled urls for source '{}' ('{}'). Wait for the last {} active ones{}",
-        stateData.source.id,
-        stateData.source.name.getOrElse(""),
-        urlToActivation.size,
-        if (urlToActivation.size < 6) {
-          "\n\t" + urlToActivation.keys.mkString("\n\t")
-        } else {
-          ""
-        }
-      )
-      handleNewUrls(
-        stateData,
-        unhandledUrls,
-        urlToActivation,
-        workerPoolProxy
-      )
-    } else {
-      context.log.info(
-        "All new urls of source '{}' ('{}') are handled. Report to supervisor.",
-        stateData.source.id,
-        stateData.source.name.getOrElse("")
-      )
-      stateData.supervisor ! NewUrlsHandled(stateData.source.id, context.self)
-      /* Change to idle and wait for termination message */
-      idle(stateData, workerPoolProxy)
-    }
-
-  /**
-    * If possible (sticking to a rate limit), issue a new url handling and change to applicable state.
-    *
-    * @param context         Actor context, the actor is in
-    * @param workerPoolProxy Reference to the proxy for the worker pool
-    * @param supervisor      Reference to the supervisor
-    * @param targetUrl       The targeted url
-    * @param targetUrlId     Id of the targeted url in database
-    * @param urlToActivation Mapping from active url to it's activation time.
-    * @param remainingUrls   List of remaining urls
-    * @param stateData       Current state of the actor
-    * @return Defined behavior
-    */
-  def maybeIssueNewHandling(
-      context: ActorContext[SourceHandlerMessage],
-      workerPoolProxy: ActorRef[UrlHandlerMessage],
-      supervisor: ActorRef[SupervisorMessage],
-      targetUrl: String,
-      targetUrlId: String,
-      urlToActivation: Map[String, Long],
-      remainingUrls: List[SimpleUrlView],
-      stateData: SourceHandlerStateData
-  ): Behavior[SourceHandlerMessage] = {
-    /* Figure out, which issue dates are within the last allowed duration */
-    val currentInstant = System.currentTimeMillis()
-    val firstRelevantInstant = currentInstant - stateData.repeatDelay.toMillis
-    val relevantIssues =
-      urlToActivation.values.filter(_ >= firstRelevantInstant)
-    if (relevantIssues.size < stateData.workerPoolSize) {
-      context.log.debug(
-        "Rate limit {}/{} Hz is not exceeded. Issue a new url handling.",
-        stateData.workerPoolSize,
-        stateData.repeatDelay.toMillis / 1000
-      )
-      val updateUrlToActivation = urlToActivation + (targetUrl -> currentInstant)
-      workerPoolProxy ! HandleNewUrl(
-        targetUrl,
-        targetUrlId,
-        stateData.pageProfile,
-        context.self
-      )
-      handleNewUrls(
-        stateData,
-        remainingUrls,
-        updateUrlToActivation,
-        workerPoolProxy
-      )
-    } else {
-      context.log.debug(
-        "Rate limit {}/{} Hz currently is exceeded. Wait {}s with a new issue of url handling.",
-        stateData.workerPoolSize,
-        stateData.repeatDelay.toMillis / 1000,
-        stateData.repeatDelay.toMillis / 1000
-      )
-
-      /* This is a first try. Therefore, no registration of re-tries is needed here! */
-      val waitTimeOut = FiniteDuration(stateData.repeatDelay.toMillis, "ms")
-      timer.startSingleTimer(
-        ScheduleUrl(targetUrlId, targetUrl, None),
-        waitTimeOut
-      )
-      Behaviors.same
-    }
   }
 }
 
@@ -823,32 +428,5 @@ object SourceHandler {
   def peek[A](list: List[A], first: Int): (List[A], List[A]) = {
     val peek = list.take(first)
     (peek, list.filterNot(peek.contains(_)))
-  }
-
-  /**
-    * Get the next url, as long as it has a name available
-    *
-    * @param urls   A view onto a url
-    * @param logger A logger to log logging stuff
-    * @return A tuple of a possibly apparent next entry and the remaining entries
-    */
-  @tailrec
-  def nextUrl(
-      urls: List[SimpleUrlView],
-      logger: Logger
-  ): (Option[SimpleUrlView], List[SimpleUrlView]) = {
-    val (peakUrls, remainingUrls) = peek(urls, 1)
-    peakUrls.headOption match {
-      case Some(peakUrl) if peakUrl.name.nonEmpty =>
-        (Some(peakUrl), remainingUrls)
-      case Some(peakUrl) =>
-        logger.error(
-          "The url entry with id '' does not contain an actual, visitable url. Cannot handle this.",
-          peakUrl.id
-        )
-        nextUrl(remainingUrls, logger)
-      case None =>
-        (None, remainingUrls)
-    }
   }
 }
