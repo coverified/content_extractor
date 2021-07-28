@@ -31,9 +31,7 @@ import info.coverified.extractor.messages.SourceHandlerMessage.{
   HandleNewUrls,
   InitSourceHandler,
   MutationsCompleted,
-  MutatorInitialized,
-  UrlHandledSuccessfully,
-  UrlHandledWithFailure
+  MutatorInitialized
 }
 import info.coverified.extractor.messages.SupervisorMessage.{
   ExistingUrlsHandled,
@@ -48,10 +46,7 @@ import info.coverified.extractor.messages.UrlHandlerMessage.{
 }
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.GraphQLHelper
-import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
-import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
-import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 
 import java.time.{Duration, ZoneId}
 

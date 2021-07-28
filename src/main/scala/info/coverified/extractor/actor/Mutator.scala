@@ -22,6 +22,7 @@ import info.coverified.extractor.messages.{
 import info.coverified.extractor.messages.MutatorMessage.{
   ConnectToTags,
   CreateEntry,
+  DisableEntryForUrl,
   InitMutator,
   Terminate,
   UpdateEntry,
@@ -132,6 +133,28 @@ object Mutator {
             )
             Behaviors.same
         }
+
+      case (context, DisableEntryForUrl(urlId, replyTo)) =>
+        /* If available, a matching entry shall be disabled */
+        stateData.helper.queryMatchingEntry(urlId) match {
+          case Some(entryId) =>
+            stateData.helper.disableEntry(entryId) match {
+              case Some(Some(false)) =>
+                context.log.debug(
+                  "Entry '{}' successfully disabled.",
+                  entryId
+                )
+              case Some(Some(false)) | Some(None) | None =>
+                context.log.error("Disabling of entry '{}' was unsuccessful.")
+              /* TODO: Report to source handler */
+            }
+          case None =>
+            context.log.debug(
+              "There is no entry for url id '{}'. No need to disable anything.",
+              urlId
+            )
+        }
+        Behaviors.same
 
       case (context, ConnectToTags(contentHash, tagIds)) =>
         context.log.debug(

@@ -35,6 +35,10 @@ object MutatorMessage {
       urlId: String,
       replyTo: ActorRef[SourceHandlerMessage]
   ) extends MutatorMessage
+  final case class DisableEntryForUrl(
+      urlId: String,
+      replyTo: ActorRef[SourceHandlerMessage]
+  ) extends MutatorMessage
 
   final case class UpdateUrl(
       urlId: String,

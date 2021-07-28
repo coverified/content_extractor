@@ -16,6 +16,7 @@ import info.coverified.extractor.actor.SourceHandler.{
   SourceHandlerStateData,
   peek
 }
+import info.coverified.extractor.messages.MutatorMessage.DisableEntryForUrl
 import info.coverified.extractor.messages.SourceHandlerMessage.{
   ScheduleUrl,
   UrlHandledSuccessfully,
@@ -231,12 +232,17 @@ trait UrlHandlingSupport {
           }
           Some(stateData.copy(stashedUrls = newlyStashedUrls))
         }
+        /* In case, the page cannot be found, attempt to disable a matching entry */
+        val handleNotFound = () => {
+          stateData.mutator ! DisableEntryForUrl(urlId, context.self)
+        }
         /* Log the error and handle accordingly. */
         val updateStateData = logAndHandleUrlHandlingFailure(
           url,
           error,
           context.log,
-          handleRateLimitExceeding
+          handleRateLimitExceeding,
+          handleNotFound
         ).getOrElse(stateData)
 
         maybeIssueNextUnhandledUrl[U, P](
@@ -352,7 +358,8 @@ trait UrlHandlingSupport {
       url: String,
       failure: Throwable,
       logger: Logger,
-      rateLimitExceededAction: () => Option[SourceHandlerStateData]
+      rateLimitExceededAction: () => Option[SourceHandlerStateData],
+      handleNotFound: () => Unit
   ): Option[SourceHandlerStateData] = failure match {
     case httpException: HttpStatusException
         if httpException.getStatusCode == 404 =>
@@ -369,6 +376,14 @@ trait UrlHandlingSupport {
         url
       )
       rateLimitExceededAction()
+    case httpException: HttpStatusException
+        if httpException.getStatusCode == 404 =>
+      logger.warn(
+        "The url '{}' cannot be found (HTTP Status 404). Attempt to disable corresponding entry.",
+        url
+      )
+      handleNotFound()
+      None
     case unknown =>
       logger.error(
         "Handling the url '{}' failed with unknown error. Skip it.\n\tError: {} - \"{}\"",

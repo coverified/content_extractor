@@ -19,6 +19,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   ArticleTagCreateInput,
   ArticleTagWhereInput,
   ArticleTagsCreateInput,
+  EntryUpdateInput,
   EntryWhereInput,
   Mutation,
   Query,
@@ -30,8 +31,11 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
 }
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
-import info.coverified.graphql.schema.{SimpleEntry, SimpleUrl}
-
+import info.coverified.graphql.schema.{
+  CoVerifiedClientSchema,
+  SimpleEntry,
+  SimpleUrl
+}
 import org.asynchttpclient.DefaultAsyncHttpClient
 import sttp.capabilities.zio.ZioStreams
 import sttp.client3.SttpBackend
@@ -199,6 +203,15 @@ class GraphQLHelper(
   }
 
   /**
+    * Query the entry, that matches the given url id
+    *
+    * @param urlId  Url identifier in query
+    * @return An option onto the article's id
+    */
+  def queryMatchingEntry(urlId: String): Option[String] =
+    queryMatchingEntries(List(urlId)).flatMap(_.headOption.map(_.id))
+
+  /**
     * Query all entries, that be long to the urls with given ids
     *
     * @param urlIds List of url ids to consider
@@ -287,6 +300,20 @@ class GraphQLHelper(
       ExtractorQuery
         .countEntriesWithGivenHash(contentHash, entryId)
     ).exists(_ > 0)
+
+  /**
+    * Disable the given entry
+    *
+    * @param entryId Identifier of the entry in question
+    * @return An Option onto the disabled attribute of the entry
+    */
+  def disableEntry(entryId: String): Option[Option[Boolean]] =
+    sendMutationWithHeader(
+      Mutation.updateEntry(
+        id = entryId,
+        data = Some(EntryUpdateInput(disabled = Some(true)))
+      )(CoVerifiedClientSchema.Entry.disabled)
+    )
 
   /**
     * Query all existing, matching tags
