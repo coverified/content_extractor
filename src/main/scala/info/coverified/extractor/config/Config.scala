@@ -66,7 +66,7 @@ object Config extends LazyLogging {
     val reAnalysisInterval: Duration = Duration.ofHours(48L)
     val workerPoolSize = 100
     val repeatDelay: Duration = Duration.ofSeconds(1L)
-    val maxRetries: Int = 5
+    val maxRetries: Int = 3
   }
 
   def apply(

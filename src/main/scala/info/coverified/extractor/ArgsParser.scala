@@ -90,7 +90,6 @@ object ArgsParser {
             else success
         )
         .text("frequency of re-analyzing content in hours")
-        .minOccurs(1)
       opt[Int]("workerPoolSize")
         .action((value, args) => {
           args.copy(
@@ -104,7 +103,6 @@ object ArgsParser {
             else success
         )
         .text("Amount of url workers for parallel handling.")
-        .minOccurs(1)
       opt[Int]("repeatDelay")
         .action((value, args) => {
           args.copy(
@@ -120,7 +118,6 @@ object ArgsParser {
         .text(
           "Amount of seconds, that successive runs should be delayed, if not all urls are handled, yet."
         )
-        .minOccurs(1)
       opt[Int]("maxRetries")
         .action((value, args) => {
           args.copy(
@@ -136,7 +133,6 @@ object ArgsParser {
         .text(
           "Amount of retries, if a website reports rate limit exceeding."
         )
-        .minOccurs(1)
       opt[String]("userAgent")
         .action { (value, args) =>
           {
@@ -146,7 +142,6 @@ object ArgsParser {
         .text(
           "User agent information, that needs to be send when visiting websites"
         )
-        .minOccurs(1)
       opt[Int]("browseTimeout")
         .action { (value, args) =>
           {
@@ -160,7 +155,6 @@ object ArgsParser {
         .text(
           "Timeout in seconds to apply, when visiting a website."
         )
-        .minOccurs(1)
       opt[String]("targetDateTimePattern")
         .action { (value, args) =>
           {
@@ -170,7 +164,6 @@ object ArgsParser {
         .text(
           "Target pattern, when sending date time information to GraphQL API."
         )
-        .minOccurs(1)
       opt[String]("targetTimeZone")
         .action { (value, args) =>
           {
@@ -180,7 +173,6 @@ object ArgsParser {
         .text(
           "Target time zone, when sending date time information to GraphQL API."
         )
-        .minOccurs(1)
     }
 
   }
