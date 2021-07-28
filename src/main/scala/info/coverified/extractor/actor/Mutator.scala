@@ -140,25 +140,31 @@ object Mutator {
         )
         stateData.awaitTagConsolidation.get(contentHash) match {
           case Some((entryInformation, urlId)) =>
-            context.log.debug(
-              "Actually create the mutation for entry '{}'.",
-              contentHash
-            )
             val connectTo = tagIds.map { tagId =>
               ArticleTagWhereUniqueInput(id = Some(tagId))
             }
 
             entryInformation match {
               case uei: UpdateEntryInformation =>
+                context.log.debug(
+                  "Received information, to which tags the content with hash code '{}' shall be connected. Update the entry! Tags to connect to:\n\t{}",
+                  contentHash,
+                  tagIds.mkString("\n\t")
+                )
                 updateEntry(
                   uei,
-                  None,
+                  Some(connectTo),
                   urlId,
                   stateData.reAnalysisInterval,
                   stateData.helper,
                   context.log
                 )
               case cei: CreateEntryInformation =>
+                context.log.debug(
+                  "Received information, to which tags the content with hash code '{}' shall be connected. Create the entry! Tags to connect to:\n\t{}",
+                  contentHash,
+                  tagIds.mkString("\n\t")
+                )
                 createEntry(
                   cei,
                   Some(connectTo),
@@ -471,6 +477,7 @@ object Mutator {
       .map { connectToRelation =>
         /* Build an model to connect to all of these models */
         ArticleTagRelateToManyInput(
+          disconnectAll = Some(true),
           connect = Some(connectToRelation)
         )
       }
