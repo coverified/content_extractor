@@ -206,7 +206,7 @@ class GraphQLHelper(
     */
   def queryMatchingEntries(
       urlIds: List[String]
-  ): Option[List[SimpleEntryView[SimpleUrlView, String]]] = {
+  ): Option[List[SimpleEntryView[SimpleUrlView, ArticleTagView]]] = {
     val filter = matchingEntriesFilter(urlIds)
     countMatchingEntries(filter).map { amountOfEntries =>
       neededBatches(amountOfEntries)
@@ -254,13 +254,14 @@ class GraphQLHelper(
   private def queryMatchingEntries(
       count: Int,
       filter: EntryWhereInput
-  ): Option[List[SimpleEntryView[SimpleUrlView, String]]] = queryWithHeader {
-    Query.allEntries(
-      where = filter,
-      first = Some(batchSize),
-      skip = count * batchSize
-    )(SimpleEntry.view(SimpleUrl.view, ArticleTag.id))
-  }
+  ): Option[List[SimpleEntryView[SimpleUrlView, ArticleTagView]]] =
+    queryWithHeader {
+      Query.allEntries(
+        where = filter,
+        first = Some(batchSize),
+        skip = count * batchSize
+      )(SimpleEntry.view(SimpleUrl.view, ArticleTag.view))
+    }
 
   /**
     * Check, if there is a entry with same content hash already available

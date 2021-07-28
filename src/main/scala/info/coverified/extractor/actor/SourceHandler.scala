@@ -51,6 +51,7 @@ import info.coverified.extractor.messages.UrlHandlerMessage.{
 }
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.GraphQLHelper
+import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
@@ -524,7 +525,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage]) {
   def handleExistingUrls(
       stateData: SourceHandlerStateData,
       urlsToBeHandled: List[
-        (SimpleUrlView, Option[SimpleEntryView[SimpleUrlView, String]])
+        (SimpleUrlView, Option[SimpleEntryView[SimpleUrlView, ArticleTagView]])
       ],
       urlToActivation: Map[SimpleUrlView, Long],
       workerPoolProxy: ActorRef[UrlHandlerMessage]

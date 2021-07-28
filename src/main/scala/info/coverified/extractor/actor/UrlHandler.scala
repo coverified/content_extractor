@@ -15,10 +15,12 @@ import info.coverified.extractor.actor.UrlHandler.{
 import info.coverified.extractor.analyzer.Analyzer
 import info.coverified.extractor.analyzer.EntryInformation.{
   CreateEntryInformation,
-  RawEntryInformation
+  RawEntryInformation,
+  UpdateEntryInformation
 }
 import info.coverified.extractor.messages.MutatorMessage.{
   CreateEntry,
+  UpdateEntry,
   UpdateUrl
 }
 import info.coverified.extractor.messages.SourceHandlerMessage.{
@@ -36,6 +38,7 @@ import info.coverified.extractor.messages.UrlHandlerMessage.{
   InitUrlHandler
 }
 import info.coverified.extractor.profile.ProfileConfig
+import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
 import org.slf4j.Logger
@@ -223,7 +226,7 @@ object UrlHandler {
     * @return A method to handle urls without given entry
     */
   private def handleUrlWithExistingEntry(
-      existingEntry: SimpleEntryView[SimpleUrlView, String],
+      existingEntry: SimpleEntryView[SimpleUrlView, ArticleTagView],
       mutator: ActorRef[MutatorMessage],
       sourceHandler: ActorRef[SourceHandlerMessage]
   ): EntryHandlingFunction =
@@ -232,10 +235,88 @@ object UrlHandler {
         urlId: String,
         rawEntryInformation: RawEntryInformation
     ) => {
-      /* TODO:
-       *  1) Check if content is equal
-       *  2) Send update request or don't do anything
-       */
-      ???
+      /* Check, if anything has changed */
+      val tagsChanged =
+        tagsHaveChanged(existingEntry.articleTags, rawEntryInformation.tags)
+      val contentChanged = contentHasChanged(existingEntry, rawEntryInformation)
+
+      /* If content has changed, update it. If nothing has changed, don't do anything and report finished handling. */
+      if (tagsChanged || contentChanged) {
+        mutator ! UpdateEntry(
+          UpdateEntryInformation(existingEntry.id, rawEntryInformation),
+          urlId,
+          sourceHandler
+        )
+      }
+
+      sourceHandler ! UrlHandledSuccessfully(url)
     }
+
+  /**
+    * Figure out, if something regarding the page provided tags has changed
+    *
+    * @param maybeExistingTags Collection of tags registered in existing entry
+    * @param maybePageTags     Tags from web page
+    * @return true, if something has changed
+    */
+  private def tagsHaveChanged(
+      maybeExistingTags: Option[List[ArticleTagView]],
+      maybePageTags: Option[List[String]]
+  ): Boolean =
+    maybeExistingTags
+      .map { existingPageTags =>
+        val sameAmount = existingPageTags.size != maybePageTags
+          .map(_.size)
+          .getOrElse(0)
+        val nothingChanged = maybePageTags
+          .map(
+            tags =>
+              !tags.forall(
+                tag => existingPageTags.exists(_.name.contains(tag))
+              )
+          )
+          .getOrElse {
+            /* Tags from web page are empty. Something has changed, if there are page tags apparent in the known entry. */
+            existingPageTags.nonEmpty
+          }
+        sameAmount && nothingChanged
+      }
+      .getOrElse {
+        /* Tags in existing entry are empty. There has something changed, if the page tags aren't empty */
+        maybePageTags.nonEmpty && maybePageTags.exists(_.nonEmpty)
+      }
+
+  /**
+    * Check, if the content of given entry and newly scraped information differs
+    *
+    * @param existingEntry        The existing entry
+    * @param rawEntryInformation  Freshly scraped information
+    * @return True, if something has changed
+    */
+  private def contentHasChanged(
+      existingEntry: SimpleEntryView[SimpleUrlView, ArticleTagView],
+      rawEntryInformation: RawEntryInformation
+  ): Boolean = (existingEntry, rawEntryInformation) match {
+    case (
+        SimpleEntryView(
+          _,
+          maybeTitle,
+          maybeContent,
+          maybeSummary,
+          _,
+          maybeDate,
+          _,
+          _
+        ),
+        RawEntryInformation(
+          scrapedTitle,
+          scrapedSummary,
+          scrapedContent,
+          scrapedDate,
+          _
+        )
+        ) =>
+      !(maybeTitle
+        .contains(scrapedTitle) && maybeSummary == scrapedSummary && maybeContent == scrapedContent && maybeDate == scrapedDate)
+  }
 }
