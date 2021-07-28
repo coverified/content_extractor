@@ -14,6 +14,19 @@ sealed trait EntryInformation {
   protected val content: Option[String]
   protected val date: Option[String]
   protected val tags: Option[List[String]]
+
+  /**
+    * Calculate the hash code of the Entry
+    *
+    * @return The hash code for the given fields
+    */
+  def contentHash: Int =
+    EntryInformation.contentHash(
+      title,
+      summary.getOrElse(""),
+      content.getOrElse(""),
+      date.getOrElse("")
+    )
 }
 
 object EntryInformation {
@@ -27,7 +40,7 @@ object EntryInformation {
     * @param date     The actual date
     * @return The hash code for the given fields
     */
-  def contentHash(
+  private def contentHash(
       title: String,
       summary: String,
       content: String,
@@ -97,15 +110,7 @@ object EntryInformation {
       override protected val content: Option[String],
       override protected val date: Option[String],
       override val tags: Option[List[String]]
-  ) extends EntryInformation {
-    def contentHash: Int =
-      EntryInformation.contentHash(
-        title,
-        summary.getOrElse(""),
-        content.getOrElse(""),
-        date.getOrElse("")
-      )
-  }
+  ) extends EntryInformation
 
   object CreateEntryInformation {
     def apply(raw: RawEntryInformation): CreateEntryInformation =
