@@ -136,7 +136,7 @@ object Mutator {
 
       case (context, DisableEntryForUrl(urlId, replyTo)) =>
         /* If available, a matching entry shall be disabled */
-        stateData.helper.queryMatchingEntry(urlId) match {
+        stateData.helper.queryMatchingEntryId(urlId) match {
           case Some(entryId) =>
             stateData.helper.disableEntry(entryId) match {
               case Some(Some(false)) =>

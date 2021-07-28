@@ -46,7 +46,11 @@ import info.coverified.extractor.messages.UrlHandlerMessage.{
 }
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.graphql.GraphQLHelper
+import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.CoVerifiedClientSchema.Source.SourceView
+import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
+import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
+import sttp.model.Uri
 
 import java.time.{Duration, ZoneId}
 
@@ -93,13 +97,13 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage])
         )
         context.watchWith(mutator, MutationsCompleted)
 
-        val graphQLHelper = new GraphQLHelper(apiUri, authSecret)
         val stateData = SourceHandlerInitializingStateData(
           userAgent,
           browseTimeout,
           targetDateTimePattern,
           targetTimeZone,
-          graphQLHelper,
+          apiUri,
+          authSecret,
           pageProfile,
           reAnalysisInterval,
           workerPoolSize,
@@ -133,8 +137,9 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage])
         }
         .withRoundRobinRouting()
         .withBroadcastPredicate {
-          case _: InitUrlHandler => true
-          case _                 => false
+          case _: InitUrlHandler           => true
+          case UrlHandlerMessage.Terminate => true
+          case _                           => false
         }
       val urlWorkerProxy =
         ctx.spawn(
@@ -148,7 +153,9 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage])
         initializingStateData.userAgent,
         initializingStateData.browseTimeout,
         initializingStateData.targetDateTimePattern,
-        initializingStateData.targetTimeZone
+        initializingStateData.targetTimeZone,
+        initializingStateData.apiUri,
+        initializingStateData.authSecret
       )
 
       /* Report completion of initialization */
@@ -277,84 +284,48 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage])
             Behaviors.same
           case Some(relevantUrls) =>
             ctx.log.debug(
-              "Found {} urls to be re-analyzed for source '{}' ({}). Query matching entries.",
+              "Found {} urls to be re-analyzed for source '{}' ({}).",
               relevantUrls.size,
               stateData.source.id,
               stateData.source.name.getOrElse("")
             )
 
-            val urlIds = relevantUrls.map(_.id)
-            stateData.graphQLHelper.queryMatchingEntries(urlIds) match {
-              case Some(matchingEntries) =>
-                ctx.log.info(
-                  "Found {} urls to be re-analyzed for source '{}' ({}). {} of them already have an entry available.",
-                  relevantUrls.size,
-                  stateData.source.id,
-                  stateData.source.name.getOrElse(""),
-                  matchingEntries.size
-                )
-
-                /* "Zip" urls and entries and sort them accordingly. */
-                val urlToEntry = relevantUrls.map { url =>
-                  /* Try to find a matching entry for this url */
-                  url -> matchingEntries.find { entry =>
-                    /* Entry matches, if the related url has the queried id */
-                    entry.url.exists(_.id == url.id)
-                  }
-                }
-                ctx.log.debug(
-                  "Found the following relation between urls and entries:\n\t{}",
-                  urlToEntry
-                    .map {
-                      case (urlView, maybeEntryView) =>
-                        s"${urlView.id} -> ${maybeEntryView.map(_.id).toString}"
-                    }
-                    .mkString("\n\t")
-                )
-
-                /* Select the first batch, send them to the url workers and change state accordingly */
-                val (firstBatch, remainingUrls) =
-                  peek(urlToEntry, stateData.workerPoolSize)
-                val urlToActivation = firstBatch.flatMap {
-                  case (url, maybeEntry) if url.name.nonEmpty =>
-                    /* Send out messages to worker */
-                    val actualUrl = url.name.get
-                    workerPoolProxy ! HandleExistingUrl(
-                      actualUrl,
-                      url.id,
-                      maybeEntry,
-                      stateData.pageProfile,
-                      ctx.self
-                    )
-                    Some(actualUrl -> System.currentTimeMillis())
-                  case _ =>
-                    /* No actual url known, nothing to handle */
-                    None
-                }.toMap
-
-                /* Change state to handle existing urls */
-                val queueEntries = remainingUrls.map(UrlWithPayLoad(_))
-                handleExistingUrls(
-                  stateData,
-                  queueEntries,
-                  urlToActivation,
-                  workerPoolProxy,
-                  timer,
-                  ctx
-                )
-              case None =>
-                ctx.log.error(
-                  "Received empty reply from API when requesting matching entries for yet visited urls in source " +
-                    "'{}' ({}). Report, that all urls to be re-analyzed are handled.",
-                  stateData.source.name.getOrElse(""),
-                  stateData.source.id
-                )
-                stateData.supervisor ! ExistingUrlsHandled(
-                  stateData.source.id,
+            /* Select the first batch, send them to the url workers and change state accordingly */
+            val (firstBatch, remainingUrls) =
+              peek(relevantUrls, stateData.workerPoolSize)
+            val urlToActivation = firstBatch.flatMap {
+              case url if url.name.nonEmpty =>
+                /* Send out messages to worker */
+                val actualUrl = url.name.get
+                workerPoolProxy ! HandleExistingUrl(
+                  actualUrl,
+                  url.id,
+                  None,
+                  stateData.pageProfile,
                   ctx.self
                 )
-                Behaviors.same
-            }
+                Some(actualUrl -> System.currentTimeMillis())
+              case _ =>
+                /* No actual url known, nothing to handle */
+                None
+            }.toMap
+
+            /* Change state to handle existing urls */
+            val queueEntries = remainingUrls.map(
+              urlView =>
+                UrlWithPayLoad[SimpleEntryView[SimpleUrlView, ArticleTagView]](
+                  urlView,
+                  None
+                )
+            )
+            handleExistingUrls(
+              stateData,
+              queueEntries,
+              urlToActivation,
+              workerPoolProxy,
+              timer,
+              ctx
+            )
         }
 
       case (ctx, SourceHandlerMessage.Terminate) =>
@@ -362,7 +333,7 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage])
           "Termination requested for source handler '{}'. Shut down mutator and worker pool.",
           stateData.source.id
         )
-        ctx.stop(workerPoolProxy)
+        workerPoolProxy ! UrlHandlerMessage.Terminate
         stateData.mutator ! Terminate
         shutdown(stateData)
       case _ => Behaviors.unhandled
@@ -397,7 +368,8 @@ object SourceHandler {
       browseTimeout: Duration,
       targetDateTimePattern: String,
       targetTimeZone: ZoneId,
-      graphQLHelper: GraphQLHelper,
+      apiUri: Uri,
+      authSecret: String,
       pageProfile: ProfileConfig,
       reAnalysisInterval: Duration,
       workerPoolSize: Int,
@@ -423,7 +395,7 @@ object SourceHandler {
   object SourceHandlerStateData {
     def apply(initStateData: SourceHandlerInitializingStateData) =
       new SourceHandlerStateData(
-        initStateData.graphQLHelper,
+        new GraphQLHelper(initStateData.apiUri, initStateData.authSecret),
         initStateData.pageProfile,
         initStateData.reAnalysisInterval,
         initStateData.workerPoolSize,

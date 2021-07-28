@@ -206,75 +206,44 @@ class GraphQLHelper(
     * Query the entry, that matches the given url id
     *
     * @param urlId  Url identifier in query
-    * @return An option onto the article's id
+    * @return An option onto the article
     */
-  def queryMatchingEntry(urlId: String): Option[String] =
-    queryMatchingEntries(List(urlId)).flatMap(_.headOption.map(_.id))
+  def queryMatchingEntry(
+      urlId: String
+  ): Option[SimpleEntryView[SimpleUrlView, ArticleTagView]] =
+    firstEntryMatchingUrlId(urlId)(
+      SimpleEntry.view(SimpleUrl.view, ArticleTag.view)
+    )
 
   /**
-    * Query all entries, that be long to the urls with given ids
+    * Query the entry, that matches the given url id
     *
-    * @param urlIds List of url ids to consider
-    * @return An optional list of matching entries
+    * @param urlId  Url identifier in query
+    * @return An option onto the article
     */
-  def queryMatchingEntries(
-      urlIds: List[String]
-  ): Option[List[SimpleEntryView[SimpleUrlView, ArticleTagView]]] = {
-    val filter = matchingEntriesFilter(urlIds)
-    countMatchingEntries(filter).map { amountOfEntries =>
-      neededBatches(amountOfEntries)
-        .flatMap(
-          batchCount => queryMatchingEntries(batchCount, filter)
-        )
-        .flatten
-        .toList
-    }
-  }
+  def queryMatchingEntryId(
+      urlId: String
+  ): Option[String] =
+    firstEntryMatchingUrlId(urlId)(CoVerifiedClientSchema.Entry.id)
 
   /**
-    * Set up an entry filter, that selects all entries belonging to the given url ids
+    * Queries the first entry, that matches the given url id
     *
-    * @param urlIds List of applicable url ids
-    * @return Condition to select matching entries
+    * @param urlId            Url identifier
+    * @param selectionBuilder Selection builder to determine the result to get
+    * @tparam T Type of return
+    * @return Optional first match
     */
-  private def matchingEntriesFilter(urlIds: List[String]): EntryWhereInput = {
-    val urlConditions = urlIds.map { urlId =>
-      UrlWhereInput(id = Some(urlId))
-    }
-    EntryWhereInput(OR = Some(urlConditions.map { urlCondition =>
-      EntryWhereInput(url = Some(urlCondition))
-    }))
-  }
-
-  /**
-    * Count the amount of matching entries
-    *
-    * @param filter Filter for matching entries
-    * @return Optional amount of available new urls
-    */
-  private def countMatchingEntries(filter: EntryWhereInput): Option[Int] =
-    queryWithHeader {
-      Query.entriesCount(where = filter)
-    }
-
-  /**
-    * Query the batch given by count.
-    *
-    * @param count  The count of batch to get
-    * @param filter Condition filter
-    * @return Optional list of view onto urls of a source, that need re-analysis
-    */
-  private def queryMatchingEntries(
-      count: Int,
-      filter: EntryWhereInput
-  ): Option[List[SimpleEntryView[SimpleUrlView, ArticleTagView]]] =
-    queryWithHeader {
+  private def firstEntryMatchingUrlId[T](urlId: String)(
+      selectionBuilder: SelectionBuilder[CoVerifiedClientSchema.Entry, T]
+  ): Option[T] =
+    queryWithHeader(
       Query.allEntries(
-        where = filter,
-        first = Some(batchSize),
-        skip = count * batchSize
-      )(SimpleEntry.view(SimpleUrl.view, ArticleTag.view))
-    }
+        where = EntryWhereInput(url = Some(UrlWhereInput(id = Some(urlId)))),
+        first = Some(1),
+        skip = 0
+      )(selectionBuilder)
+    ).flatMap(_.headOption)
 
   /**
     * Check, if there is a entry with same content hash already available

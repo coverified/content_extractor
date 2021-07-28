@@ -38,6 +38,7 @@ import info.coverified.extractor.messages.UrlHandlerMessage.{
   InitUrlHandler
 }
 import info.coverified.extractor.profile.ProfileConfig
+import info.coverified.graphql.GraphQLHelper
 import info.coverified.graphql.schema.CoVerifiedClientSchema.ArticleTag.ArticleTagView
 import info.coverified.graphql.schema.SimpleEntry.SimpleEntryView
 import info.coverified.graphql.schema.SimpleUrl.SimpleUrlView
@@ -58,7 +59,9 @@ class UrlHandler {
             userAgent,
             browseTimeout,
             targetDateTimePattern,
-            targetTimeZone
+            targetTimeZone,
+            apiUri,
+            authSecret
           )
           ) =>
         val analyzer = Analyzer(
@@ -67,13 +70,15 @@ class UrlHandler {
           targetDateTimePattern,
           targetTimeZone
         )
-        idle(mutatorRef, analyzer)
+        val graphQLHelper = new GraphQLHelper(apiUri, authSecret)
+        idle(mutatorRef, analyzer, graphQLHelper)
       case _ => Behaviors.unhandled
     }
 
   def idle(
       mutator: ActorRef[MutatorMessage],
-      analyzer: Analyzer
+      analyzer: Analyzer,
+      graphQLHelper: GraphQLHelper
   ): Behaviors.Receive[UrlHandlerMessage] =
     Behaviors.receive[UrlHandlerMessage] {
       case (context, HandleNewUrl(url, urlId, pageProfile, sourceHandler)) =>
@@ -97,50 +102,40 @@ class UrlHandler {
         Behaviors.same
       case (
           ctx,
-          HandleExistingUrl(
-            url,
-            urlId,
-            payload @ Some(entry),
-            pageProfile,
-            sourceHandler
-          )
+          HandleExistingUrl(url, urlId, maybeEntry, pageProfile, sourceHandler)
           ) =>
-        ctx.log
-          .debug(
-            "Re-analyze already known url '{}' and respect existing entry with it '{}'.",
-            url,
-            entry.id
-          )
+        /* Determine the url handling based on the provided entry information. If nothing has been delivered, yet, it
+         * might be, because the url handler is triggered the first time for this url or the analysis of this url is
+         * re-scheduled and there actually is no entry. Anyway, try to receive it, as there is no chance for
+         * distinction, yet. */
+        val urlHandling = maybeEntry
+          .orElse {
+            ctx.log.debug(
+              "No entry information delivered for url '{}' ('{}'). Try to get matching entry from API.",
+              url,
+              urlId
+            )
+            graphQLHelper.queryMatchingEntry(urlId)
+          }
+          .map { entry =>
+            ctx.log
+              .debug(
+                "Re-analyze already known url '{}' and respect existing entry with id '{}'.",
+                url,
+                entry.id
+              )
+            handleUrlWithExistingEntry(entry, mutator, sourceHandler)
+          }
+          .getOrElse {
+            ctx.log
+              .debug(
+                "Re-analyze already known url '{}'. No existing entry to consider.",
+                url
+              )
+            handleUrlWithoutExistingEntry(mutator, sourceHandler)
+          }
 
-        /* Visit the url and create an Entry under consideration of the existing one */
-        val urlHandling =
-          handleUrlWithExistingEntry(entry, mutator, sourceHandler)
-        visitUrlAndHandleEntry(
-          analyzer,
-          url,
-          urlId,
-          payload,
-          pageProfile,
-          urlHandling,
-          sourceHandler,
-          ctx.log
-        )
-
-        /* Ask the mutator to update the url */
-        mutator ! UpdateUrl(urlId, sourceHandler)
-        Behaviors.same
-      case (
-          ctx,
-          HandleExistingUrl(url, urlId, None, pageProfile, sourceHandler)
-          ) =>
-        ctx.log
-          .debug(
-            "Re-analyze already known url '{}'. No existing entry to consider.",
-            url
-          )
-
-        /* Visit the url and create an Entry right away, as no existing one needs consideration */
-        val urlHandling = handleUrlWithoutExistingEntry(mutator, sourceHandler)
+        /* Visit the url and create or update an Entry */
         visitUrlAndHandleEntry(
           analyzer,
           url,
@@ -153,8 +148,16 @@ class UrlHandler {
         )
 
         /* Ask the mutator to update the url */
-        sourceHandler ! UrlHandledSuccessfully(url)
+        mutator ! UpdateUrl(urlId, sourceHandler)
         Behaviors.same
+
+      case (ctx, UrlHandlerMessage.Terminate) =>
+        ctx.log.debug("Url handler shutting down")
+        graphQLHelper.close()
+        Behaviors.stopped { () =>
+          ctx.log.debug("Url Handler shut down.")
+        }
+
       case _ => Behaviors.unhandled
     }
 }
