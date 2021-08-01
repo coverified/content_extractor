@@ -588,7 +588,8 @@ class AnalyzerSpec
           analyzer invokePrivate extractInformation(
             urlPageDocWithoutTitle.toScraperDoc,
             validPageType.selectors,
-            url
+            url,
+            None
           )
         ) {
           case Failure(analysisException: AnalysisException) =>
@@ -612,7 +613,8 @@ class AnalyzerSpec
           analyzer invokePrivate extractInformation(
             validUrlPageDoc.toScraperDoc,
             validPageType.selectors,
-            url
+            url,
+            None
           )
         ) {
           case Success(
@@ -639,7 +641,8 @@ class AnalyzerSpec
           analyzer invokePrivate extractInformation(
             validUrlPageDocWithoutOptionalInformation.toScraperDoc,
             validPageType.selectors,
-            url
+            url,
+            None
           )
         ) {
           case Success(
@@ -724,7 +727,8 @@ class AnalyzerSpec
         analyzer invokePrivate analyze(
           coverifiedUrl + "/impressum/subpage",
           validUrlPageDoc.toScraperDoc,
-          profileConfig
+          profileConfig,
+          None
         ) match {
           case Failure(exception: AnalysisException) =>
             exception.msg shouldBe s"Unable to gather profile config for url '${coverifiedUrl + "/impressum/subpage"}'."
@@ -751,7 +755,8 @@ class AnalyzerSpec
         analyzer invokePrivate analyze(
           url,
           validUrlPageDoc.toScraperDoc,
-          profileConfig
+          profileConfig,
+          None
         ) match {
           case Success(_) => succeed
           case Failure(exception) =>
