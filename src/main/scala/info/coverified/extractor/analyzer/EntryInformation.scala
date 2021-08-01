@@ -14,6 +14,7 @@ sealed trait EntryInformation {
   protected val content: Option[String]
   protected val date: Option[String]
   protected val tags: Option[List[String]]
+  protected val eTag: Option[String]
 
   /**
     * Calculate the hash code of the Entry
@@ -55,13 +56,15 @@ object EntryInformation {
     * @param content  Actual content
     * @param date     Date of the article
     * @param tags     Tags, that can be found on the site
+    * @param eTag     Optional HTTP ETag information
     */
   final case class RawEntryInformation(
       override val title: String,
       override val summary: Option[String],
       override val content: Option[String],
       override val date: Option[String],
-      override val tags: Option[List[String]]
+      override val tags: Option[List[String]],
+      override val eTag: Option[String]
   ) extends EntryInformation
 
   /**
@@ -73,6 +76,7 @@ object EntryInformation {
     * @param content  Actual content
     * @param date     Date of the article
     * @param tags     Tags, that can be found on the site
+    * @param eTag     Optional HTTP ETag information
     */
   final case class UpdateEntryInformation(
       id: String,
@@ -80,7 +84,8 @@ object EntryInformation {
       override val summary: Option[String],
       override val content: Option[String],
       override val date: Option[String],
-      override val tags: Option[List[String]]
+      override val tags: Option[List[String]],
+      override val eTag: Option[String]
   ) extends EntryInformation
 
   object UpdateEntryInformation {
@@ -91,7 +96,8 @@ object EntryInformation {
         raw.summary,
         raw.content,
         raw.date,
-        raw.tags
+        raw.tags,
+        raw.eTag
       )
   }
 
@@ -103,13 +109,15 @@ object EntryInformation {
     * @param content  Actual content
     * @param date     Date of the article
     * @param tags     Tags, that can be found on the site
+    * @param eTag     Optional HTTP ETag information
     */
   final case class CreateEntryInformation(
       override protected val title: String,
       override protected val summary: Option[String],
       override protected val content: Option[String],
       override protected val date: Option[String],
-      override val tags: Option[List[String]]
+      override val tags: Option[List[String]],
+      override val eTag: Option[String]
   ) extends EntryInformation
 
   object CreateEntryInformation {
@@ -119,7 +127,8 @@ object EntryInformation {
         raw.summary,
         raw.content,
         raw.date,
-        raw.tags
+        raw.tags,
+        raw.eTag
       )
   }
 }

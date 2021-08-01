@@ -11,12 +11,16 @@ import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.model.Document
 import com.typesafe.scalalogging.LazyLogging
-import info.coverified.extractor.analyzer.Analyzer.ISO_DATE_TIME_PATTERN
+import info.coverified.extractor.analyzer.Analyzer.{
+  ContentUnchanged,
+  ISO_DATE_TIME_PATTERN
+}
 import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig.PageType
 import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
-import org.jsoup.Jsoup
+import org.jsoup.helper.HttpConnection
+import org.jsoup.{Connection, Jsoup}
 
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.temporal.ChronoField._
@@ -45,6 +49,8 @@ object Analyzer {
     )
 
   private val ISO_DATE_TIME_PATTERN = "yyyy-MM-dd'T'HH:mm:ssXXX"
+
+  object ContentUnchanged
 }
 
 class Analyzer private (
@@ -55,28 +61,57 @@ class Analyzer private (
 ) extends LazyLogging {
   def run(
       url: String,
-      cfg: ProfileConfig
-  ): Try[RawEntryInformation] =
-    buildPageDocument(url).flatMap(analyze(url, _, cfg))
+      cfg: ProfileConfig,
+      maybeETag: Option[String] = None
+  ): Try[Either[ContentUnchanged.type, RawEntryInformation]] =
+    request(url, maybeETag).flatMap {
+      case response if response.statusCode() == 304 =>
+        /* The url was requested with an ETag and the content hasn't changed. */
+        Success(Left(ContentUnchanged))
+      case response =>
+        /* The content actually has changed or no ETag header was available, when sending the request. */
+        val maybeActualETag = Option(response.header("etag"))
+        buildPageDocument(response)
+          .flatMap(analyze(url, _, cfg, maybeActualETag))
+          .map(Right(_))
+    }
 
   /**
-    * Get the content of the web page to be reached with the current url
+    * Send the HTTP GET-Request to the website. If applicable, send an ETag to only receive full response, if content
+    * has changed.
     *
-    * @param url Url location of the web page
-    * @return The content, that can be scraped later
+    * @param url  The url to reach out to
+    * @param eTag An optional entity tag
+    * @return A try onto the response
     */
-  def buildPageDocument(url: String): Try[JsoupDocument] = Try {
-    JsoupDocument(
+  private def request(
+      url: String,
+      eTag: Option[String] = None
+  ): Try[Connection.Response] =
+    Try {
       Jsoup
         .connect(url)
         .ignoreContentType(false)
         .userAgent(userAgent)
         .timeout(browseTimeout.toMillis.toInt)
         .followRedirects(false)
-        .execute()
-        .parse()
-    )
-  }
+    }.map {
+        case connection if eTag.nonEmpty =>
+          /* The ETag is given. Only request the full response, if the ETag has changed. */
+          connection.header("If-None-Match", eTag.get)
+        case connection => connection
+      }
+      .map(_.execute)
+
+  /**
+    * Get the content of the web page determined by the given response
+    *
+    * @param response Website's response to the request
+    * @return The content, that can be scraped later
+    */
+  private def buildPageDocument(
+      response: Connection.Response
+  ): Try[JsoupDocument] = Try { JsoupDocument(response.parse()) }
 
   /**
     * Analyze the given page document and extract information
@@ -84,15 +119,17 @@ class Analyzer private (
     * @param url           Url of page
     * @param pageDoc       Page document
     * @param profileConfig Applicable profile config for this page
+    * @param maybeETag     Optional HTTP ETag information
     * @return A trial onto the needed information
     */
   private def analyze(
       url: String,
       pageDoc: JsoupDocument,
-      profileConfig: ProfileConfig
+      profileConfig: ProfileConfig,
+      maybeETag: Option[String]
   ): Try[RawEntryInformation] =
     getSelectors(url, pageDoc, profileConfig).flatMap(
-      extractInformation(pageDoc, _, url)
+      extractInformation(pageDoc, _, url, maybeETag)
     )
 
   /**
@@ -157,12 +194,14 @@ class Analyzer private (
     * @param pageDoc   Page document
     * @param selectors Selectors to use
     * @param url       The corresponding url (only for debugging purposes)
+    * @param maybeETag Optional HTTP ETag information
     * @return Needed information
     */
   private def extractInformation(
       pageDoc: JsoupDocument,
       selectors: Selectors,
-      url: String
+      url: String,
+      maybeETag: Option[String]
   ): Try[RawEntryInformation] = {
     val scrapeStart = System.currentTimeMillis()
     logger.debug("Begin scraping content of url '{}'.", url)
@@ -178,7 +217,8 @@ class Analyzer private (
         selectors.date.flatMap(extractDate(pageDoc, _, url)),
         selectors.tags
           .flatMap(pageDoc >?> texts(_))
-          .flatMap(tags => Option.when(tags.nonEmpty)(tags.toList))
+          .flatMap(tags => Option.when(tags.nonEmpty)(tags.toList)),
+        maybeETag
       )
     } match {
       case success @ Success(_) =>

@@ -8,16 +8,20 @@ package info.coverified.extractor.actor
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import info.coverified.extractor.actor.UrlHandler.{
+  failIfContentUnchanged,
   handleUrlWithExistingEntry,
   handleUrlWithoutExistingEntry,
+  sendSuccess,
   visitUrlAndHandleEntry
 }
 import info.coverified.extractor.analyzer.Analyzer
+import info.coverified.extractor.analyzer.Analyzer.ContentUnchanged
 import info.coverified.extractor.analyzer.EntryInformation.{
   CreateEntryInformation,
   RawEntryInformation,
   UpdateEntryInformation
 }
+import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.messages.MutatorMessage.{
   CreateEntry,
   UpdateEntry,
@@ -85,16 +89,20 @@ class UrlHandler {
         context.log.debug("Start content extraction for new url '{}'.", url)
 
         /* Visit the url and create an Entry right away, as no existing one needs consideration */
-        val urlHandling = handleUrlWithoutExistingEntry(mutator, sourceHandler)
+        val handleUnchanged = failIfContentUnchanged(sourceHandler)
+        val handleChanged =
+          handleUrlWithoutExistingEntry(mutator, sourceHandler)
         visitUrlAndHandleEntry(
-          analyzer,
-          url,
-          urlId,
-          None,
-          pageProfile,
-          urlHandling,
-          sourceHandler,
-          context.log
+          analyzer = analyzer,
+          url = url,
+          urlId = urlId,
+          maybeETag = None,
+          payLoad = None,
+          pageProfile = pageProfile,
+          handleUnchanged = handleUnchanged,
+          handleChanged = handleChanged,
+          sourceHandler = sourceHandler,
+          logger = context.log
         )
 
         /* Ask the mutator to update the url */
@@ -108,7 +116,7 @@ class UrlHandler {
          * might be, because the url handler is triggered the first time for this url or the analysis of this url is
          * re-scheduled and there actually is no entry. Anyway, try to receive it, as there is no chance for
          * distinction, yet. */
-        val urlHandling = maybeEntry
+        val (handleUnchanged, handleChanged) = maybeEntry
           .orElse {
             ctx.log.debug(
               "No entry information delivered for url '{}' ('{}'). Try to get matching entry from API.",
@@ -124,7 +132,10 @@ class UrlHandler {
                 url,
                 entry.id
               )
-            handleUrlWithExistingEntry(entry, mutator, sourceHandler)
+            (
+              sendSuccess(sourceHandler),
+              handleUrlWithExistingEntry(entry, mutator, sourceHandler)
+            )
           }
           .getOrElse {
             ctx.log
@@ -132,19 +143,24 @@ class UrlHandler {
                 "Re-analyze already known url '{}'. No existing entry to consider.",
                 url
               )
-            handleUrlWithoutExistingEntry(mutator, sourceHandler)
+            (
+              failIfContentUnchanged(sourceHandler),
+              handleUrlWithoutExistingEntry(mutator, sourceHandler)
+            )
           }
 
         /* Visit the url and create or update an Entry */
         visitUrlAndHandleEntry(
-          analyzer,
-          url,
-          urlId,
-          None,
-          pageProfile,
-          urlHandling,
-          sourceHandler,
-          ctx.log
+          analyzer = analyzer,
+          url = url,
+          urlId = urlId,
+          maybeETag = maybeEntry.flatMap(_.eTag),
+          payLoad = maybeEntry,
+          pageProfile = pageProfile,
+          handleUnchanged = handleUnchanged,
+          handleChanged = handleChanged,
+          sourceHandler = sourceHandler,
+          logger = ctx.log
         )
 
         /* Ask the mutator to update the url */
@@ -165,37 +181,55 @@ class UrlHandler {
 object UrlHandler {
   def apply(): Behavior[UrlHandlerMessage] = new UrlHandler().uninitialized
 
-  type EntryHandlingFunction = (
-      String,
-      String,
-      RawEntryInformation
+  type HandleActualInformationFunction = (
+      String, // The actual url
+      String, // The url id
+      RawEntryInformation // raw web information
+  ) => Unit
+  type HandleUnchangedInformationFunction = (
+      String, // The actual url
+      String // The url id
   ) => Unit
 
   /**
     * Visit a given web page under the given url and create a new entry from content
     *
-    * @param analyzer           Analyzer to use for page analysis
-    * @param url                The url itself
-    * @param urlId              Identifier of the url
-    * @param payLoad            Possible pay load of request
-    * @param pageProfile        Applicable page profile
-    * @param handlingFunction   A function, that handles existing information as well as information from analyzer
-    * @param sourceHandler      Reference to the source handler
-    * @param logger             Logging instance
+    * @param analyzer         Analyzer to use for page analysis
+    * @param url              The url itself
+    * @param urlId            Identifier of the url
+    * @param maybeETag        Optional HTTP Entity tag to possibly detect unchanged content
+    * @param payLoad          Possible pay load of request
+    * @param pageProfile      Applicable page profile
+    * @param handleUnchanged  A function, that handles existing information in the case, that web page's information
+    *                         hasn't changed
+    * @param handleChanged    A function, that handles existing information as well as actual information from analyzer
+    * @param sourceHandler    Reference to the source handler
+    * @param logger           Logging instance
     */
   private def visitUrlAndHandleEntry[P](
       analyzer: Analyzer,
       url: String,
       urlId: String,
+      maybeETag: Option[String],
       payLoad: Option[P],
       pageProfile: ProfileConfig,
-      handlingFunction: EntryHandlingFunction,
+      handleUnchanged: HandleUnchangedInformationFunction,
+      handleChanged: HandleActualInformationFunction,
       sourceHandler: ActorRef[SourceHandlerMessage],
       logger: Logger
-  ): Unit = analyzer.run(url, pageProfile) match {
-    case Success(rawEntryInformation) =>
-      logger.debug("Visiting of web site '{}' successful.", url)
-      handlingFunction(
+  ): Unit = analyzer.run(url, pageProfile, maybeETag) match {
+    case Success(Left(ContentUnchanged)) =>
+      logger.debug(
+        "Visiting of web site '{}' successful. Content hasn't changed. Handle it!",
+        url
+      )
+      handleUnchanged(url, urlId)
+    case Success(Right(rawEntryInformation)) =>
+      logger.debug(
+        "Visiting of web site '{}' successful. Received actual content. Handle it!",
+        url
+      )
+      handleChanged(
         url,
         urlId,
         rawEntryInformation
@@ -209,6 +243,46 @@ object UrlHandler {
   }
 
   /**
+    * Sends out a [[UrlHandledWithFailure]] message, as there shouldn't be the chance to compare the content against
+    * anything else.
+    *
+    * @param sourceHandler Reference to the source handler
+    * @return A function, that does exactly that
+    */
+  private def failIfContentUnchanged(
+      sourceHandler: ActorRef[SourceHandlerMessage]
+  ): HandleUnchangedInformationFunction =
+    (
+        url: String,
+        urlId: String
+    ) => {
+      sourceHandler ! UrlHandledWithFailure(
+        url,
+        urlId,
+        None,
+        AnalysisException(
+          s"Content of '$url' ($urlId) detected as unchanged although I don't have an ETag at hand to compare against..."
+        )
+      )
+    }
+
+  /**
+    * Send out success report to source handler, as no information have changed
+    *
+    * @param sourceHandler Reference to the source handler
+    * @return A function, that does exactly that
+    */
+  private def sendSuccess(
+      sourceHandler: ActorRef[SourceHandlerMessage]
+  ): HandleUnchangedInformationFunction =
+    (
+        url: String,
+        _: String
+    ) => {
+      sourceHandler ! UrlHandledSuccessfully(url)
+    }
+
+  /**
     * A simple function, that handles an analyzed url, that does not have any kind of existing entry
     *
     * @param mutator            Reference to the mutator
@@ -218,7 +292,7 @@ object UrlHandler {
   private def handleUrlWithoutExistingEntry(
       mutator: ActorRef[MutatorMessage],
       sourceHandler: ActorRef[SourceHandlerMessage]
-  ): EntryHandlingFunction =
+  ): HandleActualInformationFunction =
     (
         url: String,
         urlId: String,
@@ -243,7 +317,7 @@ object UrlHandler {
       existingEntry: SimpleEntryView[SimpleUrlView, ArticleTagView],
       mutator: ActorRef[MutatorMessage],
       sourceHandler: ActorRef[SourceHandlerMessage]
-  ): EntryHandlingFunction =
+  ): HandleActualInformationFunction =
     (
         url: String,
         urlId: String,
@@ -320,6 +394,7 @@ object UrlHandler {
           _,
           maybeDate,
           _,
+          _,
           _
         ),
         RawEntryInformation(
@@ -327,6 +402,7 @@ object UrlHandler {
           scrapedSummary,
           scrapedContent,
           scrapedDate,
+          _,
           _
         )
         ) =>

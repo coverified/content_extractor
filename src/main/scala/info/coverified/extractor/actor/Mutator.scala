@@ -298,7 +298,7 @@ object Mutator {
     }
 
     val mutation = createEntryInformation match {
-      case CreateEntryInformation(title, summary, content, date, _) =>
+      case CreateEntryInformation(title, summary, content, date, _, eTag) =>
         buildEntry(
           urlId,
           title,
@@ -308,7 +308,8 @@ object Mutator {
           contentHash,
           reAnalysisInterval,
           disabled,
-          maybeConnectToArticleTags
+          maybeConnectToArticleTags,
+          eTag
         )
     }
 
@@ -329,7 +330,8 @@ object Mutator {
       contentHash: String,
       timeToNextCrawl: Duration,
       disabled: Boolean = false,
-      maybeConnectToArticleTags: Option[Seq[ArticleTagWhereUniqueInput]]
+      maybeConnectToArticleTags: Option[Seq[ArticleTagWhereUniqueInput]],
+      maybeETag: Option[String]
   ): SelectionBuilder[RootMutation, Option[
     SimpleEntryView[SimpleUrlView, ArticleTagView]
   ]] =
@@ -349,7 +351,8 @@ object Mutator {
           disabled = Some(disabled),
           nextCrawl = determineNextCrawl(timeToNextCrawl),
           updatedAt = updatedNow,
-          articleTags = buildTagRelationInput(maybeConnectToArticleTags)
+          articleTags = buildTagRelationInput(maybeConnectToArticleTags),
+          eTag = maybeETag
         )
       )
     )(
@@ -369,6 +372,7 @@ object Mutator {
     * @param maybeConnectToArticleTags  An optional model to connect to article tags
     * @param disabled                   If the entry needs to be disabled
     * @param contentHash                The content hash information
+    * @param maybeETag                  The HTTP ETag information, that need update
     * @param timeToNextCrawl            Duration, until the next analysis shall wait
     * @return A selection builder forming the reply from API
     */
@@ -382,6 +386,7 @@ object Mutator {
       maybeConnectToArticleTags: Option[Seq[ArticleTagWhereUniqueInput]],
       disabled: Boolean,
       contentHash: String,
+      maybeETag: Option[String],
       timeToNextCrawl: Duration
   ): SelectionBuilder[RootMutation, Option[
     SimpleEntryView[SimpleUrlView, ArticleTagView]
@@ -404,7 +409,8 @@ object Mutator {
           nextCrawl = determineNextCrawl(timeToNextCrawl),
           updatedAt = updatedNow,
           contentHash = Some(contentHash),
-          disabled = Some(disabled)
+          disabled = Some(disabled),
+          eTag = maybeETag
         )
       )
     )(SimpleEntry.view(SimpleUrl.view, ArticleTag.view))
@@ -455,7 +461,7 @@ object Mutator {
     }
 
     val mutation = updateEntryInformation match {
-      case UpdateEntryInformation(id, title, summary, content, date, _) =>
+      case UpdateEntryInformation(id, title, summary, content, date, _, eTag) =>
         updateEntry(
           id,
           urlId,
@@ -466,6 +472,7 @@ object Mutator {
           maybeConnectToArticleTags,
           disabled,
           contentHash,
+          eTag,
           reAnalysisInterval
         )
     }

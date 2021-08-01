@@ -22,7 +22,8 @@ object SimpleEntry {
       url: Option[UrlSelection],
       date: Option[String],
       disabled: Option[Boolean],
-      articleTags: Option[List[TagSelection]]
+      articleTags: Option[List[TagSelection]],
+      eTag: Option[String]
   )
 
   def view[UrlSelection, TagSelection](
@@ -34,7 +35,7 @@ object SimpleEntry {
     ) ~ Entry.date ~ Entry.disabled ~ Entry.articleTags(
       where = ArticleTagWhereInput(),
       skip = 0
-    )(tagSelection)).mapN {
+    )(tagSelection) ~ Entry.eTag).mapN {
       (
           id: String,
           name: Option[String],
@@ -43,7 +44,8 @@ object SimpleEntry {
           url: Option[UrlSelection],
           date: Option[String],
           disabled: Option[Boolean],
-          articleTags: Option[List[TagSelection]]
+          articleTags: Option[List[TagSelection]],
+          eTag: Option[String]
       ) =>
         SimpleEntryView(
           id,
@@ -53,7 +55,8 @@ object SimpleEntry {
           url,
           date,
           disabled,
-          articleTags
+          articleTags,
+          eTag
         )
     }
 }

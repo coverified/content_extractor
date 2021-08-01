@@ -621,7 +621,8 @@ class AnalyzerSpec
                 summary,
                 content,
                 date,
-                tags
+                tags,
+                eTag
               )
               ) =>
             title shouldBe "Url page with all information available"
@@ -629,6 +630,7 @@ class AnalyzerSpec
             content shouldBe Some("And with all the content.")
             date shouldBe Some("2021-06-03T13:37:00Z")
             tags shouldBe Some(List("aTag", "bTag", "cTag", "dTag"))
+            eTag shouldBe None
         }
       }
 
@@ -646,7 +648,8 @@ class AnalyzerSpec
                 summary,
                 content,
                 date,
-                tags
+                tags,
+                eTag
               )
               ) =>
             title shouldBe "Url page with all information available"
@@ -654,6 +657,7 @@ class AnalyzerSpec
             content shouldBe None
             date shouldBe None
             tags shouldBe None
+            eTag shouldBe None
         }
       }
     }
