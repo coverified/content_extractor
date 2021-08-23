@@ -79,4 +79,4 @@ trigger-build-with-config:
     variables:
         IMAGE_TO_BUILD: content_extractor
         IMAGE_HASH: $CI_COMMIT_SHA
-        IMAGE_BRANCH: $CI_COMMIT_REF_NAME
+        IMAGE_BRANCH: $CI_COMMIT_REF_SLUG
