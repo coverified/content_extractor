@@ -5,11 +5,6 @@
 
 package info.coverified.extractor.analyzer
 
-import info.coverified.extractor.profile.ProfileConfig
-import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors
-import net.ruippeixotog.scalascraper.dsl.DSL._
-import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
-import net.ruippeixotog.scalascraper.model.Document
 import com.typesafe.scalalogging.LazyLogging
 import info.coverified.extractor.analyzer.Analyzer.{
   ContentUnchanged,
@@ -17,9 +12,13 @@ import info.coverified.extractor.analyzer.Analyzer.{
 }
 import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.exceptions.AnalysisException
+import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.extractor.profile.ProfileConfig.PageType
+import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors
 import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
-import org.jsoup.helper.HttpConnection
+import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
+import net.ruippeixotog.scalascraper.dsl.DSL._
+import net.ruippeixotog.scalascraper.model.Document
 import org.jsoup.{Connection, Jsoup}
 
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
@@ -152,7 +151,10 @@ class Analyzer private (
       )
       .fold[Try[Selectors]] {
         Failure(
-          AnalysisException(s"Unable to gather profile config for url '$url'.")
+          AnalysisException(
+            s"Unable to determine profile config for url '$url' from config with hostname '${profileConfig.profile.hostname}'" +
+              s"Either non of the selectors provided in one of the profiles or the optional path condition does match the pageDoc!"
+          )
         )
       } {
         case PageType(_, _, _, selectors) => Success(selectors)
