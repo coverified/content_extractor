@@ -152,7 +152,7 @@ class Analyzer private (
       .fold[Try[Selectors]] {
         Failure(
           AnalysisException(
-            s"Unable to determine profile config for url '$url' from config with hostname '${profileConfig.profile.hostname}'" +
+            s"Unable to determine profile config for url '$url' from config with hostname '${profileConfig.profile.hostname}'. " +
               s"Either non of the selectors provided in one of the profiles or the optional path condition does match the pageDoc!"
           )
         )

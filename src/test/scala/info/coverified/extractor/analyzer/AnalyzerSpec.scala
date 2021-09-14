@@ -172,7 +172,10 @@ class AnalyzerSpec
             profileConfig
           ) match {
             case Failure(exception: AnalysisException) =>
-              exception.msg shouldBe s"Unable to gather profile config for url '${coverifiedUrl + "/impressum/subpage"}'."
+              exception.msg shouldBe s"Unable to determine profile config for url '${coverifiedUrl + "/impressum/subpage"}' " +
+                s"from config with hostname 'https://www.coverified.info'. " +
+                s"Either non of the selectors provided in one of the profiles or " +
+                s"the optional path condition does match the pageDoc!"
             case Failure(exception) =>
               fail("Failed with wrong exception.", exception)
             case Success(_) =>
@@ -251,13 +254,13 @@ class AnalyzerSpec
       "succeed, if date time can be obtained from content" in {
         val expected = "2021-07-20T23:00:00Z"
         val document = JsoupDocument(Jsoup.parse(s"""
-            |<html>
-            | <body>
-            |   Nothing interesting here.
-            |   <div id="date">$expected</div>
-            | </body>
-            |</html>
-            |""".stripMargin))
+             |<html>
+             | <body>
+             |   Nothing interesting here.
+             |   <div id="date">$expected</div>
+             | </body>
+             |</html>
+             |""".stripMargin))
 
         analyzer.getDateTimeStringFromContent(document, selector, url) match {
           case Success(dateTimeString) => dateTimeString shouldBe expected
@@ -348,24 +351,24 @@ class AnalyzerSpec
       }
 
       val fullDocument = JsoupDocument(Jsoup.parse(s"""
-        |<html>
-        | <head>
-        |   <script type="application/ld+json">
-        |{
-        |	"@context":			"http://schema.org",
-        |	"@type":			"Article",
-        |	"datePublished":	  "2021-07-20T23:20:00+01:00",
-        | "dateCreated":	    "2021-07-20T23:15:00+01:00",
-        |	"dateModified":	    "2021-07-20T23:10:00+01:00"
-        |}
-        |</script>
-        | </head>
-        | <body>
-        |   Nothing interesting here.
-        |   <time id="date" datetime="2021-07-20T23:05:00Z">2021-07-20T23:00:00Z</div>
-        | </body>
-        |</html>
-        |""".stripMargin))
+           |<html>
+           | <head>
+           |   <script type="application/ld+json">
+           |{
+           |	"@context":			"http://schema.org",
+           |	"@type":			"Article",
+           |	"datePublished":	  "2021-07-20T23:20:00+01:00",
+           | "dateCreated":	    "2021-07-20T23:15:00+01:00",
+           |	"dateModified":	    "2021-07-20T23:10:00+01:00"
+           |}
+           |</script>
+           | </head>
+           | <body>
+           |   Nothing interesting here.
+           |   <time id="date" datetime="2021-07-20T23:05:00Z">2021-07-20T23:00:00Z</div>
+           | </body>
+           |</html>
+           |""".stripMargin))
 
       "get date time string from correct source, if receive from JSON-LD is desired and succeeds" in {
         val expected = "2021-07-20T23:20:00+01:00"
@@ -389,13 +392,13 @@ class AnalyzerSpec
 
       "get date time string from correct source, if receive from JSON-LD is desired and fails" in {
         val fullDocument = JsoupDocument(Jsoup.parse(s"""
-          |<html>
-          | <body>
-          |   Nothing interesting here.
-          |   <time id="date" datetime="2021-07-20T23:05:00Z">2021-07-20T23:00:00Z</div>
-          | </body>
-          |</html>
-          |""".stripMargin))
+             |<html>
+             | <body>
+             |   Nothing interesting here.
+             |   <time id="date" datetime="2021-07-20T23:05:00Z">2021-07-20T23:00:00Z</div>
+             | </body>
+             |</html>
+             |""".stripMargin))
 
         val expected = "2021-07-20T23:05:00Z"
 
@@ -731,7 +734,9 @@ class AnalyzerSpec
           None
         ) match {
           case Failure(exception: AnalysisException) =>
-            exception.msg shouldBe s"Unable to gather profile config for url '${coverifiedUrl + "/impressum/subpage"}'."
+            exception.msg shouldBe s"Unable to determine profile config for url '${coverifiedUrl + "/impressum/subpage"}' " +
+              s"from config with hostname 'https://www.coverified.info'. " +
+              s"Either non of the selectors provided in one of the profiles or the optional path condition does match the pageDoc!"
           case Failure(exception) =>
             fail("Failed with wrong exception.", exception)
           case Success(_) =>
