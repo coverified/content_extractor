@@ -148,7 +148,7 @@ object Mutator {
                 context.log.error("Disabling of entry '{}' was unsuccessful.")
               /* TODO: Report to source handler */
             }
-          case None =>
+          case _ =>
             context.log.debug(
               "There is no entry for url id '{}'. No need to disable anything.",
               urlId
