@@ -64,7 +64,7 @@ class AnalyzerSpec
             defaultZoneId = "Europe/Berlin"
           )
         ),
-        image = Some("#pic"),
+        image = Some(ProfileConfig.PageType.Selectors.Image("src", "pic")),
         subtitle = Some("#subtitle"),
         summary = Some("#summary"),
         title = "#title",

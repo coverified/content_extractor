@@ -41,7 +41,7 @@ object ProfileConfig {
         breadcrumb: scala.Option[java.lang.String],
         content: ProfileConfig.PageType.Selectors.Content,
         date: scala.Option[ProfileConfig.PageType.Selectors.Date],
-        image: scala.Option[java.lang.String],
+        image: scala.Option[ProfileConfig.PageType.Selectors.Image],
         subtitle: scala.Option[java.lang.String],
         summary: scala.Option[java.lang.String],
         tags: scala.Option[java.lang.String],
@@ -143,6 +143,40 @@ object ProfileConfig {
 
       }
 
+      final case class Image(
+          attributeVal: java.lang.String,
+          selector: java.lang.String
+      )
+      object Image {
+        def apply(
+            c: com.typesafe.config.Config,
+            parentPath: java.lang.String,
+            $tsCfgValidator: $TsCfgValidator
+        ): ProfileConfig.PageType.Selectors.Image = {
+          ProfileConfig.PageType.Selectors.Image(
+            attributeVal =
+              $_reqStr(parentPath, c, "attributeVal", $tsCfgValidator),
+            selector = $_reqStr(parentPath, c, "selector", $tsCfgValidator)
+          )
+        }
+        private def $_reqStr(
+            parentPath: java.lang.String,
+            c: com.typesafe.config.Config,
+            path: java.lang.String,
+            $tsCfgValidator: $TsCfgValidator
+        ): java.lang.String = {
+          if (c == null) null
+          else
+            try c.getString(path)
+            catch {
+              case e: com.typesafe.config.ConfigException =>
+                $tsCfgValidator.addBadPath(parentPath + path, e)
+                null
+            }
+        }
+
+      }
+
       def apply(
           c: com.typesafe.config.Config,
           parentPath: java.lang.String,
@@ -172,7 +206,16 @@ object ProfileConfig {
               )
             else None,
           image =
-            if (c.hasPathOrNull("image")) Some(c.getString("image")) else None,
+            if (c.hasPathOrNull("image"))
+              scala.Some(
+                ProfileConfig.PageType.Selectors
+                  .Image(
+                    c.getConfig("image"),
+                    parentPath + "image.",
+                    $tsCfgValidator
+                  )
+              )
+            else None,
           subtitle =
             if (c.hasPathOrNull("subtitle")) Some(c.getString("subtitle"))
             else None,
