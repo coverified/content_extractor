@@ -1,6 +1,5 @@
 /**
- * © 2021. CoVerified,
- * Diehl, Fetzer, Hiry, Kilian, Mayer, Schlittenbauer, Schweikert, Vollnhals, Weise GbR
+ * © 2021. CoVerified GmbH
  **/
 
 package info.coverified.extractor.actor

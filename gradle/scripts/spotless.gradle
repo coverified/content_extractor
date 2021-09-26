@@ -2,8 +2,7 @@
 
 spotless {
 	def coverifiedLicHead = '/**\n' +
-			' * © $YEAR. CoVerified,\n' +
-			' * Diehl, Fetzer, Hiry, Kilian, Mayer, Schlittenbauer, Schweikert, Vollnhals, Weise GbR\n' +
+			' * © $YEAR. CoVerified GmbH\n' +
 			' **/\n\n'
 
 	//sets a license header, removes unused imports and formats conforming to the google java format
