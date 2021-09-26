@@ -10,7 +10,10 @@ import info.coverified.extractor.analyzer.EntryInformation.RawEntryInformation
 import info.coverified.extractor.config.ProfileConfigHelper
 import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig
-import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors.Date
+import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors.{
+  Date,
+  Image
+}
 import info.coverified.extractor.profile.ProfileConfig.PageType.{
   Condition,
   Selectors
@@ -22,6 +25,7 @@ import org.jsoup.Jsoup
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.Inside.inside
 
+import java.net.URL
 import java.time.{Duration, LocalDateTime, ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
 import scala.util.{Failure, Success, Try}
@@ -788,6 +792,24 @@ class AnalyzerSpec
         }
       }
 
+      "successfully extract an img url" in {
+        val url =
+          "https://www.bmbf.de/bmbf/shareddocs/pressemitteilungen/de/2021/08/180821-Behandlungszentrum-psychische-Gesundheit.html"
+        val imgCfg =
+          Image("src", ".c-intro__image .c-picture .c-picture__wrapper img")
+        val doc = JsoupDocument(
+          Jsoup.parse(
+            new URL(
+              "https://www.bmbf.de/bmbf/shareddocs/pressemitteilungen/de/2021/08/180821-Behandlungszentrum-psychische-Gesundheit.html"
+            ),
+            10000
+          )
+        )
+
+        analyzer.extractImageUrl(doc, imgCfg, url) shouldBe Some(
+          "https://www.bmbf.de/SharedDocs/Bilder/de/bmbf/bmbf_datenbank/5/52/52465.jpg?__blob=poster&v=1"
+        )
+      }
     }
   }
 }

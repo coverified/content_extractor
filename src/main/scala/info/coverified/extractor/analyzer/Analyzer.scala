@@ -14,12 +14,14 @@ import info.coverified.extractor.exceptions.AnalysisException
 import info.coverified.extractor.profile.ProfileConfig
 import info.coverified.extractor.profile.ProfileConfig.PageType
 import info.coverified.extractor.profile.ProfileConfig.PageType.Selectors
+import info.coverified.extractor.util.UrlCleaner
 import net.ruippeixotog.scalascraper.browser.JsoupBrowser.JsoupDocument
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.model.Document
 import org.jsoup.{Connection, Jsoup}
 
+import java.net.URL
 import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.time.temporal.ChronoField._
 import java.time.{Duration, LocalDate, LocalDateTime, ZoneId}
@@ -342,12 +344,23 @@ class Analyzer private (
 
   def extractImageUrl(
       document: JsoupDocument,
-      dateConfig: ProfileConfig.PageType.Selectors.Image,
-      url: String
-  ): Option[String] = {
-
-    None // todo JH
-  }
+      imgConfig: ProfileConfig.PageType.Selectors.Image,
+      entryUrl: String
+  ): Option[String] =
+    Try(
+      s"${new URL(entryUrl).getProtocol}://${new URL(entryUrl).getHost}"
+    ) match {
+      case Failure(_) =>
+        None
+      case Success(host) =>
+        // extract src
+        (document >?> element(imgConfig.selector))
+          .flatMap(
+            _.attrs
+              .get(imgConfig.attributeVal)
+              .map(srcUrl => UrlCleaner.mergeHostAndUrl(srcUrl, host))
+          )
+    }
 
   /** Get date time string and matching format from page document.
     *
