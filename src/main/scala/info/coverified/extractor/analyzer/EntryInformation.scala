@@ -15,6 +15,7 @@ sealed trait EntryInformation {
   protected val date: Option[String]
   protected val tags: Option[List[String]]
   protected val eTag: Option[String]
+  protected val imageUrl: Option[String]
 
   /**
     * Calculate the hash code of the Entry
@@ -64,7 +65,8 @@ object EntryInformation {
       override val content: Option[String],
       override val date: Option[String],
       override val tags: Option[List[String]],
-      override val eTag: Option[String]
+      override val eTag: Option[String],
+      override val imageUrl: Option[String]
   ) extends EntryInformation
 
   /**
@@ -85,7 +87,8 @@ object EntryInformation {
       override val content: Option[String],
       override val date: Option[String],
       override val tags: Option[List[String]],
-      override val eTag: Option[String]
+      override val eTag: Option[String],
+      override val imageUrl: Option[String]
   ) extends EntryInformation
 
   object UpdateEntryInformation {
@@ -97,7 +100,8 @@ object EntryInformation {
         raw.content,
         raw.date,
         raw.tags,
-        raw.eTag
+        raw.eTag,
+        raw.imageUrl
       )
   }
 
@@ -117,7 +121,8 @@ object EntryInformation {
       override protected val content: Option[String],
       override protected val date: Option[String],
       override val tags: Option[List[String]],
-      override val eTag: Option[String]
+      override val eTag: Option[String],
+      override val imageUrl: Option[String]
   ) extends EntryInformation
 
   object CreateEntryInformation {
@@ -128,7 +133,8 @@ object EntryInformation {
         raw.content,
         raw.date,
         raw.tags,
-        raw.eTag
+        raw.eTag,
+        raw.imageUrl
       )
   }
 }

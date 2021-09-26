@@ -298,7 +298,15 @@ object Mutator {
     }
 
     val mutation = createEntryInformation match {
-      case CreateEntryInformation(title, summary, content, date, _, eTag) =>
+      case CreateEntryInformation(
+          title,
+          summary,
+          content,
+          date,
+          _,
+          eTag,
+          imageUrl
+          ) =>
         buildEntry(
           urlId,
           title,
@@ -309,7 +317,8 @@ object Mutator {
           reAnalysisInterval,
           disabled,
           maybeConnectToArticleTags,
-          eTag
+          eTag,
+          imageUrl
         )
     }
 
@@ -331,7 +340,8 @@ object Mutator {
       timeToNextCrawl: Duration,
       disabled: Boolean = false,
       maybeConnectToArticleTags: Option[Seq[ArticleTagWhereUniqueInput]],
-      maybeETag: Option[String]
+      maybeETag: Option[String],
+      maybeImageUrl: Option[String]
   ): SelectionBuilder[RootMutation, Option[
     SimpleEntryView[SimpleUrlView, ArticleTagView]
   ]] =
@@ -352,7 +362,8 @@ object Mutator {
           nextCrawl = determineNextCrawl(timeToNextCrawl),
           updatedAt = updatedNow,
           articleTags = buildTagRelationInput(maybeConnectToArticleTags),
-          eTag = maybeETag
+          eTag = maybeETag,
+          img = maybeImageUrl
         )
       )
     )(
@@ -387,7 +398,8 @@ object Mutator {
       disabled: Boolean,
       contentHash: String,
       maybeETag: Option[String],
-      timeToNextCrawl: Duration
+      timeToNextCrawl: Duration,
+      maybeImageUrl: Option[String]
   ): SelectionBuilder[RootMutation, Option[
     SimpleEntryView[SimpleUrlView, ArticleTagView]
   ]] =
@@ -410,7 +422,8 @@ object Mutator {
           updatedAt = updatedNow,
           contentHash = Some(contentHash),
           disabled = Some(disabled),
-          eTag = maybeETag
+          eTag = maybeETag,
+          img = maybeImageUrl
         )
       )
     )(SimpleEntry.view(SimpleUrl.view, ArticleTag.view))
@@ -461,7 +474,16 @@ object Mutator {
     }
 
     val mutation = updateEntryInformation match {
-      case UpdateEntryInformation(id, title, summary, content, date, _, eTag) =>
+      case UpdateEntryInformation(
+          id,
+          title,
+          summary,
+          content,
+          date,
+          _,
+          eTag,
+          imageUrl
+          ) =>
         updateEntry(
           id,
           urlId,
@@ -473,7 +495,8 @@ object Mutator {
           disabled,
           contentHash,
           eTag,
-          reAnalysisInterval
+          reAnalysisInterval,
+          imageUrl
         )
     }
 

@@ -627,7 +627,8 @@ class AnalyzerSpec
                 content,
                 date,
                 tags,
-                eTag
+                eTag,
+                imageUrl
               )
               ) =>
             title shouldBe "Url page with all information available"
@@ -636,6 +637,7 @@ class AnalyzerSpec
             date shouldBe Some("2021-06-03T13:37:00Z")
             tags shouldBe Some(List("aTag", "bTag", "cTag", "dTag"))
             eTag shouldBe None
+            imageUrl shouldBe None
         }
       }
 
@@ -655,7 +657,8 @@ class AnalyzerSpec
                 content,
                 date,
                 tags,
-                eTag
+                eTag,
+                imageUrl
               )
               ) =>
             title shouldBe "Url page with all information available"
@@ -664,6 +667,7 @@ class AnalyzerSpec
             date shouldBe None
             tags shouldBe None
             eTag shouldBe None
+            imageUrl shouldBe None
         }
       }
     }
@@ -768,6 +772,7 @@ class AnalyzerSpec
             fail("Analysis was meant to succeed, but failed.", exception)
         }
       }
+
     }
   }
 }

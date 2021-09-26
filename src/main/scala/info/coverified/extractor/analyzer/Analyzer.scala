@@ -110,7 +110,9 @@ class Analyzer private (
     */
   private def buildPageDocument(
       response: Connection.Response
-  ): Try[JsoupDocument] = Try { JsoupDocument(response.parse()) }
+  ): Try[JsoupDocument] = Try {
+    JsoupDocument(response.parse())
+  }
 
   /**
     * Analyze the given page document and extract information
@@ -220,7 +222,8 @@ class Analyzer private (
         selectors.tags
           .flatMap(pageDoc >?> texts(_))
           .flatMap(tags => Option.when(tags.nonEmpty)(tags.toList)),
-        maybeETag
+        maybeETag,
+        selectors.image.flatMap(extractImageUrl(pageDoc, _, url))
       )
     } match {
       case success @ Success(_) =>
@@ -319,6 +322,15 @@ class Analyzer private (
         )
         None
     }
+
+  def extractImageUrl(
+      document: JsoupDocument,
+      dateConfig: ProfileConfig.PageType.Selectors.Image,
+      url: String
+  ): Option[String] = {
+
+    None // todo JH
+  }
 
   /**
     * Get date time string and matching format from page document.

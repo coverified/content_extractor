@@ -41,7 +41,8 @@ class EntryInformationSpec extends UnitSpec {
           content = Some("This contains a lot."),
           date = Some("2021-07-21T22:00:00Z"),
           tags = Some(List("aTag", "bTag", "cTag", "dTag")),
-          eTag = None
+          eTag = None,
+          imageUrl = None
         ).contentHash shouldBe 328104163
       }
 
@@ -52,7 +53,8 @@ class EntryInformationSpec extends UnitSpec {
           content = None,
           date = None,
           tags = None,
-          eTag = None
+          eTag = None,
+          imageUrl = None
         ).contentHash shouldBe 318208789
       }
     }

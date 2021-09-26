@@ -403,6 +403,7 @@ object UrlHandler {
           scrapedContent,
           scrapedDate,
           _,
+          _,
           _
         )
         ) =>
