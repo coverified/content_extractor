@@ -12,12 +12,15 @@ import java.io.{File, PrintWriter}
 
 trait ProfileConfigHelper {
 
-  /**
-    * Create a dummy config at a specified location
+  /** Create a dummy config at a specified location
     *
-    * @param directory  Directory, where to write the dummy config to
-    * @param hostname   Host name, the config does belong to
-    * @return An instance of [[TempConfig]] that contains the expected config and the temp file
+    * @param directory
+    *   Directory, where to write the dummy config to
+    * @param hostname
+    *   Host name, the config does belong to
+    * @return
+    *   An instance of [[TempConfig]] that contains the expected config and the
+    *   temp file
     */
   def writeTempConfig(directory: File, hostname: String): TempConfig = {
     val (content, expectedConfig) = generateTempConfig(hostname)
@@ -33,11 +36,12 @@ trait ProfileConfigHelper {
     TempConfig(expectedConfig, configFile)
   }
 
-  /**
-    * Generates a sample / temporary config for the given host name
+  /** Generates a sample / temporary config for the given host name
     *
-    * @param hostname Host name, the config belongs to
-    * @return A tuple of content and instance
+    * @param hostname
+    *   Host name, the config belongs to
+    * @return
+    *   A tuple of content and instance
     */
   private def generateTempConfig(hostname: String): (String, ProfileConfig) = {
     val content =
@@ -77,11 +81,12 @@ trait ProfileConfigHelper {
     (content, ProfileConfig(ConfigFactory.parseString(content)))
   }
 
-  /**
-    * Generates a sample / temporary config for the given host name
+  /** Generates a sample / temporary config for the given host name
     *
-    * @param hostname Host name, the config belongs to
-    * @return The config
+    * @param hostname
+    *   Host name, the config belongs to
+    * @return
+    *   The config
     */
   def getConfig(hostname: String): ProfileConfig =
     generateTempConfig(hostname)._2

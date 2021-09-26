@@ -49,8 +49,7 @@ import java.time.{Duration, ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
 import scala.concurrent.duration.FiniteDuration
 
-/**
-  * This actor takes care of facing all mutation to the GraphQL API
+/** This actor takes care of facing all mutation to the GraphQL API
   */
 object Mutator {
   def apply(): Behaviors.Receive[MutatorMessage] = uninitialized
@@ -58,14 +57,14 @@ object Mutator {
   def uninitialized: Behaviors.Receive[MutatorMessage] =
     Behaviors.receive[MutatorMessage] {
       case (
-          _,
-          InitMutator(
-            apiUri,
-            authToken,
-            reAnalysisInterval,
-            distinctTagHandler,
-            sourceHandler
-          )
+            _,
+            InitMutator(
+              apiUri,
+              authToken,
+              reAnalysisInterval,
+              distinctTagHandler,
+              sourceHandler
+            )
           ) =>
         val helper = new GraphQLHelper(apiUri, authToken)
         sourceHandler ! MutatorInitialized
@@ -242,15 +241,20 @@ object Mutator {
       case _ => Behaviors.unhandled
     }
 
-  /**
-    * Ask the [[DistinctTagHandler]] to consolidate the given page tags
+  /** Ask the [[DistinctTagHandler]] to consolidate the given page tags
     *
-    * @param urlId            Identifier of the url
-    * @param entryInformation Entry information to keep in mind
-    * @param articleTags      List of page provided tags
-    * @param stateData        Current state of actor
-    * @param self             Reference to self
-    * @return Updated state data
+    * @param urlId
+    *   Identifier of the url
+    * @param entryInformation
+    *   Entry information to keep in mind
+    * @param articleTags
+    *   List of page provided tags
+    * @param stateData
+    *   Current state of actor
+    * @param self
+    *   Reference to self
+    * @return
+    *   Updated state data
     */
   private def requestTagConsolidation(
       urlId: String,
@@ -265,19 +269,25 @@ object Mutator {
       articleTags,
       self
     )
-    val updatedAwaitMap = stateData.awaitTagConsolidation + (contentHash -> (entryInformation, urlId))
+    val updatedAwaitMap =
+      stateData.awaitTagConsolidation + (contentHash -> (entryInformation, urlId))
     stateData.copy(awaitTagConsolidation = updatedAwaitMap)
   }
 
-  /**
-    * Finally builds the mutation and sends it to GraphQL-API
+  /** Finally builds the mutation and sends it to GraphQL-API
     *
-    * @param createEntryInformation     Raw information to create entry from
-    * @param maybeConnectToArticleTags  Optional model to connect to several tags
-    * @param urlId                      Id of the url, the article does belong to
-    * @param reAnalysisInterval         Interval, when the next analysis shall be made
-    * @param graphQLHelper              Helper to connect to GraphQL
-    * @param logger                     Logging instance
+    * @param createEntryInformation
+    *   Raw information to create entry from
+    * @param maybeConnectToArticleTags
+    *   Optional model to connect to several tags
+    * @param urlId
+    *   Id of the url, the article does belong to
+    * @param reAnalysisInterval
+    *   Interval, when the next analysis shall be made
+    * @param graphQLHelper
+    *   Helper to connect to GraphQL
+    * @param logger
+    *   Logging instance
     */
   private def createEntry(
       createEntryInformation: CreateEntryInformation,
@@ -298,13 +308,13 @@ object Mutator {
 
     val mutation = createEntryInformation match {
       case CreateEntryInformation(
-          title,
-          summary,
-          content,
-          date,
-          _,
-          eTag,
-          imageUrl
+            title,
+            summary,
+            content,
+            date,
+            _,
+            eTag,
+            imageUrl
           ) =>
         buildEntry(
           urlId,
@@ -370,21 +380,32 @@ object Mutator {
         .view(SimpleUrl.view, ArticleTag.view)
     )
 
-  /**
-    * Build a mutation to update the entry
+  /** Build a mutation to update the entry
     *
-    * @param entryId                    Identifier of to be updated entry
-    * @param urlId                      Identifier of url
-    * @param title                      Title
-    * @param maybeSummary               Optional summary information
-    * @param maybeContent               Optional content information
-    * @param maybeDate                  Optional date information
-    * @param maybeConnectToArticleTags  An optional model to connect to article tags
-    * @param disabled                   If the entry needs to be disabled
-    * @param contentHash                The content hash information
-    * @param maybeETag                  The HTTP ETag information, that need update
-    * @param timeToNextCrawl            Duration, until the next analysis shall wait
-    * @return A selection builder forming the reply from API
+    * @param entryId
+    *   Identifier of to be updated entry
+    * @param urlId
+    *   Identifier of url
+    * @param title
+    *   Title
+    * @param maybeSummary
+    *   Optional summary information
+    * @param maybeContent
+    *   Optional content information
+    * @param maybeDate
+    *   Optional date information
+    * @param maybeConnectToArticleTags
+    *   An optional model to connect to article tags
+    * @param disabled
+    *   If the entry needs to be disabled
+    * @param contentHash
+    *   The content hash information
+    * @param maybeETag
+    *   The HTTP ETag information, that need update
+    * @param timeToNextCrawl
+    *   Duration, until the next analysis shall wait
+    * @return
+    *   A selection builder forming the reply from API
     */
   private def updateEntry(
       entryId: String,
@@ -442,15 +463,20 @@ object Mutator {
       ""
     )
 
-  /**
-    * Finally builds the mutation and sends it to GraphQL-API
+  /** Finally builds the mutation and sends it to GraphQL-API
     *
-    * @param updateEntryInformation     Raw information to create entry from
-    * @param maybeConnectToArticleTags  Optional model to connect to several tags
-    * @param urlId                      Id of the url, the article does belong to
-    * @param reAnalysisInterval         Interval, when the next analysis shall be made
-    * @param graphQLHelper              Helper to connect to GraphQL
-    * @param logger                     Logging instance
+    * @param updateEntryInformation
+    *   Raw information to create entry from
+    * @param maybeConnectToArticleTags
+    *   Optional model to connect to several tags
+    * @param urlId
+    *   Id of the url, the article does belong to
+    * @param reAnalysisInterval
+    *   Interval, when the next analysis shall be made
+    * @param graphQLHelper
+    *   Helper to connect to GraphQL
+    * @param logger
+    *   Logging instance
     */
   private def updateEntry(
       updateEntryInformation: UpdateEntryInformation,
@@ -474,14 +500,14 @@ object Mutator {
 
     val mutation = updateEntryInformation match {
       case UpdateEntryInformation(
-          id,
-          title,
-          summary,
-          content,
-          date,
-          _,
-          eTag,
-          imageUrl
+            id,
+            title,
+            summary,
+            content,
+            date,
+            _,
+            eTag,
+            imageUrl
           ) =>
         updateEntry(
           id,
@@ -510,11 +536,12 @@ object Mutator {
     }
   }
 
-  /**
-    * Build a model to connect to related article tags
+  /** Build a model to connect to related article tags
     *
-    * @param maybeConnectToArticleTags Optional list of models, that describe single tags to connect to
-    * @return Optional model to describe necessary connections to article tags
+    * @param maybeConnectToArticleTags
+    *   Optional list of models, that describe single tags to connect to
+    * @return
+    *   Optional model to describe necessary connections to article tags
     */
   private def buildTagRelationInput(
       maybeConnectToArticleTags: Option[Seq[ArticleTagWhereUniqueInput]]

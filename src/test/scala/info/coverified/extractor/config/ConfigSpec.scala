@@ -35,19 +35,19 @@ class ConfigSpec extends UnitSpec {
             )
         ) {
           case Success(
-              Config(
-                userAgent,
-                browseTimeout,
-                targetDateTimePattern,
-                targetTimeZone,
-                apiUri,
-                authSecret,
-                profileDirectoryPath,
-                reAnalysisInterval,
-                workerPoolSize,
-                repeatDelay,
-                maxRetries
-              )
+                Config(
+                  userAgent,
+                  browseTimeout,
+                  targetDateTimePattern,
+                  targetTimeZone,
+                  apiUri,
+                  authSecret,
+                  profileDirectoryPath,
+                  reAnalysisInterval,
+                  workerPoolSize,
+                  repeatDelay,
+                  maxRetries
+                )
               ) =>
             userAgent shouldBe "userAgent"
             browseTimeout shouldBe Duration.ofSeconds(90L)
@@ -72,19 +72,19 @@ class ConfigSpec extends UnitSpec {
       "succeed" in {
         inside(Config.fromEnv()) {
           case Success(
-              Config(
-                userAgent,
-                browseTimeout,
-                targetDateTimePattern,
-                targetTimeZone,
-                apiUri,
-                authSecret,
-                profileDirectoryPath,
-                reAnalysisInterval,
-                workerPoolSize,
-                repeatDelay,
-                maxRetries
-              )
+                Config(
+                  userAgent,
+                  browseTimeout,
+                  targetDateTimePattern,
+                  targetTimeZone,
+                  apiUri,
+                  authSecret,
+                  profileDirectoryPath,
+                  reAnalysisInterval,
+                  workerPoolSize,
+                  repeatDelay,
+                  maxRetries
+                )
               ) =>
             /* The values expected here, have to placed within the environment during the build CI-stage.
              * Cf. .gitlab-ci.yml file in root directory */

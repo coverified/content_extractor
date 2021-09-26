@@ -53,31 +53,30 @@ import sttp.model.Uri
 
 import java.time.{Duration, ZoneId}
 
-/**
-  * An actor, that handles the extraction process per source
+/** An actor, that handles the extraction process per source
   */
 class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage])
     extends UrlHandlingSupport {
   def uninitialized: Behaviors.Receive[SourceHandlerMessage] =
     Behaviors.receive[SourceHandlerMessage] {
       case (
-          context,
-          InitSourceHandler(
-            userAgent,
-            browseTimeout,
-            targetDateTimePattern,
-            targetTimeZone,
-            apiUri,
-            authSecret,
-            pageProfile,
-            reAnalysisInterval,
-            workerPoolSize,
-            repeatDelay,
-            maxRetries,
-            source,
-            distinctTagHandler,
-            replyTo
-          )
+            context,
+            InitSourceHandler(
+              userAgent,
+              browseTimeout,
+              targetDateTimePattern,
+              targetTimeZone,
+              apiUri,
+              authSecret,
+              pageProfile,
+              reAnalysisInterval,
+              workerPoolSize,
+              repeatDelay,
+              maxRetries,
+              source,
+              distinctTagHandler,
+              replyTo
+            )
           ) =>
         context.log.info(
           "Initializing a source handler for source '{}' ({}).",
@@ -167,12 +166,14 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage])
     case _ => Behaviors.unhandled
   }
 
-  /**
-    * Waiting for anything to do
+  /** Waiting for anything to do
     *
-    * @param stateData        Current state of the actor
-    * @param workerPoolProxy  Proxy actor for worker pool
-    * @return The defined behavior
+    * @param stateData
+    *   Current state of the actor
+    * @param workerPoolProxy
+    *   Proxy actor for worker pool
+    * @return
+    *   The defined behavior
     */
   def idle(
       stateData: SourceHandlerStateData,
@@ -310,12 +311,11 @@ class SourceHandler(private val timer: TimerScheduler[SourceHandlerMessage])
             }.toMap
 
             /* Change state to handle existing urls */
-            val queueEntries = remainingUrls.map(
-              urlView =>
-                UrlWithPayLoad[SimpleEntryView[SimpleUrlView, ArticleTagView]](
-                  urlView,
-                  None
-                )
+            val queueEntries = remainingUrls.map(urlView =>
+              UrlWithPayLoad[SimpleEntryView[SimpleUrlView, ArticleTagView]](
+                urlView,
+                None
+              )
             )
             handleExistingUrls(
               stateData,

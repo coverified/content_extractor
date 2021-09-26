@@ -9,13 +9,16 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{Source, Url}
 
 object SimpleSource {
 
-  /**
-    * Little sister of [[Source]], but without resolving linked information
+  /** Little sister of [[Source]], but without resolving linked information
     *
-    * @param id      Identifier
-    * @param name    Name of source
-    * @param acronym Acronym of the source
-    * @param url     Base url
+    * @param id
+    *   Identifier
+    * @param name
+    *   Name of source
+    * @param acronym
+    *   Acronym of the source
+    * @param url
+    *   Base url
     */
   final case class SimpleSourceView(
       id: String,

@@ -30,7 +30,12 @@ class EntryInformationSpec extends UnitSpec {
       }
 
       "return correct hash code, if some fields have empty content" in {
-        EntryInformation invokePrivate contentHash("The title", "", "", "") shouldBe 318208789
+        EntryInformation invokePrivate contentHash(
+          "The title",
+          "",
+          "",
+          ""
+        ) shouldBe 318208789
       }
 
       "return correct hash code from entry creation information" in {

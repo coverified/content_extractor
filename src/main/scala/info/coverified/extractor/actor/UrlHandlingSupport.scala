@@ -47,14 +47,18 @@ import scala.concurrent.duration.FiniteDuration
 trait UrlHandlingSupport {
   this: SourceHandler =>
 
-  /**
-    * Behavior to steer the handling of new urls
+  /** Behavior to steer the handling of new urls
     *
-    * @param stateData       Current state of the actor
-    * @param urlsToBeHandled List of urls, that need to be addressed
-    * @param urlToActivation Mapping from activated url to it's activation time
-    * @param workerPoolProxy Reference to the worker pool proxy
-    * @return The defined behavior
+    * @param stateData
+    *   Current state of the actor
+    * @param urlsToBeHandled
+    *   List of urls, that need to be addressed
+    * @param urlToActivation
+    *   Mapping from activated url to it's activation time
+    * @param workerPoolProxy
+    *   Reference to the worker pool proxy
+    * @return
+    *   The defined behavior
     */
   def handleNewUrls(
       stateData: SourceHandlerStateData,
@@ -106,14 +110,18 @@ trait UrlHandlingSupport {
     )
   }
 
-  /**
-    * Behavior to steer the handling of new urls
+  /** Behavior to steer the handling of new urls
     *
-    * @param stateData       Current state of the actor
-    * @param urlsToBeHandled List of urls, that need to be addressed
-    * @param urlToActivation Mapping from activated url to it's activation time
-    * @param workerPoolProxy Reference to the worker pool proxy
-    * @return The defined behavior
+    * @param stateData
+    *   Current state of the actor
+    * @param urlsToBeHandled
+    *   List of urls, that need to be addressed
+    * @param urlToActivation
+    *   Mapping from activated url to it's activation time
+    * @param workerPoolProxy
+    *   Reference to the worker pool proxy
+    * @return
+    *   The defined behavior
     */
   def handleExistingUrls(
       stateData: SourceHandlerStateData,
@@ -158,7 +166,9 @@ trait UrlHandlingSupport {
         context.self
       )
 
-    handleUrls[UrlWithPayLoad[SimpleEntryView[SimpleUrlView, ArticleTagView]], SimpleEntryView[
+    handleUrls[UrlWithPayLoad[
+      SimpleEntryView[SimpleUrlView, ArticleTagView]
+    ], SimpleEntryView[
       SimpleUrlView,
       ArticleTagView
     ]](
@@ -173,24 +183,35 @@ trait UrlHandlingSupport {
     )
   }
 
-  /**
-    * Handle queued urls. There are three possible scenarios:
-    * 1) If the url handler replies with a failure, try to solve it, otherwise report completion. And try to issue a new
-    *    url handling.
-    * 2) If the url handler replies successfully, report completion. And try to issue a new url handling.
-    * 3) If the [[SourceHandler]] re-scheduled a url handling, try to issue it, if rate limit allows to.
+  /** Handle queued urls. There are three possible scenarios: 1) If the url
+    * handler replies with a failure, try to solve it, otherwise report
+    * completion. And try to issue a new url handling. 2) If the url handler
+    * replies successfully, report completion. And try to issue a new url
+    * handling. 3) If the [[SourceHandler]] re-scheduled a url handling, try to
+    * issue it, if rate limit allows to.
     *
-    * @param stateData                Current state of the actor
-    * @param urlsToBeHandled          List of queued elements
-    * @param urlToActivation          Mapping from url to their activation times
-    * @param workerPoolProxy          Reference to url worker pool proxy
-    * @param timer                    A timer to re-schedule urls
-    * @param completionMessage        Completion message to send, after handling finished
-    * @param stateChangeOnActivation  State to apply, after a new url handling has been issued
-    * @param toActivationMessage      Function to build activation message to [[UrlHandler]]
-    * @tparam U Type of queued url elements
-    * @tparam P Type of payload of queued elements
-    * @return Defined behavior.
+    * @param stateData
+    *   Current state of the actor
+    * @param urlsToBeHandled
+    *   List of queued elements
+    * @param urlToActivation
+    *   Mapping from url to their activation times
+    * @param workerPoolProxy
+    *   Reference to url worker pool proxy
+    * @param timer
+    *   A timer to re-schedule urls
+    * @param completionMessage
+    *   Completion message to send, after handling finished
+    * @param stateChangeOnActivation
+    *   State to apply, after a new url handling has been issued
+    * @param toActivationMessage
+    *   Function to build activation message to [[UrlHandler]]
+    * @tparam U
+    *   Type of queued url elements
+    * @tparam P
+    *   Type of payload of queued elements
+    * @return
+    *   Defined behavior.
     */
   private def handleUrls[U <: UrlQueueObject[P], P](
       stateData: SourceHandlerStateData,
@@ -308,18 +329,26 @@ trait UrlHandlingSupport {
       case _ => Behaviors.unhandled
     }
 
-  /**
-    * Checks the current amount of retries for this url and, if the maximum amount of retries is not exceeded,
-    * re-schedule the url. Each time, the repeat delay is enlarged by multiplying it with the repeat delay. The boolean
-    * return part indicates, if the url has been re-scheduled.
+  /** Checks the current amount of retries for this url and, if the maximum
+    * amount of retries is not exceeded, re-schedule the url. Each time, the
+    * repeat delay is enlarged by multiplying it with the repeat delay. The
+    * boolean return part indicates, if the url has been re-scheduled.
     *
-    * @param urlToNumOfRetries  Mapping from url id to current amount of retries
-    * @param maxRetries         Maximum permissible amount of retries
-    * @param url                Actual url information
-    * @param urlId              Identifier of the url
-    * @param payLoad            Possible, additional payload for scheduling of an url
-    * @param repeatDelay        Repeat delay
-    * @return The updated mapping from url to retry and a boolean indicator, if that url has been re-scheduled
+    * @param urlToNumOfRetries
+    *   Mapping from url id to current amount of retries
+    * @param maxRetries
+    *   Maximum permissible amount of retries
+    * @param url
+    *   Actual url information
+    * @param urlId
+    *   Identifier of the url
+    * @param payLoad
+    *   Possible, additional payload for scheduling of an url
+    * @param repeatDelay
+    *   Repeat delay
+    * @return
+    *   The updated mapping from url to retry and a boolean indicator, if that
+    *   url has been re-scheduled
     */
   private def tryToReScheduleUrl(
       urlToNumOfRetries: Map[String, Int],
@@ -345,13 +374,17 @@ trait UrlHandlingSupport {
     }
   }
 
-  /**
-    * Log the error when handling an url and handle accordingly in the case of a rate limit exceeding
+  /** Log the error when handling an url and handle accordingly in the case of a
+    * rate limit exceeding
     *
-    * @param url                      Url, that was handled unsuccessfully
-    * @param failure                  Reported failure
-    * @param logger                   Instance of logger to use
-    * @param rateLimitExceededAction  Action to take care of, if rate limit is exceeded
+    * @param url
+    *   Url, that was handled unsuccessfully
+    * @param failure
+    *   Reported failure
+    * @param logger
+    *   Instance of logger to use
+    * @param rateLimitExceededAction
+    *   Action to take care of, if rate limit is exceeded
     */
   private def logAndHandleUrlHandlingFailure(
       url: String,
@@ -393,19 +426,28 @@ trait UrlHandlingSupport {
       None
   }
 
-  /**
-    * Check out the not yet handled urls and attempt to handle one if applicable
+  /** Check out the not yet handled urls and attempt to handle one if applicable
     *
-    * @param context            Actor context, the actor is in
-    * @param workerPoolProxy    Reference to the proxy for the worker pool
-    * @param supervisor         Reference to the supervisor
-    * @param timer              Timer for message scheduling
-    * @param stateData          Current state of the actor
-    * @param unhandledUrls      List of remaining urls
-    * @param urlToActivation    Mapping from active url to activation time
-    * @param completionMessage  Message, that indicates completion to source handler
-    * @param stateChangeOnActivation  State, that shall be used after activation of new url
-    * @param toActivationMessage      Function to build activation message to [[UrlHandler]]
+    * @param context
+    *   Actor context, the actor is in
+    * @param workerPoolProxy
+    *   Reference to the proxy for the worker pool
+    * @param supervisor
+    *   Reference to the supervisor
+    * @param timer
+    *   Timer for message scheduling
+    * @param stateData
+    *   Current state of the actor
+    * @param unhandledUrls
+    *   List of remaining urls
+    * @param urlToActivation
+    *   Mapping from active url to activation time
+    * @param completionMessage
+    *   Message, that indicates completion to source handler
+    * @param stateChangeOnActivation
+    *   State, that shall be used after activation of new url
+    * @param toActivationMessage
+    *   Function to build activation message to [[UrlHandler]]
     * @return
     */
   private def maybeIssueNextUnhandledUrl[U <: UrlQueueObject[P], P](
@@ -480,12 +522,14 @@ trait UrlHandlingSupport {
       idle(stateData, workerPoolProxy)
     }
 
-  /**
-    * Get the next url, as long as it has a name available
+  /** Get the next url, as long as it has a name available
     *
-    * @param urls   A view onto a url
-    * @param logger A logger to log logging stuff
-    * @return A tuple of a possibly apparent next entry and the remaining entries
+    * @param urls
+    *   A view onto a url
+    * @param logger
+    *   A logger to log logging stuff
+    * @return
+    *   A tuple of a possibly apparent next entry and the remaining entries
     */
   @tailrec
   private def nextUrl[U <: UrlQueueObject[P], P](
@@ -507,21 +551,33 @@ trait UrlHandlingSupport {
     }
   }
 
-  /**
-    * If possible (sticking to a rate limit), issue a new url handling and change to applicable state.
+  /** If possible (sticking to a rate limit), issue a new url handling and
+    * change to applicable state.
     *
-    * @param context                  Actor context, the actor is in
-    * @param workerPoolProxy          Reference to the proxy for the worker pool
-    * @param supervisor               Reference to the supervisor
-    * @param timer                    Timer for message scheduling
-    * @param targetUrl                The targeted url
-    * @param targetUrlId              Id of the targeted url in database
-    * @param toActivationMessage      Function to build activation message to [[UrlHandler]]
-    * @param remainingUrls            Remaining urls to handle
-    * @param urlToActivation          Mapping from active url to it's activation time.
-    * @param stateData                Current state of the actor
-    * @param stateChangeOnActivation  State, that shall be used after activation of new url
-    * @return Defined behavior
+    * @param context
+    *   Actor context, the actor is in
+    * @param workerPoolProxy
+    *   Reference to the proxy for the worker pool
+    * @param supervisor
+    *   Reference to the supervisor
+    * @param timer
+    *   Timer for message scheduling
+    * @param targetUrl
+    *   The targeted url
+    * @param targetUrlId
+    *   Id of the targeted url in database
+    * @param toActivationMessage
+    *   Function to build activation message to [[UrlHandler]]
+    * @param remainingUrls
+    *   Remaining urls to handle
+    * @param urlToActivation
+    *   Mapping from active url to it's activation time.
+    * @param stateData
+    *   Current state of the actor
+    * @param stateChangeOnActivation
+    *   State, that shall be used after activation of new url
+    * @return
+    *   Defined behavior
     */
   private def maybeIssueNewHandling[U <: UrlQueueObject[P], P](
       context: ActorContext[SourceHandlerMessage],
@@ -558,7 +614,8 @@ trait UrlHandlingSupport {
         stateData.repeatDelay.toMillis / 1000,
         targetUrl
       )
-      val updatedUrlToActivation = urlToActivation + (targetUrl -> currentInstant)
+      val updatedUrlToActivation =
+        urlToActivation + (targetUrl -> currentInstant)
       workerPoolProxy ! toActivationMessage(
         targetUrl,
         targetUrlId,

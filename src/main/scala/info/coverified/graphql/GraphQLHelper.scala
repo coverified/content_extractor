@@ -58,10 +58,10 @@ class GraphQLHelper(
       client
     )
 
-  /**
-    * Queries all available sources in batches.
+  /** Queries all available sources in batches.
     *
-    * @return An optional lists of views onto sources
+    * @return
+    *   An optional lists of views onto sources
     */
   def queryAllSources: Option[List[Source.SourceView]] =
     countAllSources.flatMap { amountOfSources =>
@@ -73,19 +73,20 @@ class GraphQLHelper(
   private def neededBatches(amount: Int): Seq[Int] =
     0 to math.ceil(amount.toDouble / batchSize).toInt
 
-  /**
-    * Count all available sources
+  /** Count all available sources
     *
-    * @return Amount of sources - possibly...
+    * @return
+    *   Amount of sources - possibly...
     */
   private def countAllSources: Option[Int] =
     queryWithHeader(Query.sourcesCount(where = SourceWhereInput()))
 
-  /**
-    * Query the batch given by count.
+  /** Query the batch given by count.
     *
-    * @param count The count of batch to get
-    * @return Optional list of view onto sources
+    * @param count
+    *   The count of batch to get
+    * @return
+    *   Optional list of view onto sources
     */
   private def queryAllSources(count: Int): Option[List[Source.SourceView]] =
     queryWithHeader(
@@ -96,11 +97,12 @@ class GraphQLHelper(
       )(Source.view)
     )
 
-  /**
-    * Query all not yet visited urls
+  /** Query all not yet visited urls
     *
-    * @param sourceId The identifier of the source, the url shall belong to
-    * @return An option onto a list of new urls
+    * @param sourceId
+    *   The identifier of the source, the url shall belong to
+    * @return
+    *   An option onto a list of new urls
     */
   def queryNewUrls(sourceId: String): Option[List[SimpleUrl.SimpleUrlView]] =
     countNewUrls(sourceId).map { amountOfUrls =>
@@ -110,21 +112,23 @@ class GraphQLHelper(
         .toList
     }
 
-  /**
-    * Count the amount of urls for a given source
+  /** Count the amount of urls for a given source
     *
-    * @param sourceId The given source
-    * @return Optional amount of available new urls
+    * @param sourceId
+    *   The given source
+    * @return
+    *   Optional amount of available new urls
     */
   private def countNewUrls(sourceId: String): Option[Int] = queryWithHeader {
     Query.urlsCount(where = isNewUrl(sourceId))
   }
 
-  /**
-    * Query the batch given by count.
+  /** Query the batch given by count.
     *
-    * @param count The count of batch to get
-    * @return Optional list of view onto new urls of a source
+    * @param count
+    *   The count of batch to get
+    * @return
+    *   Optional list of view onto new urls of a source
     */
   private def queryNewUrls(
       sourceId: String,
@@ -137,12 +141,15 @@ class GraphQLHelper(
     )(SimpleUrl.view)
   }
 
-  /**
-    * Query all existing urls, that need to be re-analysed, as the re-analysis interval has expired since last visit.
+  /** Query all existing urls, that need to be re-analysed, as the re-analysis
+    * interval has expired since last visit.
     *
-    * @param sourceId           Identifier of the source, the urls shall belong to
-    * @param reAnalysisInterval Minimum duration between two visits of a website
-    * @return An optional list of existing urls
+    * @param sourceId
+    *   Identifier of the source, the urls shall belong to
+    * @param reAnalysisInterval
+    *   Minimum duration between two visits of a website
+    * @return
+    *   An optional list of existing urls
     */
   def queryExistingUrls(
       sourceId: String,
@@ -162,19 +169,18 @@ class GraphQLHelper(
     /* Query the relevant urls */
     countExistingUrls(sourceId, relevant).map { amountOfUrls =>
       neededBatches(amountOfUrls)
-        .flatMap(
-          batchCount => queryExistingUrls(batchCount, relevant)
-        )
+        .flatMap(batchCount => queryExistingUrls(batchCount, relevant))
         .flatten
         .toList
     }
   }
 
-  /**
-    * Count the amount of urls for a given source
+  /** Count the amount of urls for a given source
     *
-    * @param sourceId The given source
-    * @return Optional amount of available new urls
+    * @param sourceId
+    *   The given source
+    * @return
+    *   Optional amount of available new urls
     */
   private def countExistingUrls(
       sourceId: String,
@@ -183,12 +189,14 @@ class GraphQLHelper(
     Query.urlsCount(where = needsReAnalysis)
   }
 
-  /**
-    * Query the batch given by count.
+  /** Query the batch given by count.
     *
-    * @param count            The count of batch to get
-    * @param needsReAnalysis  Condition filter
-    * @return Optional list of view onto urls of a source, that need re-analysis
+    * @param count
+    *   The count of batch to get
+    * @param needsReAnalysis
+    *   Condition filter
+    * @return
+    *   Optional list of view onto urls of a source, that need re-analysis
     */
   private def queryExistingUrls(
       count: Int,
@@ -201,11 +209,12 @@ class GraphQLHelper(
     )(SimpleUrl.view)
   }
 
-  /**
-    * Query the entry, that matches the given url id
+  /** Query the entry, that matches the given url id
     *
-    * @param urlId  Url identifier in query
-    * @return An option onto the article
+    * @param urlId
+    *   Url identifier in query
+    * @return
+    *   An option onto the article
     */
   def queryMatchingEntry(
       urlId: String
@@ -214,24 +223,28 @@ class GraphQLHelper(
       SimpleEntry.view(SimpleUrl.view, ArticleTag.view)
     )
 
-  /**
-    * Query the entry, that matches the given url id
+  /** Query the entry, that matches the given url id
     *
-    * @param urlId  Url identifier in query
-    * @return An option onto the article
+    * @param urlId
+    *   Url identifier in query
+    * @return
+    *   An option onto the article
     */
   def queryMatchingEntryId(
       urlId: String
   ): Option[String] =
     firstEntryMatchingUrlId(urlId)(CoVerifiedClientSchema.Entry.id)
 
-  /**
-    * Queries the first entry, that matches the given url id
+  /** Queries the first entry, that matches the given url id
     *
-    * @param urlId            Url identifier
-    * @param selectionBuilder Selection builder to determine the result to get
-    * @tparam T Type of return
-    * @return Optional first match
+    * @param urlId
+    *   Url identifier
+    * @param selectionBuilder
+    *   Selection builder to determine the result to get
+    * @tparam T
+    *   Type of return
+    * @return
+    *   Optional first match
     */
   private def firstEntryMatchingUrlId[T](urlId: String)(
       selectionBuilder: SelectionBuilder[CoVerifiedClientSchema.Entry, T]
@@ -244,11 +257,12 @@ class GraphQLHelper(
       )(selectionBuilder)
     ).flatMap(_.headOption)
 
-  /**
-    * Check, if there is a entry with same content hash already available
+  /** Check, if there is a entry with same content hash already available
     *
-    * @param contentHash The content hash to check against
-    * @return True, if there is one
+    * @param contentHash
+    *   The content hash to check against
+    * @return
+    *   True, if there is one
     */
   def existsEntryWithSameHash(contentHash: String): Boolean =
     queryWithHeader(
@@ -256,12 +270,15 @@ class GraphQLHelper(
         .countEntriesWithGivenHash(contentHash)
     ).exists(_ > 0)
 
-  /**
-    * Check, if there is a entry with same content hash already available, that is NOT the one with the given id
+  /** Check, if there is a entry with same content hash already available, that
+    * is NOT the one with the given id
     *
-    * @param contentHash  The content hash to check against
-    * @param entryId      Id of the entry, that is meant to be neglected.
-    * @return True, if there is one
+    * @param contentHash
+    *   The content hash to check against
+    * @param entryId
+    *   Id of the entry, that is meant to be neglected.
+    * @return
+    *   True, if there is one
     */
   def existsEntryWithSameHash(contentHash: String, entryId: String): Boolean =
     queryWithHeader(
@@ -269,11 +286,12 @@ class GraphQLHelper(
         .countEntriesWithGivenHash(contentHash, entryId)
     ).exists(_ > 0)
 
-  /**
-    * Disable the given entry
+  /** Disable the given entry
     *
-    * @param entryId Identifier of the entry in question
-    * @return An Option onto the disabled attribute of the entry
+    * @param entryId
+    *   Identifier of the entry in question
+    * @return
+    *   An Option onto the disabled attribute of the entry
     */
   def disableEntry(entryId: String): Option[Option[Boolean]] =
     sendMutationWithHeader(
@@ -283,11 +301,12 @@ class GraphQLHelper(
       )(CoVerifiedClientSchema.Entry.disabled)
     )
 
-  /**
-    * Query all existing, matching tags
+  /** Query all existing, matching tags
     *
-    * @param tags The tags
-    * @return Possibly a result list
+    * @param tags
+    *   The tags
+    * @return
+    *   Possibly a result list
     */
   def matchingTags(tags: List[String]): Option[List[ArticleTagView]] = {
     val filter = tagFilter(tags)
@@ -299,23 +318,26 @@ class GraphQLHelper(
     }
   }
 
-  /**
-    * Count the amount of existing tags
+  /** Count the amount of existing tags
     *
-    * @param tagFilter Filter to identify the tags
-    * @return Option onto tag count
+    * @param tagFilter
+    *   Filter to identify the tags
+    * @return
+    *   Option onto tag count
     */
   private def countExistingTags(tagFilter: ArticleTagWhereInput): Option[Int] =
     queryWithHeader {
       Query.articleTagsCount(where = tagFilter)
     }
 
-  /**
-    * Query all existing tags
+  /** Query all existing tags
     *
-    * @param tagFilter List of filter statements
-    * @param count     Batch count
-    * @return All existing tags
+    * @param tagFilter
+    *   List of filter statements
+    * @param count
+    *   Batch count
+    * @return
+    *   All existing tags
     */
   private def existingTags(
       tagFilter: ArticleTagWhereInput,
@@ -328,11 +350,12 @@ class GraphQLHelper(
     )(ArticleTag.view)
   )
 
-  /**
-    * Save the entry to data base
+  /** Save the entry to data base
     *
-    * @param entryMutation Mutation that describes the transformation
-    * @return Optional view onto the created entry
+    * @param entryMutation
+    *   Mutation that describes the transformation
+    * @return
+    *   Optional view onto the created entry
     */
   def saveEntry(
       entryMutation: SelectionBuilder[RootMutation, Option[
@@ -341,11 +364,12 @@ class GraphQLHelper(
   ): Option[SimpleEntryView[SimpleUrlView, ArticleTagView]] =
     sendMutationWithHeader(entryMutation)
 
-  /**
-    * Builds and sends mutation to save new article tags
+  /** Builds and sends mutation to save new article tags
     *
-    * @param tags Tags to save
-    * @return An optional list of matching ids
+    * @param tags
+    *   Tags to save
+    * @return
+    *   An optional list of matching ids
     */
   def saveArticleTags(tags: List[String]): List[String] =
     tags
@@ -355,11 +379,12 @@ class GraphQLHelper(
       }
       .toList
 
-  /**
-    * Saves a batch of mutations for article tags
+  /** Saves a batch of mutations for article tags
     *
-    * @param tags Tag input
-    * @return Optional list of results
+    * @param tags
+    *   Tag input
+    * @return
+    *   Optional list of results
     */
   private def saveArticleTagBatch(tags: List[String]): Option[List[String]] = {
     /* If the list of tags is non empty, build and send mutations */
@@ -401,12 +426,15 @@ class GraphQLHelper(
       )(Url.id)
     )
 
-  /**
-    * Sends the given request with specified auth header to the GraphQL and directly run the equivalent ZIO-Effect
+  /** Sends the given request with specified auth header to the GraphQL and
+    * directly run the equivalent ZIO-Effect
     *
-    * @param selectionBuilder Selection builder to apply
-    * @tparam R Type of return
-    * @return The result of the query
+    * @param selectionBuilder
+    *   Selection builder to apply
+    * @tparam R
+    *   Type of return
+    * @return
+    *   The result of the query
     */
   private def queryWithHeader[R](
       selectionBuilder: SelectionBuilder[RootQuery, Option[R]]
@@ -443,12 +471,15 @@ class GraphQLHelper(
       )
   }
 
-  /**
-    * Sends the given request with specified auth header to the GraphQL and directly run the equivalent ZIO-Effect
+  /** Sends the given request with specified auth header to the GraphQL and
+    * directly run the equivalent ZIO-Effect
     *
-    * @param mutation Selection builder to apply
-    * @tparam R Type of return
-    * @return The result of the mutation
+    * @param mutation
+    *   Selection builder to apply
+    * @tparam R
+    *   Type of return
+    * @return
+    *   The result of the mutation
     */
   private def sendMutationWithHeader[R](
       mutation: SelectionBuilder[RootMutation, Option[R]]
@@ -530,15 +561,16 @@ object GraphQLHelper {
   )
 
   private def excludeCommonFiles: List[UrlWhereInput] =
-    commonFileEndings.map(
-      ending => UrlWhereInput(name_not_contains_i = Some(ending))
+    commonFileEndings.map(ending =>
+      UrlWhereInput(name_not_contains_i = Some(ending))
     )
 
-  /**
-    * Set up condition for new urls of a given source
+  /** Set up condition for new urls of a given source
     *
-    * @param sourceId The given source
-    * @return The url restriction model
+    * @param sourceId
+    *   The given source
+    * @return
+    *   The url restriction model
     */
   private def isNewUrl(sourceId: String): UrlWhereInput = UrlWhereInput(
     lastCrawl = Some(DUMMY_LAST_CRAWL_DATE_TIME),
@@ -549,11 +581,12 @@ object GraphQLHelper {
     )
   )
 
-  /**
-    * Set up condition to find
+  /** Set up condition to find
     *
-    * @param sourceId           Identifier of the source
-    * @param mostRecentInstant  Most recent instant, that is relevant for re-analysis
+    * @param sourceId
+    *   Identifier of the source
+    * @param mostRecentInstant
+    *   Most recent instant, that is relevant for re-analysis
     * @return
     */
   private def needsReAnalysis(
@@ -566,11 +599,12 @@ object GraphQLHelper {
     AND = Some(excludeCommonFiles)
   )
 
-  /**
-    * Build a filter to search for given tags
+  /** Build a filter to search for given tags
     *
-    * @param tags The tags to search for
-    * @return An equivalent filter
+    * @param tags
+    *   The tags to search for
+    * @return
+    *   An equivalent filter
     */
   def tagFilter(tags: List[String]): ArticleTagWhereInput = {
     val singleFilters = tags.map { tag =>

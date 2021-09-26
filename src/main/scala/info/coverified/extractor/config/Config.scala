@@ -13,22 +13,33 @@ import sttp.model.Uri
 import java.time.{Duration, ZoneId}
 import scala.util.{Failure, Success, Try}
 
-/**
-  * Configuring the content extraction service
+/** Configuring the content extraction service
   *
-  * @param userAgent              User agent to be sent when reaching out to websites
-  * @param browseTimeout          Time out, when reaching out for websites
-  * @param targetDateTimePattern  The target date time pattern, in which date time information shall be sent to GraphQL
-  *                               API
-  * @param targetTimeZone         The target time zone, in which date time information shall be sent to GraphQL
-  *                               API
-  * @param apiUri                URI of the API that needs to be queried for the sites to extract content from
-  * @param authSecret            Secret to authenticate against API
-  * @param profileDirectoryPath  Directory path, where to find the site profiles
-  * @param reAnalysisInterval    Interval, after which the content may be analyzed once again
-  * @param workerPoolSize        Amount of workers to paralle handle urls in parallel
-  * @param repeatDelay           Delay between two successive runs, if there are still some urls left
-  * @param maxRetries            Maximum permissible amount of retries, if an url's rate limit is exceeded
+  * @param userAgent
+  *   User agent to be sent when reaching out to websites
+  * @param browseTimeout
+  *   Time out, when reaching out for websites
+  * @param targetDateTimePattern
+  *   The target date time pattern, in which date time information shall be sent
+  *   to GraphQL API
+  * @param targetTimeZone
+  *   The target time zone, in which date time information shall be sent to
+  *   GraphQL API
+  * @param apiUri
+  *   URI of the API that needs to be queried for the sites to extract content
+  *   from
+  * @param authSecret
+  *   Secret to authenticate against API
+  * @param profileDirectoryPath
+  *   Directory path, where to find the site profiles
+  * @param reAnalysisInterval
+  *   Interval, after which the content may be analyzed once again
+  * @param workerPoolSize
+  *   Amount of workers to paralle handle urls in parallel
+  * @param repeatDelay
+  *   Delay between two successive runs, if there are still some urls left
+  * @param maxRetries
+  *   Maximum permissible amount of retries, if an url's rate limit is exceeded
   */
 final case class Config private (
     userAgent: String,
@@ -107,32 +118,33 @@ object Config extends LazyLogging {
         DefaultValues.targetTimeZone
     }
 
-  /**
-    * Build config from parsed CLI input
+  /** Build config from parsed CLI input
     *
-    * @param args The parsed input
-    * @return A try to create a [[Config]]
+    * @param args
+    *   The parsed input
+    * @return
+    *   A try to create a [[Config]]
     */
   def fromArgs(args: Args): Try[Config] = args match {
     case Args(
-        apiUrl,
-        authSecret,
-        pageProfileDirectoryPath,
-        maybeReAnalysisInterval,
-        maybeWorkerPoolSize,
-        maybeRepeatDelay,
-        maybeMaxRetries,
-        maybeUserAgent,
-        maybeBrowseTimeout,
-        maybeTargetDateTimePattern,
-        maybeTargetTimeZone
+          apiUrl,
+          authSecret,
+          pageProfileDirectoryPath,
+          maybeReAnalysisInterval,
+          maybeWorkerPoolSize,
+          maybeRepeatDelay,
+          maybeMaxRetries,
+          maybeUserAgent,
+          maybeBrowseTimeout,
+          maybeTargetDateTimePattern,
+          maybeTargetTimeZone
         ) =>
       Success(
         Config(
           maybeUserAgent.getOrElse(DefaultValues.userAgent),
           maybeBrowseTimeout
-            .map(
-              timeoutInSeconds => Duration.ofSeconds(timeoutInSeconds.toLong)
+            .map(timeoutInSeconds =>
+              Duration.ofSeconds(timeoutInSeconds.toLong)
             )
             .getOrElse(DefaultValues.browseTimeout),
           maybeTargetDateTimePattern.getOrElse(
@@ -147,8 +159,8 @@ object Config extends LazyLogging {
           authSecret,
           pageProfileDirectoryPath,
           maybeReAnalysisInterval
-            .map(
-              reAnalysisInterval => Duration.ofHours(reAnalysisInterval.toLong)
+            .map(reAnalysisInterval =>
+              Duration.ofHours(reAnalysisInterval.toLong)
             )
             .getOrElse(DefaultValues.reAnalysisInterval),
           maybeWorkerPoolSize.getOrElse(DefaultValues.workerPoolSize),
@@ -166,10 +178,10 @@ object Config extends LazyLogging {
       )
   }
 
-  /**
-    * Trying to get the config from environment variables
+  /** Trying to get the config from environment variables
     *
-    * @return A try to create a [[Config]]
+    * @return
+    *   A try to create a [[Config]]
     */
   def fromEnv(): Try[Config] =
     for {
@@ -229,12 +241,14 @@ object Config extends LazyLogging {
       )
     }
 
-  /**
-    * Attempt to obtain an entry from environment variables
+  /** Attempt to obtain an entry from environment variables
     *
-    * @param key      The key to get
-    * @param encoder  Transforming function
-    * @return The value
+    * @param key
+    *   The key to get
+    * @param encoder
+    *   Transforming function
+    * @return
+    *   The value
     */
   private def fromEnv[T](key: String, encoder: String => T): Try[T] =
     (sys.env.get(key) match {
@@ -245,13 +259,17 @@ object Config extends LazyLogging {
         )
     }).map(encoder(_))
 
-  /**
-    * Attempt to obtain an entry from environment variables. If the key cannot be obtained, take the default one.
+  /** Attempt to obtain an entry from environment variables. If the key cannot
+    * be obtained, take the default one.
     *
-    * @param key      The key to get
-    * @param encoder  Transforming function
-    * @param default  The default value to recover with.
-    * @return The value
+    * @param key
+    *   The key to get
+    * @param encoder
+    *   Transforming function
+    * @param default
+    *   The default value to recover with.
+    * @return
+    *   The value
     */
   private def fromEnv[T](
       key: String,

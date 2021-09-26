@@ -543,14 +543,21 @@ class AnalyzerSpec
         )
 
         /* If no time zone information is provided, assume we are in UTC */
-        analyzer.reformatDateTimePattern(input, format, fallBackZone) shouldBe expected
+        analyzer.reformatDateTimePattern(
+          input,
+          format,
+          fallBackZone
+        ) shouldBe expected
       }
 
       "properly reformat date time string with 'Z' as time zone" in {
         val input = "2019-06-27T22:00:00Z"
         val expected = Success(input)
 
-        analyzer.reformatDateTimePattern(input, targetDateTimePattern) shouldBe expected
+        analyzer.reformatDateTimePattern(
+          input,
+          targetDateTimePattern
+        ) shouldBe expected
       }
 
       "properly reformat date time string with other time zone description" in {
@@ -558,7 +565,10 @@ class AnalyzerSpec
         /* The input is given in another time zone, therefore the instant is transferred to UTC. */
         val expected = Success("2019-06-27T21:00:00Z")
 
-        analyzer.reformatDateTimePattern(input, targetDateTimePattern) shouldBe expected
+        analyzer.reformatDateTimePattern(
+          input,
+          targetDateTimePattern
+        ) shouldBe expected
       }
 
       "properly reformat date time string with missing time" in {
@@ -576,7 +586,11 @@ class AnalyzerSpec
             .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssX"))
         )
 
-        analyzer.reformatDateTimePattern(input, format, fallBackZone) shouldBe expected
+        analyzer.reformatDateTimePattern(
+          input,
+          format,
+          fallBackZone
+        ) shouldBe expected
       }
     }
 
@@ -620,18 +634,20 @@ class AnalyzerSpec
           )
         ) {
           case Success(
-              RawEntryInformation(
-                title,
-                summary,
-                content,
-                date,
-                tags,
-                eTag,
-                imageUrl
-              )
+                RawEntryInformation(
+                  title,
+                  summary,
+                  content,
+                  date,
+                  tags,
+                  eTag,
+                  imageUrl
+                )
               ) =>
             title shouldBe "Url page with all information available"
-            summary.getOrElse(fail("Expected to get a summary.")) shouldBe "This is a summary"
+            summary.getOrElse(
+              fail("Expected to get a summary.")
+            ) shouldBe "This is a summary"
             content shouldBe Some("And with all the content.")
             date shouldBe Some("2021-06-03T13:37:00Z")
             tags shouldBe Some(List("aTag", "bTag", "cTag", "dTag"))
@@ -650,15 +666,15 @@ class AnalyzerSpec
           )
         ) {
           case Success(
-              RawEntryInformation(
-                title,
-                summary,
-                content,
-                date,
-                tags,
-                eTag,
-                imageUrl
-              )
+                RawEntryInformation(
+                  title,
+                  summary,
+                  content,
+                  date,
+                  tags,
+                  eTag,
+                  imageUrl
+                )
               ) =>
             title shouldBe "Url page with all information available"
             summary shouldBe None
@@ -689,10 +705,10 @@ class AnalyzerSpec
 
         forAll(testCases) {
           case ExtractorTestCase(
-              rawDocument,
-              expectedContent,
-              contentSelector,
-              excludeSelectors
+                rawDocument,
+                expectedContent,
+                contentSelector,
+                excludeSelectors
               ) =>
             analyzer invokePrivate extractContent(
               rawDocument,

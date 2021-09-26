@@ -43,8 +43,7 @@ import java.time.{Duration, ZoneId}
 object ExtractionSupervisor {
   def apply(): Behavior[SupervisorMessage] = uninitialized
 
-  /**
-    * Start uninitialized
+  /** Start uninitialized
     */
   def uninitialized: Receive[SupervisorMessage] = receive[SupervisorMessage] {
     case (context, initMessage: InitSupervisor) =>
@@ -113,19 +112,19 @@ object ExtractionSupervisor {
 
       val sourceIdToHandlerRef = initStateData match {
         case InitializingStateData(
-            profileDirectoryPath,
-            userAgent,
-            browseTimeout,
-            targetDateTimePattern,
-            targetTimeZone,
-            apiUri,
-            authSecret,
-            reAnalysisInterval,
-            repeatDelay,
-            maxRetries,
-            workerPoolSize,
-            distinctTagHandlerRef,
-            sourcesToInitialize
+              profileDirectoryPath,
+              userAgent,
+              browseTimeout,
+              targetDateTimePattern,
+              targetTimeZone,
+              apiUri,
+              authSecret,
+              reAnalysisInterval,
+              repeatDelay,
+              maxRetries,
+              workerPoolSize,
+              distinctTagHandlerRef,
+              sourcesToInitialize
             ) =>
           initializeChildren(
             ctx,
@@ -163,8 +162,8 @@ object ExtractionSupervisor {
         "Source handler for source '{}' successfully initialized.",
         sourceId
       )
-      val initializingSources = awaitedSources.filterNot {
-        case (key, _) => key == sourceId
+      val initializingSources = awaitedSources.filterNot { case (key, _) =>
+        key == sourceId
       }
       val newActiveSource = activeSources + (sourceId -> replyTo)
       if (initializingSources.nonEmpty) {
@@ -204,13 +203,16 @@ object ExtractionSupervisor {
     case _ => Behaviors.unhandled
   }
 
-  /**
-    * Handle the responses from source handlers
+  /** Handle the responses from source handlers
     *
-    * @param stateData          State information
-    * @param initializedSources Mapping of all yet initialized sources
-    * @param activeSources      Mapping of all sources, that have been initialized
-    * @return The specified behavior
+    * @param stateData
+    *   State information
+    * @param initializedSources
+    *   Mapping of all yet initialized sources
+    * @param activeSources
+    *   Mapping of all sources, that have been initialized
+    * @return
+    *   The specified behavior
     */
   def handleSourceResponses(
       stateData: ExtractorStateData,
@@ -234,8 +236,8 @@ object ExtractionSupervisor {
     case (ctx, SourceHandlerTerminated(sourceId)) =>
       ctx.log
         .debug("Handler for source '{}' reported to have terminated.", sourceId)
-      val stillActiveSources = activeSources.filterNot {
-        case (key, _) => key == sourceId
+      val stillActiveSources = activeSources.filterNot { case (key, _) =>
+        key == sourceId
       }
       if (stillActiveSources.nonEmpty) {
         ctx.log.debug(
@@ -268,12 +270,14 @@ object ExtractionSupervisor {
         Behaviors.same
     }
 
-  /**
-    * Spawn a [[DistinctTagHandler]] and wait for it's completion message.
+  /** Spawn a [[DistinctTagHandler]] and wait for it's completion message.
     *
-    * @param context      Current actor context
-    * @param apiUri       Uri for the GraphQL API
-    * @param authSecret   Auth token for GraphQL API
+    * @param context
+    *   Current actor context
+    * @param apiUri
+    *   Uri for the GraphQL API
+    * @param authSecret
+    *   Auth token for GraphQL API
     * @return
     */
   private def initializeDistinctTagHandler(
@@ -294,26 +298,43 @@ object ExtractionSupervisor {
     distinctTagHandler
   }
 
-  /**
-    * Initialize source handler per available source
+  /** Initialize source handler per available source
     *
-    * @param context                Current actor context
-    * @param distinctTagHandler     Reference to distinct tag handler
-    * @param profileDirectoryPath   Directory path, where to find page profiles
-    * @param userAgent              User agent to be sent when reaching out to websites
-    * @param browseTimeout          Time out, when reaching out for websites
-    * @param targetDateTimePattern  The target date time pattern, in which date time information shall be sent to
-    *                               [[info.coverified.extractor.actor.Mutator]]
-    * @param targetTimeZone         The target time zone, in which date time information shall be sent to
-    *                               [[info.coverified.extractor.actor.Mutator]]
-    * @param apiUri                 Uri for the GraphQL API
-    * @param authSecret             Auth token for GraphQL API
-    * @param reAnalysisInterval     Duration, when an entry shall be re-analysed
-    * @param repeatDelay            Amount of time, that a) is reference for rate limit and b) delay time for postponed urls
-    * @param maxRetries             Maximum permissible amount of retries, if an url's rate limit is exceeded
-    * @param workerPoolSize         Amount of url co-workers and amount of urls to be visited within given time
-    * @param sources                Collection of available sources
-    * @return Defined behavior
+    * @param context
+    *   Current actor context
+    * @param distinctTagHandler
+    *   Reference to distinct tag handler
+    * @param profileDirectoryPath
+    *   Directory path, where to find page profiles
+    * @param userAgent
+    *   User agent to be sent when reaching out to websites
+    * @param browseTimeout
+    *   Time out, when reaching out for websites
+    * @param targetDateTimePattern
+    *   The target date time pattern, in which date time information shall be
+    *   sent to [[info.coverified.extractor.actor.Mutator]]
+    * @param targetTimeZone
+    *   The target time zone, in which date time information shall be sent to
+    *   [[info.coverified.extractor.actor.Mutator]]
+    * @param apiUri
+    *   Uri for the GraphQL API
+    * @param authSecret
+    *   Auth token for GraphQL API
+    * @param reAnalysisInterval
+    *   Duration, when an entry shall be re-analysed
+    * @param repeatDelay
+    *   Amount of time, that a) is reference for rate limit and b) delay time
+    *   for postponed urls
+    * @param maxRetries
+    *   Maximum permissible amount of retries, if an url's rate limit is
+    *   exceeded
+    * @param workerPoolSize
+    *   Amount of url co-workers and amount of urls to be visited within given
+    *   time
+    * @param sources
+    *   Collection of available sources
+    * @return
+    *   Defined behavior
     */
   private def initializeChildren(
       context: ActorContext[SupervisorMessage],
@@ -343,9 +364,8 @@ object ExtractionSupervisor {
               "https://" + sourceUrl
             else
               sourceUrl
-          hostToPageProfile.find {
-            case (hostUrl, _) =>
-              hostUrl.contains(new URL(sourceWithProtocol).getHost)
+          hostToPageProfile.find { case (hostUrl, _) =>
+            hostUrl.contains(new URL(sourceWithProtocol).getHost)
           } match {
             case Some(_ -> pageProfile) =>
               context.log.debug(
@@ -417,11 +437,12 @@ object ExtractionSupervisor {
       distinctTagHandler: ActorRef[DistinctTagHandlerMessage]
   )
 
-  /**
-    * Read all page profile configs from file
+  /** Read all page profile configs from file
     *
-    * @param cfgDirectoryPath Path, where to find the configs
-    * @return A Mapping from applicable source url to page profile
+    * @param cfgDirectoryPath
+    *   Path, where to find the configs
+    * @return
+    *   A Mapping from applicable source url to page profile
     */
   private def readPageProfileConfigs(
       cfgDirectoryPath: String

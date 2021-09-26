@@ -312,13 +312,12 @@ object ProfileConfig {
     ): scala.List[ProfileConfig.PageType] = {
       import scala.jdk.CollectionConverters._
       cl.asScala
-        .map(
-          cv =>
-            ProfileConfig.PageType(
-              cv.asInstanceOf[com.typesafe.config.ConfigObject].toConfig,
-              parentPath,
-              $tsCfgValidator
-            )
+        .map(cv =>
+          ProfileConfig.PageType(
+            cv.asInstanceOf[com.typesafe.config.ConfigObject].toConfig,
+            parentPath,
+            $tsCfgValidator
+          )
         )
         .toList
     }

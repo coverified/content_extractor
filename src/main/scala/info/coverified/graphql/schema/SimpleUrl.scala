@@ -10,12 +10,14 @@ import info.coverified.graphql.schema.SimpleSource.SimpleSourceView
 
 object SimpleUrl {
 
-  /**
-    * Little sister of [[Url]], but without resolving linked information
+  /** Little sister of [[Url]], but without resolving linked information
     *
-    * @param id             Identifier
-    * @param name           The actual url
-    * @param sourceId       Id of the source to belong to
+    * @param id
+    *   Identifier
+    * @param name
+    *   The actual url
+    * @param sourceId
+    *   Id of the source to belong to
     */
   final case class SimpleUrlView(
       id: String,

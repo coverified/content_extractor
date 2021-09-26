@@ -67,15 +67,16 @@ object ExtractorQuery {
 
   @deprecated("Use equivalent method in GraphQLHelper")
   private def excludeCommonFiles: List[UrlWhereInput] =
-    commonFileEndings.map(
-      ending => UrlWhereInput(name_not_contains_i = Some(ending))
+    commonFileEndings.map(ending =>
+      UrlWhereInput(name_not_contains_i = Some(ending))
     )
 
-  /**
-    * Query a specified amount of urls, that haven't been handled yet
+  /** Query a specified amount of urls, that haven't been handled yet
     *
-    * @param first Amount of urls to query
-    * @return An equivalent [[SelectionBuilder]]
+    * @param first
+    *   Amount of urls to query
+    * @return
+    *   An equivalent [[SelectionBuilder]]
     */
   @deprecated("Use equivalent method in GraphQLHelper")
   def newUrls(
@@ -83,21 +84,23 @@ object ExtractorQuery {
   ): SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
     newUrls(Some(first))
 
-  /**
-    * Query all new urls
+  /** Query all new urls
     *
-    * @return A selection build to query all not yet visited urls
+    * @return
+    *   A selection build to query all not yet visited urls
     */
   @deprecated("Use equivalent method in GraphQLHelper")
   def newUrls
       : SelectionBuilder[RootQuery, Option[List[SimpleUrl.SimpleUrlView]]] =
     newUrls(None)
 
-  /**
-    * Query all new urls for a given source
+  /** Query all new urls for a given source
     *
-    * @param sourceId Id of the source, the url shall belong to
-    * @return A selection build to query all not yet visited urls, that belong to a source
+    * @param sourceId
+    *   Id of the source, the url shall belong to
+    * @return
+    *   A selection build to query all not yet visited urls, that belong to a
+    *   source
     */
   @deprecated("Use equivalent method in GraphQLHelper")
   def newUrls(
@@ -137,12 +140,14 @@ object ExtractorQuery {
       SimpleUrl.view
     )
 
-  /**
-    * Query a specified amount of urls, that haven't been handled recently
+  /** Query a specified amount of urls, that haven't been handled recently
     *
-    * @param first              Amount of urls to query
-    * @param reAnalysisInterval Delay between two analyses of a page
-    * @return An equivalent [[SelectionBuilder]]
+    * @param first
+    *   Amount of urls to query
+    * @param reAnalysisInterval
+    *   Delay between two analyses of a page
+    * @return
+    *   An equivalent [[SelectionBuilder]]
     */
   def existingUrls(
       first: Int,
@@ -173,11 +178,12 @@ object ExtractorQuery {
       SimpleUrl.view
     )
 
-  /**
-    * Query entry, that do exist for the given url ids
+  /** Query entry, that do exist for the given url ids
     *
-    * @param urlId Id of applicable url
-    * @return An equivalent [[SelectionBuilder]]
+    * @param urlId
+    *   Id of applicable url
+    * @return
+    *   An equivalent [[SelectionBuilder]]
     */
   def existingEntry(urlId: String): SelectionBuilder[RootQuery, Option[
     List[SimpleEntry.SimpleEntryView[String, ArticleTagView]]
@@ -187,11 +193,12 @@ object ExtractorQuery {
       skip = 0
     )(SimpleEntry.view(Url.id, ArticleTag.view))
 
-  /**
-    * Query all entries with the given hash code
+  /** Query all entries with the given hash code
     *
-    * @param contentHash Hash code of the content
-    * @return A List of applicable entries
+    * @param contentHash
+    *   Hash code of the content
+    * @return
+    *   A List of applicable entries
     */
   def countEntriesWithGivenHash(
       contentHash: String
@@ -203,12 +210,15 @@ object ExtractorQuery {
       )
     )
 
-  /**
-    * Count all entries with the given hash code, that are NOT the one denoted by the given id
+  /** Count all entries with the given hash code, that are NOT the one denoted
+    * by the given id
     *
-    * @param contentHash Hash code of the content
-    * @param entryId     Entry to neglect while counting
-    * @return A List of applicable entries
+    * @param contentHash
+    *   Hash code of the content
+    * @param entryId
+    *   Entry to neglect while counting
+    * @return
+    *   A List of applicable entries
     */
   def countEntriesWithGivenHash(
       contentHash: String,

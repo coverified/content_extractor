@@ -49,23 +49,22 @@ import org.slf4j.Logger
 
 import scala.util.{Failure, Success}
 
-/**
-  * Extracting the content of a single url
+/** Extracting the content of a single url
   */
 class UrlHandler {
   def uninitialized: Behaviors.Receive[UrlHandlerMessage] =
     Behaviors.receive[UrlHandlerMessage] {
       case (
-          _,
-          InitUrlHandler(
-            mutatorRef,
-            userAgent,
-            browseTimeout,
-            targetDateTimePattern,
-            targetTimeZone,
-            apiUri,
-            authSecret
-          )
+            _,
+            InitUrlHandler(
+              mutatorRef,
+              userAgent,
+              browseTimeout,
+              targetDateTimePattern,
+              targetTimeZone,
+              apiUri,
+              authSecret
+            )
           ) =>
         val analyzer = Analyzer(
           userAgent,
@@ -108,8 +107,14 @@ class UrlHandler {
         mutator ! UpdateUrl(urlId, sourceHandler)
         Behaviors.same
       case (
-          ctx,
-          HandleExistingUrl(url, urlId, maybeEntry, pageProfile, sourceHandler)
+            ctx,
+            HandleExistingUrl(
+              url,
+              urlId,
+              maybeEntry,
+              pageProfile,
+              sourceHandler
+            )
           ) =>
         /* Determine the url handling based on the provided entry information. If nothing has been delivered, yet, it
          * might be, because the url handler is triggered the first time for this url or the analysis of this url is
@@ -190,20 +195,31 @@ object UrlHandler {
       String // The url id
   ) => Unit
 
-  /**
-    * Visit a given web page under the given url and create a new entry from content
+  /** Visit a given web page under the given url and create a new entry from
+    * content
     *
-    * @param analyzer         Analyzer to use for page analysis
-    * @param url              The url itself
-    * @param urlId            Identifier of the url
-    * @param maybeETag        Optional HTTP Entity tag to possibly detect unchanged content
-    * @param payLoad          Possible pay load of request
-    * @param pageProfile      Applicable page profile
-    * @param handleUnchanged  A function, that handles existing information in the case, that web page's information
-    *                         hasn't changed
-    * @param handleChanged    A function, that handles existing information as well as actual information from analyzer
-    * @param sourceHandler    Reference to the source handler
-    * @param logger           Logging instance
+    * @param analyzer
+    *   Analyzer to use for page analysis
+    * @param url
+    *   The url itself
+    * @param urlId
+    *   Identifier of the url
+    * @param maybeETag
+    *   Optional HTTP Entity tag to possibly detect unchanged content
+    * @param payLoad
+    *   Possible pay load of request
+    * @param pageProfile
+    *   Applicable page profile
+    * @param handleUnchanged
+    *   A function, that handles existing information in the case, that web
+    *   page's information hasn't changed
+    * @param handleChanged
+    *   A function, that handles existing information as well as actual
+    *   information from analyzer
+    * @param sourceHandler
+    *   Reference to the source handler
+    * @param logger
+    *   Logging instance
     */
   private def visitUrlAndHandleEntry[P](
       analyzer: Analyzer,
@@ -241,12 +257,13 @@ object UrlHandler {
       sourceHandler ! UrlHandledWithFailure(url, urlId, payLoad, exception)
   }
 
-  /**
-    * Sends out a [[UrlHandledWithFailure]] message, as there shouldn't be the chance to compare the content against
-    * anything else.
+  /** Sends out a [[UrlHandledWithFailure]] message, as there shouldn't be the
+    * chance to compare the content against anything else.
     *
-    * @param sourceHandler Reference to the source handler
-    * @return A function, that does exactly that
+    * @param sourceHandler
+    *   Reference to the source handler
+    * @return
+    *   A function, that does exactly that
     */
   private def failIfContentUnchanged(
       sourceHandler: ActorRef[SourceHandlerMessage]
@@ -265,11 +282,12 @@ object UrlHandler {
       )
     }
 
-  /**
-    * Send out success report to source handler, as no information have changed
+  /** Send out success report to source handler, as no information have changed
     *
-    * @param sourceHandler Reference to the source handler
-    * @return A function, that does exactly that
+    * @param sourceHandler
+    *   Reference to the source handler
+    * @return
+    *   A function, that does exactly that
     */
   private def sendSuccess(
       sourceHandler: ActorRef[SourceHandlerMessage]
@@ -281,12 +299,15 @@ object UrlHandler {
       sourceHandler ! UrlHandledSuccessfully(url)
     }
 
-  /**
-    * A simple function, that handles an analyzed url, that does not have any kind of existing entry
+  /** A simple function, that handles an analyzed url, that does not have any
+    * kind of existing entry
     *
-    * @param mutator            Reference to the mutator
-    * @param sourceHandler      Reference to the source handler
-    * @return A method to handle urls without given entry
+    * @param mutator
+    *   Reference to the mutator
+    * @param sourceHandler
+    *   Reference to the source handler
+    * @return
+    *   A method to handle urls without given entry
     */
   private def handleUrlWithoutExistingEntry(
       mutator: ActorRef[MutatorMessage],
@@ -305,12 +326,15 @@ object UrlHandler {
       sourceHandler ! UrlHandledSuccessfully(url)
     }
 
-  /**
-    * A simple function, that handles an analyzed url, that does not have any kind of existing entry
+  /** A simple function, that handles an analyzed url, that does not have any
+    * kind of existing entry
     *
-    * @param mutator            Reference to the mutator
-    * @param sourceHandler      Reference to the source handler
-    * @return A method to handle urls without given entry
+    * @param mutator
+    *   Reference to the mutator
+    * @param sourceHandler
+    *   Reference to the source handler
+    * @return
+    *   A method to handle urls without given entry
     */
   private def handleUrlWithExistingEntry(
       existingEntry: SimpleEntryView[SimpleUrlView, ArticleTagView],
@@ -339,12 +363,14 @@ object UrlHandler {
       sourceHandler ! UrlHandledSuccessfully(url)
     }
 
-  /**
-    * Figure out, if something regarding the page provided tags has changed
+  /** Figure out, if something regarding the page provided tags has changed
     *
-    * @param maybeExistingTags Collection of tags registered in existing entry
-    * @param maybePageTags     Tags from web page
-    * @return true, if something has changed
+    * @param maybeExistingTags
+    *   Collection of tags registered in existing entry
+    * @param maybePageTags
+    *   Tags from web page
+    * @return
+    *   true, if something has changed
     */
   private def tagsHaveChanged(
       maybeExistingTags: Option[List[ArticleTagView]],
@@ -356,11 +382,8 @@ object UrlHandler {
           .map(_.size)
           .getOrElse(0)
         val nothingChanged = maybePageTags
-          .map(
-            tags =>
-              !tags.forall(
-                tag => existingPageTags.exists(_.name.contains(tag))
-              )
+          .map(tags =>
+            !tags.forall(tag => existingPageTags.exists(_.name.contains(tag)))
           )
           .getOrElse {
             /* Tags from web page are empty. Something has changed, if there are page tags apparent in the known entry. */
@@ -373,40 +396,44 @@ object UrlHandler {
         maybePageTags.nonEmpty && maybePageTags.exists(_.nonEmpty)
       }
 
-  /**
-    * Check, if the content of given entry and newly scraped information differs
+  /** Check, if the content of given entry and newly scraped information differs
     *
-    * @param existingEntry        The existing entry
-    * @param rawEntryInformation  Freshly scraped information
-    * @return True, if something has changed
+    * @param existingEntry
+    *   The existing entry
+    * @param rawEntryInformation
+    *   Freshly scraped information
+    * @return
+    *   True, if something has changed
     */
   private def contentHasChanged(
       existingEntry: SimpleEntryView[SimpleUrlView, ArticleTagView],
       rawEntryInformation: RawEntryInformation
   ): Boolean = (existingEntry, rawEntryInformation) match {
     case (
-        SimpleEntryView(
-          _,
-          maybeTitle,
-          maybeContent,
-          maybeSummary,
-          _,
-          maybeDate,
-          _,
-          _,
-          _
-        ),
-        RawEntryInformation(
-          scrapedTitle,
-          scrapedSummary,
-          scrapedContent,
-          scrapedDate,
-          _,
-          _,
-          _
-        )
+          SimpleEntryView(
+            _,
+            maybeTitle,
+            maybeContent,
+            maybeSummary,
+            _,
+            maybeDate,
+            _,
+            _,
+            _
+          ),
+          RawEntryInformation(
+            scrapedTitle,
+            scrapedSummary,
+            scrapedContent,
+            scrapedDate,
+            _,
+            _,
+            _
+          )
         ) =>
       !(maybeTitle
-        .contains(scrapedTitle) && maybeSummary == scrapedSummary && maybeContent == scrapedContent && maybeDate == scrapedDate)
+        .contains(
+          scrapedTitle
+        ) && maybeSummary == scrapedSummary && maybeContent == scrapedContent && maybeDate == scrapedDate)
   }
 }

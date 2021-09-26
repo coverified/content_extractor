@@ -11,8 +11,8 @@ import sttp.model.Uri
 
 import java.time.{Duration, ZoneId}
 
-/**
-  * All messages that are understood by the [[info.coverified.extractor.actor.SourceHandler]]
+/** All messages that are understood by the
+  * [[info.coverified.extractor.actor.SourceHandler]]
   */
 sealed trait SourceHandlerMessage
 object SourceHandlerMessage {
@@ -40,8 +40,7 @@ object SourceHandlerMessage {
   final case class HandleExistingUrls(replyTo: ActorRef[SupervisorMessage])
       extends SourceHandlerMessage
 
-  /**
-    * Get report about _single_ handled urls from [[UrlHandlerMessage]]
+  /** Get report about _single_ handled urls from [[UrlHandlerMessage]]
     */
   sealed trait UrlHandledMessage extends SourceHandlerMessage
   final case class UrlHandledSuccessfully(url: String) extends UrlHandledMessage

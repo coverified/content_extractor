@@ -6,8 +6,7 @@ package info.coverified.extractor
 
 import scopt.{OptionParser => scoptOptionParser}
 
-/**
-  * Parsing needed extractor configuration from CLI arguments
+/** Parsing needed extractor configuration from CLI arguments
   *
   * @version 0.1
   * @since 27.02.21
@@ -39,10 +38,9 @@ object ArgsParser {
             )
           }
         }
-        .validate(
-          value =>
-            if (value.trim.isEmpty) failure("apiUrl cannot be empty!")
-            else success
+        .validate(value =>
+          if (value.trim.isEmpty) failure("apiUrl cannot be empty!")
+          else success
         )
         .text("Backend API Url")
         .minOccurs(1)
@@ -53,11 +51,10 @@ object ArgsParser {
             authSecret = value
           )
         })
-        .validate(
-          value =>
-            if (value.trim.isEmpty)
-              failure("auth secret cannot be empty!")
-            else success
+        .validate(value =>
+          if (value.trim.isEmpty)
+            failure("auth secret cannot be empty!")
+          else success
         )
         .text("secret to authenticate against API")
         .minOccurs(1)
@@ -68,11 +65,10 @@ object ArgsParser {
             pageProfileDirectoryPath = value
           )
         })
-        .validate(
-          value =>
-            if (value.trim.isEmpty)
-              failure("page profile folder path cannot be empty!")
-            else success
+        .validate(value =>
+          if (value.trim.isEmpty)
+            failure("page profile folder path cannot be empty!")
+          else success
         )
         .text("full path to all page profile config files")
         .minOccurs(1)
@@ -82,11 +78,10 @@ object ArgsParser {
             reAnalysisInterval = Option(value)
           )
         })
-        .validate(
-          value =>
-            if (value < 0)
-              failure("re analysis interval must be greater than zero!")
-            else success
+        .validate(value =>
+          if (value < 0)
+            failure("re analysis interval must be greater than zero!")
+          else success
         )
         .text("frequency of re-analyzing content in hours")
       opt[Int]("workerPoolSize")
@@ -95,11 +90,10 @@ object ArgsParser {
             workerPoolSize = Option(value)
           )
         })
-        .validate(
-          value =>
-            if (value <= 0)
-              failure("Amount of workers may be greater than zero!")
-            else success
+        .validate(value =>
+          if (value <= 0)
+            failure("Amount of workers may be greater than zero!")
+          else success
         )
         .text("Amount of url workers for parallel handling.")
       opt[Int]("repeatDelay")
@@ -108,11 +102,10 @@ object ArgsParser {
             repeatDelay = Option(value)
           )
         })
-        .validate(
-          value =>
-            if (value <= 0)
-              failure("Repeat delay may be greater than zero!")
-            else success
+        .validate(value =>
+          if (value <= 0)
+            failure("Repeat delay may be greater than zero!")
+          else success
         )
         .text(
           "Amount of seconds, that successive runs should be delayed, if not all urls are handled, yet."
@@ -123,11 +116,10 @@ object ArgsParser {
             maxRetries = Option(value)
           )
         })
-        .validate(
-          value =>
-            if (value <= 0)
-              failure("Amount of retries may be greater than zero!")
-            else success
+        .validate(value =>
+          if (value <= 0)
+            failure("Amount of retries may be greater than zero!")
+          else success
         )
         .text(
           "Amount of retries, if a website reports rate limit exceeding."

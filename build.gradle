@@ -63,8 +63,8 @@ dependencies {
 	// type safe config handling //
 	implementation "com.github.carueda:tscfg_$scalaVersion:$tscfgVersion"
 
-	implementation 'io.circe:circe-generic_2.13:0.14.1'
-	implementation 'io.circe:circe-parser_2.13:0.14.1'
+	implementation 'io.circe:circe-generic_2.13:0.13.0'
+	implementation 'io.circe:circe-parser_2.13:0.13.0'
 
 	// logging
 	implementation "org.slf4j:slf4j-api:$slf4jVersion"  // slf4j wrapper
@@ -86,12 +86,12 @@ dependencies {
 	implementation "org.scala-lang:scala-library:$scalaBinaryVersion"
 	/* Testing scala */
 	testImplementation "org.scalatest:scalatest_$scalaVersion:3.2.8"
-	testImplementation 'com.vladsch.flexmark:flexmark-all:0.62.2'
-	implementation 'org.mockito:mockito-core:3.12.4'
+	testImplementation 'com.vladsch.flexmark:flexmark-all:0.35.10'
+	implementation 'org.mockito:mockito-core:3.10.0'
 	implementation "org.mockito:mockito-scala-scalatest_$scalaVersion:1.16.37"
 
 	/* Testing web based APIs */
-	testImplementation 'com.github.tomakehurst:wiremock-jre8:2.31.0'
+	testImplementation "com.github.tomakehurst:wiremock-jre8:2.29.0"
 
 	implementation 'org.typelevel:jawn-parser_2.13:1.2.0'
 

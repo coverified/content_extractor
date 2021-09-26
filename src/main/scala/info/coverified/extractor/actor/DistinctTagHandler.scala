@@ -19,8 +19,7 @@ import info.coverified.graphql.schema.CoVerifiedClientSchema.{
   ArticleTagsCreateInput
 }
 
-/**
-  * Service actor to ensure a consistent set of article tags
+/** Service actor to ensure a consistent set of article tags
   */
 object DistinctTagHandler {
   def apply(): Behaviors.Receive[DistinctTagHandlerMessage] = uninitialized
@@ -28,8 +27,8 @@ object DistinctTagHandler {
   def uninitialized: Behaviors.Receive[DistinctTagHandlerMessage] =
     Behaviors.receive {
       case (
-          ctx,
-          InitializeDistinctTagHandler(apiUri, authSecret, supervisor)
+            ctx,
+            InitializeDistinctTagHandler(apiUri, authSecret, supervisor)
           ) =>
         ctx.log.info("Initializing tag harmonizer.")
         val graphQLHelper = new GraphQLHelper(apiUri, authSecret)
