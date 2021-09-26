@@ -5,7 +5,7 @@ plugins {
 	id 'java' // java support
 	id 'scala' // scala support
 	id 'application'
-	id 'com.diffplug.spotless' version '5.12.5'//code format
+	id 'com.diffplug.spotless' version '5.15.1'//code format
 	id 'com.github.johnrengelman.shadow' version '7.0.0' // fat jar
 	id 'de.undercouch.download' version '4.1.1' // downloads plugin
 	id 'com.github.maiflai.scalatest' version '0.31' // testing scala source code
@@ -18,12 +18,12 @@ application {
 
 ext {
 	scalaVersion = '2.13'
-	scalaBinaryVersion = '2.13.1'
+	scalaBinaryVersion = '2.13.6'
 	javaVersion = JavaVersion.VERSION_1_8
 
 	tscfgVersion = '0.9.985'
-	slf4jVersion = '1.7.26'
-	sentryVersion = '5.0.1'
+	slf4jVersion = '1.7.32'
+	sentryVersion = '5.1.2'
 
 	scriptsLocation = 'gradle' + File.separator + 'scripts' + File.separator //location of script plugins
 }
@@ -55,7 +55,7 @@ dependencies {
 
 	// cmd args parser //
 	implementation "com.github.scopt:scopt_$scalaVersion:4.0.0"
-	implementation "net.ruippeixotog:scala-scraper_2.13:2.2.0"
+	implementation 'net.ruippeixotog:scala-scraper_2.13:2.2.1'
 	implementation "com.github.ghostdogpr:caliban_$scalaVersion:0.9.5"
 	implementation "com.github.ghostdogpr:caliban-client_$scalaVersion:0.9.5"
 	implementation "com.github.ghostdogpr:caliban-tools_$scalaVersion:0.9.5"
@@ -63,15 +63,15 @@ dependencies {
 	// type safe config handling //
 	implementation "com.github.carueda:tscfg_$scalaVersion:$tscfgVersion"
 
-	implementation 'io.circe:circe-generic_2.13:0.13.0'
-	implementation 'io.circe:circe-parser_2.13:0.13.0'
+	implementation 'io.circe:circe-generic_2.13:0.14.1'
+	implementation 'io.circe:circe-parser_2.13:0.14.1'
 
 	// logging
 	implementation "org.slf4j:slf4j-api:$slf4jVersion"  // slf4j wrapper
-	implementation 'com.lmax:disruptor:3.4.2' // async logging
-	implementation 'org.apache.logging.log4j:log4j-api:2.14.0' // log4j
-	implementation 'org.apache.logging.log4j:log4j-core:2.14.0' // log4j
-	implementation 'org.apache.logging.log4j:log4j-slf4j-impl:2.14.0' // log4j -> slf4j
+	implementation 'com.lmax:disruptor:3.4.4' // async logging
+	implementation 'org.apache.logging.log4j:log4j-api:2.14.1' // log4j
+	implementation 'org.apache.logging.log4j:log4j-core:2.14.1' // log4j
+	implementation 'org.apache.logging.log4j:log4j-slf4j-impl:2.14.1' // log4j -> slf4j
 	implementation "com.typesafe.scala-logging:scala-logging_${scalaVersion}:3.9.2" // akka scala logging
 
 	// Error reporting
@@ -86,12 +86,12 @@ dependencies {
 	implementation "org.scala-lang:scala-library:$scalaBinaryVersion"
 	/* Testing scala */
 	testImplementation "org.scalatest:scalatest_$scalaVersion:3.2.8"
-	testImplementation 'com.vladsch.flexmark:flexmark-all:0.35.10'
-	implementation 'org.mockito:mockito-core:3.10.0'
+	testImplementation 'com.vladsch.flexmark:flexmark-all:0.62.2'
+	implementation 'org.mockito:mockito-core:3.12.4'
 	implementation "org.mockito:mockito-scala-scalatest_$scalaVersion:1.16.37"
 
 	/* Testing web based APIs */
-	testImplementation "com.github.tomakehurst:wiremock-jre8:2.29.0"
+	testImplementation 'com.github.tomakehurst:wiremock-jre8:2.31.0'
 
 	implementation 'org.typelevel:jawn-parser_2.13:1.2.0'
 
