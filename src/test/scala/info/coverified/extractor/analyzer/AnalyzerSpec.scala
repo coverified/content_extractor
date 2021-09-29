@@ -799,15 +799,28 @@ class AnalyzerSpec
           Image("src", ".c-intro__image .c-picture .c-picture__wrapper img")
         val doc = JsoupDocument(
           Jsoup.parse(
-            new URL(
-              "https://www.bmbf.de/bmbf/shareddocs/pressemitteilungen/de/2021/08/180821-Behandlungszentrum-psychische-Gesundheit.html"
-            ),
-            10000
+            new URL(url),
+            20000
           )
         )
-
         analyzer.extractImageUrl(doc, imgCfg, url) shouldBe Some(
           "https://www.bmbf.de/SharedDocs/Bilder/de/bmbf/bmbf_datenbank/5/52/52465.jpg?__blob=poster&v=1"
+        )
+      }
+
+      "successfully extract an img url with srcset" in {
+        val url =
+          "https://www.auswaertiges-amt.de/en/aussenpolitik/themen/humanitarianassistance/forgotten-crises-colombia/2439880"
+        val imgCfg =
+          Image("srcset", ".c-picture--heading source")
+        val doc = JsoupDocument(
+          Jsoup.parse(
+            new URL(url),
+            20000
+          )
+        )
+        analyzer.extractImageUrl(doc, imgCfg, url) shouldBe Some(
+          "https://www.auswaertiges-amt.de/image/2439454/123x55/1230/550/72d9a7b1edca057065476e5a4600fca0/Vz/210203-vergessenekrisen-kolumbien-bild.jpg"
         )
       }
     }

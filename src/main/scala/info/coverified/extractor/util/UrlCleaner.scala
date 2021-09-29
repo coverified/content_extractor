@@ -17,14 +17,16 @@ object UrlCleaner {
 
   def cleanUrl(url: String): String = clean(Url.parse(url)).toStringPunycode
 
-  def mergeHostAndUrl(url: String, host: String): String = {
-    if (url.contains(host))
-      cleanUrl(url)
-    else if (url.startsWith("//"))
-      cleanUrl(s"https:$url")
-    else
-      cleanUrl(s"$host$url")
-  }
+  def mergeHostAndUrl(url: String, host: String): String =
+    cleanUrl(
+      if (url.contains(host)) {
+        url
+      } else if (url.startsWith("//")) {
+        s"https:$url"
+      } else {
+        s"$host$url"
+      }
+    )
 
   private def clean(url: Url): Url =
     url

@@ -355,12 +355,36 @@ class Analyzer private (
       case Success(host) =>
         // extract src
         (document >?> element(imgConfig.selector))
-          .flatMap(
-            _.attrs
-              .get(imgConfig.attributeVal)
+          .flatMap(element =>
+            imgUrlByAttributeVal(element.attrs, imgConfig.attributeVal)
               .map(srcUrl => UrlCleaner.mergeHostAndUrl(srcUrl, host))
           )
     }
+
+  private def imgUrlByAttributeVal(
+      attributes: Map[String, String],
+      imgAttributeVal: String
+  ): Option[String] =
+    attributes
+      .get(imgAttributeVal)
+      .flatMap(attributeVal =>
+        if (imgAttributeVal.equals("srcset")) {
+          // source sets needs to be threaded differently -> take only the last one
+          // assumed structure is [https://xxx.jpg 300w, https://yyy.jpg 1000w, ...]
+          // take the last element of this list, split again at whitespace and take the first element which is the valid url
+          val srcSetSep = ","
+          attributeVal
+            .split(srcSetSep)
+            .map(_.trim)
+            .map(_.split(" "))
+            .lastOption
+            .flatMap(_.toList.headOption)
+
+        } else {
+          // in this case attributeVal == srcUrl, as we only have one element
+          Some(attributeVal)
+        }
+      )
 
   /** Get date time string and matching format from page document.
     *
