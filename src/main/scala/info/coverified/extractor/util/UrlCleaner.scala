@@ -20,6 +20,8 @@ object UrlCleaner {
   def mergeHostAndUrl(url: String, host: String): String = {
     if (url.contains(host))
       cleanUrl(url)
+    else if (url.startsWith("//"))
+      cleanUrl(s"https:$url")
     else
       cleanUrl(s"$host$url")
   }
